@@ -37,6 +37,7 @@ import Screenshot from './Screenshot.jsx';
 import SelectedElement from './SelectedElement.jsx';
 import SessionInfo from './SessionInfo.jsx';
 import Source from './Source.jsx';
+import AppiumAnalysisPanel from './AppiumAnalysisPanel.jsx';
 
 const {SELECT, TAP_SWIPE} = SCREENSHOT_INTERACTION_MODE;
 
@@ -414,6 +415,23 @@ const Inspector = (props) => {
                   className={InspectorStyles['interaction-tab-card']}
                 >
                   <SessionInfo {...props} />
+                </Card>
+              ),
+            },
+            {
+              label: t('Page Capture'),
+              key: 'INSPECTOR_TABS.AI_COMMANDS',
+              disabled: !showScreenshot,
+              children: (
+                <Card
+                  title={
+                    <span>
+                      <InfoCircleOutlined /> {t('Page Capture')}
+                    </span>
+                  }
+                  className={InspectorStyles['interaction-tab-card']}
+                >
+                  <AppiumAnalysisPanel {...props} />
                 </Card>
               ),
             },

@@ -42,6 +42,7 @@ export const INSPECTOR_TABS = {
   GESTURES: 'gestures',
   RECORDER: 'recorder',
   SESSION_INFO: 'sessionInfo',
+  AI_COMMANDS:  'aiCommands',
 };
 
 export const CLIENT_FRAMEWORKS = {

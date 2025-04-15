@@ -22,6 +22,7 @@ const Root = ({store}) => (
           <Route path="/" element={<SessionPage />} />
           <Route path="/session" element={<SessionPage />} />
           <Route path="/inspector" element={<InspectorPage />} />
+          <Route path="/inspector" element={<InspectorPage />} />
         </Routes>
       </Suspense>
     </MemoryRouter>
