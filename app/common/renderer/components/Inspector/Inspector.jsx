@@ -37,7 +37,7 @@ import Screenshot from './Screenshot.jsx';
 import SelectedElement from './SelectedElement.jsx';
 import SessionInfo from './SessionInfo.jsx';
 import Source from './Source.jsx';
-import AppiumAnalysisPanel from './AppiumAnalysisPanel.jsx';
+import AppiumAnalysisPanel from '../ai/AppiumAnalysisPanel.jsx';
 
 const {SELECT, TAP_SWIPE} = SCREENSHOT_INTERACTION_MODE;
 

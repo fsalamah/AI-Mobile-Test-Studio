@@ -2,7 +2,7 @@ export const SESSION_BUILDER_TABS = {
   CAPS_BUILDER: 'new',
   SAVED_CAPS: 'saved',
   ATTACH_TO_SESSION: 'attach',
-  AI:'ai',
+  AI_GENERATOR:'ai'
 };
 
 export const SERVER_TYPES = {

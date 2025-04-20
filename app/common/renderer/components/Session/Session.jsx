@@ -10,6 +10,7 @@ import {
   ADD_CLOUD_PROVIDER_TAB_KEY,
   SERVER_TYPES,
   SESSION_BUILDER_TABS,
+  
 } from '../../constants/session-builder';
 import {ipcRenderer, openLink} from '../../polyfills';
 import {log} from '../../utils/logger';
@@ -21,6 +22,7 @@ import CloudProviderSelector from './CloudProviderSelector.jsx';
 import SavedSessions from './SavedSessions.jsx';
 import ServerTabCustom from './ServerTabCustom.jsx';
 import SessionStyles from './Session.module.css';
+import AppiumAnalysisPanel from '../ai/AppiumAnalysisPanel.jsx';
 
 const Session = (props) => {
   const {
@@ -122,6 +124,11 @@ const Session = (props) => {
               {
                 label: <span className="addCloudProviderTab">{t('Select Cloud Providers')}</span>,
                 key: ADD_CLOUD_PROVIDER_TAB_KEY,
+              }, {
+                label: t('AI Automation Generator'),
+                key: SESSION_BUILDER_TABS.AI,
+                className: SessionStyles.scrollingTab,
+                children: <AppiumAnalysisPanel {...props} />,
               },
             ]}
           />
@@ -157,6 +164,7 @@ const Session = (props) => {
               className: SessionStyles.scrollingTab,
               children: <AttachToSession {...props} />,
             },
+           
           ]}
         />
 
