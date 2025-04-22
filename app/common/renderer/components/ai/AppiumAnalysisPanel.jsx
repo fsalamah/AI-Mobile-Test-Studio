@@ -42,7 +42,16 @@ import {
     FolderOpenOutlined,
     SearchOutlined
 } from "@ant-design/icons";
+import {  BiSolidGraduation } from "react-icons/bi";
+import { executeVisualPipeline,executeXpathPipeline } from "../../lib/ai/pipeline.js";
+import {Logger as PipelineLogger} from "../../lib/ai/logger.js"
+import XrayComponent from "./Xray.jsx";
+import DevNamesEditorModal from "./Modals/DevNamesEditorModal.js";
+import DevNameEditor from "./DevNamesEditor.js";
+import TSKCrudTask from "./XPathGrid.js"
+import XPathGrid from "./XPathGrid.js";
 
+//import Xray from "./Xray.jsx";
 const { Text, Title, Paragraph } = Typography;
 const { TextArea, Search } = Input;
 const { Sider, Content } = Layout;
@@ -243,6 +252,10 @@ const buildTreeData = (pages, searchTerm) => {
 export default function AppiumAnalysisPanel() {
     const [pages, setPages] = useState([]);
     const [selectedPageId, setSelectedPageId] = useState(null);
+    const selectedPage = useMemo(() => pages.find(p => p.id === selectedPageId), [pages, selectedPageId]);
+    const [aiJsonResult, setAiJsonResult] = useState(null);
+    const [aiVisualResult,setAiVisualResult] = useState(null)
+    const [aiXpathResult,setAiXpathResult] = useState(null)
     const [currentView, setCurrentView] = useState('pageList');
     const [saving, setSaving] = useState(false);
     const [fileHandle, setFileHandle] = useState(null);
@@ -271,8 +284,8 @@ export default function AppiumAnalysisPanel() {
     const [newPageForm] = Form.useForm();
     const [editPageForm] = Form.useForm();
 
-    const selectedPage = useMemo(() => pages.find(p => p.id === selectedPageId), [pages, selectedPageId]);
-
+    
+    // const [viewXrayModalVisible,setViewXrayModalVisible]=useState(false);
     const { treeData, expandedKeys: initialExpandedKeys } = useMemo(
         () => buildTreeData(pages, searchTerm),
         [pages, searchTerm]
@@ -427,7 +440,6 @@ export default function AppiumAnalysisPanel() {
         
         captureState(targetStateId);
     };
-
     const captureState = async (targetStateId) => {
          if (!selectedPageId || !inspectorState?.driver || isCapturing) {
              if (isCapturing) message.warn("Capture already in progress.");
@@ -552,6 +564,23 @@ export default function AppiumAnalysisPanel() {
              setCaptureIntendedOs(null);
         }
     };
+    const getPageById = (pageId) => {
+        return pages.find(page => page.id === pageId) || null;
+    };
+
+    const updatePage = (updatedPage) => {
+        setPages(prevPages => {
+            const pageIndex = prevPages.findIndex(page => page.id === updatedPage.id);
+            if (pageIndex === -1) {
+                console.warn(`Page with ID ${updatedPage.id} not found.`);
+                return prevPages;
+            }
+
+            const updatedPages = [...prevPages];
+            updatedPages[pageIndex] = { ...updatedPages[pageIndex], ...updatedPage };
+            return updatedPages;
+        });
+    };
 
     const showEditStateModal = (state) => {
         setEditingState(state);
@@ -623,7 +652,63 @@ export default function AppiumAnalysisPanel() {
         setCurrentPageForCode(selectedPage);
         setViewLocatorsModalVisible(true);
     };
-
+    const handlePipelineLogs = (log)=>{
+        updateProgressPopupMessage(log.message)
+    }
+       
+    const startAiPipeline = async () =>{
+         //executePipeline(page, osVersions);
+         
+         PipelineLogger.subscribe(handlePipelineLogs)
+         try{
+            showProgressPopup("Initializing...");
+            
+            setAiVisualResult( await executeVisualPipeline(selectedPage,['ios','android']))
+            //const xpathResult = await executeXpathPipeline(aiJsonResult)
+            //console.log(xpathResult)   
+            //hideProgressPopup(); 
+            setViewLocatorsModalVisible(true);
+            
+        }
+            catch (e)
+        {console.log(e);
+            
+        }
+        finally{PipelineLogger.unsubscribe(handlePipelineLogs)
+            hideProgressPopup();
+            
+    }
+         
+    }
+    const proceedToAiXpath = async (aiVisualResult)=>{
+        if(selectedPage['aiAnalysis']==null)
+            selectedPage['aiAnalysis']={}
+        
+        selectedPage['aiAnalysis']['visualElements'] = aiVisualResult;
+        
+        updatePage(selectedPage)
+        setViewLocatorsModalVisible(false);
+        PipelineLogger.subscribe(handlePipelineLogs)
+        try{
+            showProgressPopup("XPATH Detection starting...");
+        setAiXpathResult( await executeXpathPipeline(aiVisualResult,['ios','android']))
+        
+        setViewCodeModalVisible(true);
+        }
+        catch(e)
+        {console.log(e)}
+        finally
+        {
+            hideProgressPopup();
+            PipelineLogger.unsubscribe(handlePipelineLogs)
+            //hideProgressPopup();
+        }
+    }   
+    const handleXpathSave = (data)=>{
+        setAiXpathResult( aiXpathResult)
+        selectedPage['aiAnalysis']['locators'] = aiXpathResult;
+        updatePage(selectedPage)
+    }
     const chooseFile = async () => {
         try {
             if (!window.showSaveFilePicker) {
@@ -643,7 +728,29 @@ export default function AppiumAnalysisPanel() {
             }
         }
     };
+    const [progressPopupVisible, setProgressPopupVisible] = useState(false);
+    const [progressPopupMessage, setProgressPopupMessage] = useState("");
 
+    const showProgressPopup = (message) => {
+        setProgressPopupMessage(message);
+        setProgressPopupVisible(true);
+    };
+
+    const updateProgressPopupMessage = (message) => {
+        setProgressPopupMessage(message);
+    };
+
+    const hideProgressPopup = () => {
+        setProgressPopupVisible(false);
+        setProgressPopupMessage("");
+    };
+
+    // Example usage:
+    // showProgressPopup("Initializing...");
+    // updateProgressPopupMessage("Processing data...");
+    // hideProgressPopup();
+
+    
     const saveToFile = async () => {
         let handleToSave = fileHandle;
         if (!handleToSave) {
@@ -772,6 +879,11 @@ export default function AppiumAnalysisPanel() {
                            <Tooltip title="View AI-Generated Page Object Model (Placeholder)">
                              <Button icon={<CodeSandboxOutlined />} onClick={viewPageObjectModel}>
                                  View POM
+                             </Button>
+                         </Tooltip>
+                         <Tooltip title="Execute AI code generation processing for this page">
+                             <Button icon={<BiSolidGraduation />} onClick={startAiPipeline}>
+                                 Generate Code
                              </Button>
                          </Tooltip>
                          <Tooltip title="View AI-Generated Locators (Placeholder)">
@@ -930,7 +1042,7 @@ export default function AppiumAnalysisPanel() {
          setExpandedKeys(newExpandedKeys);
          setAutoExpandParent(false);
      };
-
+    
     const renderTreeNodeTitle = (nodeData) => {
         const { title, key, isModule, pageData, icon } = nodeData;
 
@@ -1013,7 +1125,16 @@ export default function AppiumAnalysisPanel() {
                      <div style={{ textAlign: 'center', marginTop: '20vh' }}> <ArrowLeftOutlined style={{ fontSize: '48px', color: '#d9d9d9' }}/> <Title level={4} type="secondary" style={{ marginTop: 16 }}>Page Deselected</Title> <Text type="secondary">Select the page again to view details.</Text> </div>
                  )}
             </Content>
-
+            <Modal
+        visible={progressPopupVisible}
+        footer={null}
+        closable={false}
+        centered
+        bodyStyle={{ textAlign: "center", padding: "20px" }}
+    >
+        <Spin size="large" style={{ marginBottom: "16px" }} />
+        <Text>{progressPopupMessage}</Text>
+    </Modal>
             <Modal title="Create New Page" visible={newPageModalVisible} onOk={createNewPage} onCancel={() => setNewPageModalVisible(false)} okText="Create" destroyOnClose >
                 <Form form={newPageForm} layout="vertical" name="newPageForm">
                     <Form.Item name="name" label="Page Name" rules={[{ required: true, message: 'Please enter page name', whitespace: true }]}>
@@ -1049,15 +1170,24 @@ export default function AppiumAnalysisPanel() {
                       {editingState && ( <Form.Item label="Captured Versions"> {getOsBadges(editingState)} {!editingState.versions?.ios && !editingState.versions?.android && <Text type="secondary">No versions captured.</Text>} </Form.Item> )}
                  </Form>
             </Modal>
-
-             <Modal title={`Page Object Model for "${currentPageForCode?.name}"`} visible={viewCodeModalVisible} onCancel={() => setViewCodeModalVisible(false)} footer={null} width="70vw" bodyStyle={{ background: '#282c34', color: '#abb2bf', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
-                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}> {currentPageForCode ? getPlaceholderPageObjectModel(currentPageForCode.name) : ''} </pre>
+                 
+             <Modal title={`Page Object Model for "${currentPageForCode?.name}"`} visible={viewCodeModalVisible} onCancel={() => setViewCodeModalVisible(false)} footer={null} width="70vw" bodyStyle={{ background: '#f8f8f8', color: '#abb2bf', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
+                 {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}> {aiXpathResult!=null? JSON.stringify(aiXpathResult).toString() : 'No XPATHS Detected'} </pre> */}
+                 
+                 <XPathGrid 
+          data={aiXpathResult? aiXpathResult:(selectedPage?.aiAnalysis?.locators? selectedPage?.aiAnalysis?.locators :[])}
+          onSave={handleXpathSave}
+        />
              </Modal>
 
              <Modal title={`Locators for "${currentPageForCode?.name}"`} visible={viewLocatorsModalVisible} onCancel={() => setViewLocatorsModalVisible(false)} footer={null} width="60vw" bodyStyle={{ background: '#f8f8f8', color: '#333', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
-                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}> {currentPageForCode ? getPlaceholderLocators(currentPageForCode.name) : ''} </pre>
+                 <DevNameEditor originalData={aiVisualResult? aiVisualResult:(selectedPage?.aiAnalysis?.visualElements? selectedPage?.aiAnalysis?.visualElements:[])} onSave={ proceedToAiXpath}/>
+                 {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}> {selectedPage?.aiAnalysis.visualElements ? JSON.stringify(selectedPage?.aiAnalysis.visualElements) : 'Please run AI Service to generate the locators'} </pre> */}
+                 
              </Modal>
-
+             {/* <Modal title="Xray"      visible={viewXrayModalVisible} >
+                <Xray/>
+             </Modal> */}
         </Layout>
     );
 }

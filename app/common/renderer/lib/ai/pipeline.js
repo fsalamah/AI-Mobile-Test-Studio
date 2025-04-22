@@ -9,11 +9,12 @@ import { evaluateXPath } from './xpathEvaluator.js';
 
 const aiService = new AIService();
 const model = CONFIG.MODEL;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 1;
 const RETRY_DELAY = 2000;
 
 async function extractPageVisualElements(page, osVersions) {
   try {
+    const visual_model = 'gemini-2.0-flash'
     const os = CONFIG.DEFAULT_OS || 'ios';
     const analysisRuns = CONFIG.ANALYSIS_RUNS || 1;
     await FileUtils.writeOutputToFile(page, "original_page_data");
@@ -22,13 +23,13 @@ async function extractPageVisualElements(page, osVersions) {
     const initialPrompt = await PromptBuilder.generateStatesPrompt(page, CONFIG.GENERATION, os);
     await FileUtils.writeOutputToFile(initialPrompt, "initial_prompt");
 
-    Logger.log(`Running initial analysis ${analysisRuns} time(s) with ${model}`, "info");
+    Logger.log(`Running initial analysis ${analysisRuns} time(s) with ${visual_model}`, "info");
 
     const runs = [];
 
     for (let runIndex = 0; runIndex < analysisRuns; runIndex++) {
       const response = await retryAICall(() =>
-        aiService.analyzeVisualElements(model, initialPrompt, possibleStateIds, 1, 0)
+        aiService.analyzeVisualElements(visual_model, initialPrompt, possibleStateIds, 1, 0)
       );
 
       const parsedResult = JSON.parse(response.choices[0].message.content);
@@ -63,9 +64,9 @@ async function extractPageVisualElements(page, osVersions) {
     );
     await FileUtils.writeOutputToFile(validatedPrompt, "validated_prompt");
 
-    Logger.log("Running final validation with gemini-2.0-flash", "info");
+    Logger.log("Running final validation", "info");
     const secondResponse = await retryAICall(() =>
-      aiService.analyzeVisualElements("gemini-2.0-flash", validatedPrompt, possibleStateIds, 1, 0)
+      aiService.analyzeVisualElements(visual_model, validatedPrompt, possibleStateIds, 1, 0)
     );
     await FileUtils.writeOutputToFile(secondResponse, "second_response_complete");
 
@@ -94,7 +95,7 @@ async function extractPageVisualElements(page, osVersions) {
           await FileUtils.writeOutputToFile(stateIdPrompt, `stateId_prompt_${osVersion}`);
 
           const stateIdResponse = await retryAICall(() =>
-            aiService.analyzeVisualElements(model, stateIdPrompt, possibleStateIds)
+            aiService.analyzeVisualElements(visual_model, stateIdPrompt, possibleStateIds)
           );
           await FileUtils.writeOutputToFile(stateIdResponse, `stateId_response_${osVersion}`);
 
@@ -270,10 +271,10 @@ function groupElementsByStateAndOs(data, page) {
 /**
  * NEW: Execute full pipeline with best-of-N XPath runs
  */
-async function executePipeline(page, osVersions) {
+async function executeVisualPipeline(page, osVersions) {
   const processingStatus = {
     startTime: new Date().toISOString(),
-    pageId: CONFIG.PAGE_ID,
+    pageId: "DUMMY",
     osVersions,
     steps: {}
   };
@@ -315,6 +316,16 @@ async function executePipeline(page, osVersions) {
     };
     throw groupingError;
   }
+  return elementsByStateByOS
+}
+async function executeXpathPipeline  (elementsByStateByOS,osVersions) {
+  
+  const processingStatus = {
+    startTime: new Date().toISOString(),
+    pageId: "DUMMY",
+    osVersions,
+    steps: {}
+  };
 
   Logger.log("Processing XPath generation...", "info");
   processingStatus.steps.xpathGeneration = {
@@ -399,7 +410,7 @@ async function executePipeline(page, osVersions) {
   await FileUtils.writeOutputToFile(processingStatus, "processing_status");
 
   Logger.log("Processing completed successfully", "info");
-  return elementsByStateByOS;
+  return clean_results;
 }
 
 function createMappedElements(states) {
@@ -436,7 +447,9 @@ async function main() {
   try {
     const osVersions = CONFIG.OS_VERSIONS || ['ios', 'android'];
     const page = await PageService.getPageById(CONFIG.DATA_PATH, CONFIG.PAGE_ID);
-    await executePipeline(page, osVersions);
+    const visualResult =await executeVisualPipeline(page, osVersions);
+    const xpathResult = await executeXpathPipeline(visualResult)
+    return xpathResult
   } catch (error) {
     Logger.error("Fatal error in main process:", error);
     await FileUtils.writeOutputToFile({
@@ -446,9 +459,10 @@ async function main() {
     }, "fatal_error_log");
     process.exit(1);
   }
+  
 }
 
-main();
+//main();
 
 export {
   extractPageVisualElements,
@@ -456,5 +470,6 @@ export {
   groupElementsByStateAndOs,
   validateElementsAgainstPageState,
   retryAICall,
-  executePipeline
+  executeVisualPipeline,
+  executeXpathPipeline
 };

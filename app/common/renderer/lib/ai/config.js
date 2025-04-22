@@ -11,7 +11,7 @@ export const CONFIG = {
     topP: 1,
     topK: 1,
   },
-  ANALYSIS_RUNS: 3,
+  ANALYSIS_RUNS: 1,
   DEBUG: true,
   DATA_PATH: "C:\\Users\\Faisa\\Desktop\\AI_TEST_PROJECT.json",
   PAGE_ID: "id_m9l81dph_wmm7f",

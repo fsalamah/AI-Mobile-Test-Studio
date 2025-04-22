@@ -11,6 +11,7 @@ export class AIService {
     this.client = new OpenAI({
       apiKey: CONFIG.API.KEY,
       baseURL: CONFIG.API.BASE_URL,
+      dangerouslyAllowBrowser:true
     });
   }
 

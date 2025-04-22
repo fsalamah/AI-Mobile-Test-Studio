@@ -1,0 +1,849 @@
+<!DOCTYPE html> 
+<html>
+<head>
+    <title>XML Viewer with CodeMirror</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            overflow: hidden;
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            font-family: Consolas, monospace;
+            margin: 0;
+            padding: 0;
+        }
+        .top-bar {
+            background: #252526;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #3c3c3c;
+        }
+        .top-bar button {
+            background: #333;
+            border: 1px solid #555;
+            color: #dcdcdc;
+            margin: 0 5px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .top-bar button:hover {
+            background: #444;
+            color: #569cd6;
+        }
+        .top-bar button.active {
+            background: #569cd6;
+            color: white;
+        }
+        .container-fluid {
+            padding: 10px;
+        }
+        .main-content {
+            display: flex;
+            height: calc(100vh - 50px);
+            width: 100%;
+        }
+        .panel {
+            
+            padding: 0px!important;
+            background: #1e1e1e;
+            padding: 10px;
+            border-right: 1px solid #3c3c3c;
+            overflow: auto;
+            flex: 1;
+            position: relative;
+        }
+        .resizable {
+            resize: horizontal;
+            overflow: auto;
+            min-width: 200px;
+        }
+        #editor {
+            height: 100%;
+        }
+        .CodeMirror {
+            height: 100% !important;
+            border: none;
+        }
+        .rectangle {
+            position: absolute;
+            border: 2px solid red;
+            background: rgba(255, 0, 0, 0.1);
+            cursor: move;
+            transition: background-color 0.2s;
+        }
+        .rectangle:hover {
+            background: rgba(255, 0, 0, 0.3);
+        }
+        .rectangle.selected {
+            border-color: #569cd6;
+            background: rgba(86, 156, 214, 0.3);
+        }
+        .rectangle-item {
+            padding: 8px;
+            margin: 4px 0;
+            background: #252526;
+            border-radius: 4px;
+        }
+        .rectangle-item.highlighted {
+            background: #333;
+        }
+        .rectangle-item.hidden {
+            opacity: 0.5;
+        }
+        .rectangle-item input {
+            background: #333;
+            border: 1px solid #555;
+            color: #dcdcdc;
+            padding: 4px;
+            margin-right: 8px;
+            border-radius: 4px;
+        }
+        .rectangle-item button {
+            background: #333;
+            border: 1px solid #555;
+            color: #dcdcdc;
+            margin: 0 4px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .rectangle-item button:hover {
+            background: #444;
+        }
+        .clear-icon {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 1px solid #666;
+            cursor: se-resize;
+        }
+        .modal {
+            background: rgba(0, 0, 0, 0.8);
+            width: 100%;
+            height: 100%;
+        }
+        .modal-content {
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            margin: 50px auto;
+        }
+        .modal input[type="file"] {
+            background: #333;
+            border: 1px solid #555;
+            color: #dcdcdc;
+            padding: 8px;
+            margin: 8px 0;
+            width: 100%;
+            border-radius: 4px;
+        }
+        
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <button id="openFileModal"><i class="fas fa-folder-open"></i> Load Files</button>
+        <button id="drawModeButton"><i class="fas fa-pencil-alt"></i> Draw Mode</button>
+        <button id="selectModeButton"><i class="fas fa-mouse-pointer"></i> Select Mode</button>
+        <button id="exportJson"><i class="fas fa-file-export"></i> Export JSON</button>
+        <button id="toggleEmptyLabels"><i class="fas fa-eye-slash"></i> Toggle Labels</button>
+        <button id="undoButton"><i class="fas fa-undo"></i> Undo</button>
+        <button id="redoButton"><i class="fas fa-redo"></i> Redo</button>
+        <input type="text" id="xpathInput" placeholder="Enter XPATH...">
+        <button id="evaluateXpath"><i class="fas fa-search"></i> Evaluate</button>
+    </div>
+
+    <div id="fileModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Load Files</h3>
+            <div>
+                <label for="xmlLoader">Load XML:</label>
+                <input type="file" id="xmlLoader" accept=".xml">
+            </div>
+            <div>
+                <label for="imageLoader">Load Image:</label>
+                <input type="file" id="imageLoader" accept="image/*">
+            </div>
+            <div>
+                <label for="jsonLoader">Load JSON:</label>
+                <input type="file" id="jsonLoader" accept=".json">
+            </div>
+            <button onclick="document.getElementById('fileModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="main-content">
+            <div class="panel resizable" id="screenshot-panel" style="    padding: 0 !important;overflow: hidden!important;">
+                
+                <div id="canvas-container" >
+                    <img id="image" alt="Screenshot" style="display:none;">
+                </div>
+            </div>
+            
+            <div class="panel resizable" style="padding:0px; overflow: hidden!important;" id="xml-panel">
+                <h3>XML Inspector</h3>
+                <div id="editor"></div>
+            </div>
+            
+            <div class="panel" id="elements-panel">
+                <h3>Elements List</h3>
+                <button class="btn btn-secondary" id="button-all-elements">All Elements</button>
+                <button class="btn btn-secondary" id="button-ai-elements">AI Extracted </button>
+                <div id="ai-elements-list"></div>
+                <div id="rectangles-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script>
+        // Initialize variables
+        let rectangles = [];
+        let history = [];
+        let redoStack = [];
+        let isDrawing = false;
+        let isSelectMode = true; // Default to select mode
+        let hideEmptyLabels = true;
+        let startX, startY, currentRect;
+
+        // Initialize CodeMirror
+        const editor = CodeMirror(document.getElementById('editor'), {
+            mode: 'xml',
+            theme: 'monokai',
+            lineNumbers: true,
+            readOnly: true
+        });
+
+        // Make panels resizable
+        $(".resizable").resizable({
+            handles: 'e',
+            minWidth: 200,
+            resize: function(event, ui) {
+                editor.refresh();
+            }
+        });
+
+        // Initialize UI elements
+        const imageLoader = document.getElementById('imageLoader');
+        const jsonLoader = document.getElementById('jsonLoader');
+        const xmlLoader = document.getElementById('xmlLoader');
+        const canvasContainer = document.getElementById('canvas-container');
+        const image = document.getElementById('image');
+        const exportJsonBtn = document.getElementById('exportJson');
+        const rectanglesList = document.getElementById('rectangles-list');
+        const drawModeButton = document.getElementById('drawModeButton');
+        const selectModeButton = document.getElementById('selectModeButton');
+        const toggleEmptyLabelsButton = document.getElementById('toggleEmptyLabels');
+        const undoButton = document.getElementById('undoButton');
+        const redoButton = document.getElementById('redoButton');
+
+        // Event Listeners
+        window.addEventListener('resize', reloadCanvas);
+        
+        document.getElementById('openFileModal').addEventListener('click', () => {
+            document.getElementById('fileModal').style.display = 'block';
+        });
+
+        // Initialize mode buttons
+        selectModeButton.classList.add('active');
+        drawModeButton.classList.remove('active');
+
+        function saveState() {
+            history.push(JSON.stringify({ rectangles: [...rectangles] }));
+            redoStack = [];
+        }
+
+        function undo() {
+            if (history.length > 0) {
+                redoStack.push(JSON.stringify({ rectangles: [...rectangles] }));
+                const previousState = JSON.parse(history.pop());
+                rectangles = previousState.rectangles;
+                reloadCanvas();
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                history.push(JSON.stringify({ rectangles: [...rectangles] }));
+                const nextState = JSON.parse(redoStack.pop());
+                rectangles = nextState.rectangles;
+                reloadCanvas();
+            }
+        }
+
+        function getScaleFactor() {
+            if (rectangles.length === 0) return 1;
+            const maxWidth = Math.max(...rectangles.map(rect => rect.x + rect.width));
+            console.log('maxWidth', maxWidth);
+            return image.clientWidth / maxWidth;
+        }
+
+        function reloadCanvas() {
+            canvasContainer.innerHTML = '';
+            canvasContainer.appendChild(image);
+
+            const scaleFactor = getScaleFactor();
+            console.log('scaleFactor', scaleFactor);
+            console.log('rectangles', rectangles);
+            rectangles.forEach((rect, index) => {
+                const rectElement = document.createElement('div');
+                rectElement.className = 'rectangle';
+                rectElement.style.left = `${rect.x * scaleFactor}px`;
+                rectElement.style.top = `${rect.y * scaleFactor}px`;
+                rectElement.style.width = `${rect.width * scaleFactor}px`;
+                rectElement.style.height = `${rect.height * scaleFactor}px`;
+                rectElement.setAttribute('data-label', rect.label);
+                rectElement.setAttribute('data-index', index);
+                rectElement.title = rect.label;
+
+                const resizeHandle = document.createElement('div');
+                resizeHandle.className = 'resize-handle';
+                resizeHandle.style.left = `${rect.width * scaleFactor - 5}px`;
+                resizeHandle.style.top = `${rect.height * scaleFactor - 5}px`;
+                rectElement.appendChild(resizeHandle);
+
+                const clearIcon = document.createElement('span');
+                clearIcon.className = 'clear-icon';
+                clearIcon.innerHTML = '×';
+                clearIcon.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    saveState();
+                    rectangles.splice(index, 1);
+                    reloadCanvas();
+                });
+                rectElement.appendChild(clearIcon);
+
+                makeDraggable(rectElement, index);
+                makeResizable(resizeHandle, rectElement, index);
+                
+                // Add hover handlers
+                rectElement.addEventListener('mouseenter', () => highlightRectangle(index));
+                rectElement.addEventListener('mouseleave', () => unhighlightRectangle(index));
+                
+                canvasContainer.appendChild(rectElement);
+            });
+             scaleToFit('#screenshot-panel', '#canvas-container')
+            updateRectanglesList();
+        }
+
+        function updateRectanglesList() {
+            rectanglesList.innerHTML = '';
+            rectangles.forEach((rect, index) => {
+                const rectItem = document.createElement('div');
+                rectItem.className = 'rectangle-item';
+                rectItem.setAttribute('data-index', index);
+
+                const labelInput = document.createElement('input');
+                labelInput.type = 'text';
+                labelInput.value = rect.label;
+                labelInput.addEventListener('change', (e) => {
+                    saveState();
+                    rect.label = e.target.value;
+                    reloadCanvas();
+                });
+
+                const controls = document.createElement('div');
+                controls.style.marginTop = '5px';
+
+                ['Show', 'Hide', 'Delete', 'Duplicate'].forEach(action => {
+                    const button = document.createElement('button');
+                    button.textContent = action;
+                    button.addEventListener('click', () => {
+                        switch(action) {
+                            case 'Show':
+                                document.querySelector(`.rectangle[data-index='${index}']`).style.display = 'block';
+                                break;
+                            case 'Hide':
+                                document.querySelector(`.rectangle[data-index='${index}']`).style.display = 'none';
+                                break;
+                            case 'Delete':
+                                saveState();
+                                rectangles.splice(index, 1);
+                                reloadCanvas();
+                                break;
+                            case 'Duplicate':
+                                saveState();
+                                rectangles.push({...rect, x: rect.x + 10, y: rect.y + 10});
+                                reloadCanvas();
+                                break;
+                        }
+                    });
+                    controls.appendChild(button);
+                });
+
+                rectItem.appendChild(labelInput);
+                rectItem.appendChild(controls);
+
+                if (hideEmptyLabels && !rect.label) {
+                    rectItem.classList.add('hidden');
+                    const rectElement = document.querySelector(`.rectangle[data-index='${index}']`);
+                    if (rectElement) rectElement.style.display = 'none';
+                }
+
+                rectItem.addEventListener('mouseenter', () => highlightRectangle(index));
+                rectItem.addEventListener('mouseleave', () => unhighlightRectangle(index));
+
+                rectanglesList.appendChild(rectItem);
+            });
+        }
+
+function highlightRectangle(index) {
+            document.querySelectorAll('.rectangle').forEach(rect => rect.classList.remove('selected'));
+            document.querySelectorAll('.rectangle-item').forEach(item => item.classList.remove('highlighted'));
+
+            const rectElement = document.querySelector(`.rectangle[data-index='${index}']`);
+            const listItem = document.querySelector(`.rectangle-item[data-index='${index}']`);
+
+            if (rectElement) rectElement.classList.add('selected');
+            if (listItem) listItem.classList.add('highlighted');
+        }
+
+        function unhighlightRectangle(index) {
+            const rectElement = document.querySelector(`.rectangle[data-index='${index}']`);
+            const listItem = document.querySelector(`.rectangle-item[data-index='${index}']`);
+
+            if (rectElement) rectElement.classList.remove('selected');
+            if (listItem) listItem.classList.remove('highlighted');
+        }
+
+        function loadImage(imageSrc) {
+            image.src = imageSrc;
+            image.style.display = 'block';
+            rectangles = [];
+            saveState();
+            reloadCanvas();
+        }
+
+        imageLoader.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => loadImage(e.target.result);
+                reader.readAsDataURL(file);
+            }
+        });
+
+        jsonLoader.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+                        console.log('loading json');
+
+                        if (jsonData.imagePath || jsonData.imageBase64) {
+                            image.src = jsonData.imagePath || jsonData.imageBase64;
+                            
+                            editor.setValue(jsonData.xml);
+                            image.style.display = 'block';
+                            rectangles = jsonData.rectangles || jsonData.elements || [];
+                            saveState();
+                            reloadCanvas();
+                            console.log('rectangles', rectangles);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing JSON:', error);
+                        alert('Invalid JSON file');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        xmlLoader.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadXml(e.target.result);
+                    editor.setValue(e.target.result); // Update CodeMirror with XML content
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function loadXml(xml) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xml, 'text/xml');
+                const jsonData = parseXMLToRectanglesJSONArray(xmlDoc);
+                console.log('loading json xml');
+                rectangles = jsonData.map(item => ({
+                    x: item.x,
+                    y: item.y,
+                    width: item.width,
+                    height: item.height,
+                    label: item.label,
+                    absolutePath: item.absolutePath
+                }));
+
+                saveState();
+                reloadCanvas();
+            } catch (error) {
+                console.error('Error parsing XML:', error);
+                alert('Invalid XML file');
+            }
+        }
+
+        function getAbsolutePath(node) {
+            if (!node || node.nodeType !== 1) return '';
+
+            let path = [];
+            while (node && node.nodeType === 1) {
+                let name = node.nodeName;
+                let index = 1;
+                let sibling = node.previousSibling;
+
+                while (sibling) {
+                    if (sibling.nodeType === 1 && sibling.nodeName === name) {
+                        index++;
+                    }
+                    sibling = sibling.previousSibling;
+                }
+
+                path.unshift(`${name}[${index}]`);
+                node = node.parentNode;
+            }
+
+            return '/' + path.join('/');
+        }
+
+        function parseXMLToRectanglesJSONArray(xml) {
+            const jsonData = [];
+            const nodes = xml.getElementsByTagName('*');
+
+            Array.from(nodes).forEach(node => {
+                if (node.hasAttribute('bounds')) {
+                    // Android format
+                    const bounds = node.getAttribute('bounds').match(/\d+/g).map(Number);
+                    jsonData.push({
+                        x: bounds[0],
+                        y: bounds[1],
+                        width: bounds[2] - bounds[0],
+                        height: bounds[3] - bounds[1],
+                        label: node.getAttribute('text') || '',
+                        absolutePath: getAbsolutePath(node)
+                    });
+                } else if (node.hasAttribute('x') && node.hasAttribute('y')) {
+                    // iOS format
+                    jsonData.push({
+                        x: parseInt(node.getAttribute('x')),
+                        y: parseInt(node.getAttribute('y')),
+                        width: parseInt(node.getAttribute('width')),
+                        height: parseInt(node.getAttribute('height')),
+                        label: node.getAttribute('name') || node.getAttribute('label') || '',
+                        absolutePath: getAbsolutePath(node)
+                    });
+                }
+            });
+
+            return jsonData;
+        }
+
+        function makeDraggable(rectElement, index) {
+            let isDragging = false;
+            let startDragX, startDragY;
+            let initialRectX, initialRectY;
+
+            rectElement.addEventListener('mousedown', (event) => {
+                if (!isSelectMode || event.target.classList.contains('resize-handle')) return;
+
+                isDragging = true;
+                startDragX = event.clientX;
+                startDragY = event.clientY;
+                initialRectX = rectangles[index].x;
+                initialRectY = rectangles[index].y;
+
+                const handleMouseMove = (moveEvent) => {
+                    if (!isDragging) return;
+
+                    const deltaX = moveEvent.clientX - startDragX;
+                    const deltaY = moveEvent.clientY - startDragY;
+                    const scaleFactor = getScaleFactor();
+
+                    rectangles[index].x = initialRectX + (deltaX / scaleFactor);
+                    rectangles[index].y = initialRectY + (deltaY / scaleFactor);
+
+                    reloadCanvas();
+                };
+
+                const handleMouseUp = () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        saveState();
+                    }
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+        }
+
+        function makeResizable(resizeHandle, rectElement, index) {
+            let isResizing = false;
+            let startResizeX, startResizeY;
+            let initialWidth, initialHeight;
+
+            resizeHandle.addEventListener('mousedown', (event) => {
+                event.stopPropagation();
+                isResizing = true;
+                startResizeX = event.clientX;
+                startResizeY = event.clientY;
+                initialWidth = rectangles[index].width;
+                initialHeight = rectangles[index].height;
+
+                const handleMouseMove = (moveEvent) => {
+                    if (!isResizing) return;
+
+                    const deltaX = moveEvent.clientX - startResizeX;
+                    const deltaY = moveEvent.clientY - startResizeY;
+                    const scaleFactor = getScaleFactor();
+
+                    const newWidth = initialWidth + (deltaX / scaleFactor);
+                    const newHeight = initialHeight + (deltaY / scaleFactor);
+
+                    if (newWidth > 10 && newHeight > 10) {
+                        rectangles[index].width = newWidth;
+                        rectangles[index].height = newHeight;
+                        reloadCanvas();
+                    }
+                };
+
+                const handleMouseUp = () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        saveState();
+                    }
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            });
+        }
+
+        // Drawing mode
+        canvasContainer.addEventListener('mousedown', (event) => {
+            if (isSelectMode || event.target !== image) return;
+
+            isDrawing = true;
+            const rect = image.getBoundingClientRect();
+            startX = event.clientX - rect.left;
+            startY = event.clientY - rect.top;
+
+            currentRect = document.createElement('div');
+            currentRect.className = 'rectangle';
+            currentRect.style.left = `${startX}px`;
+            currentRect.style.top = `${startY}px`;
+            canvasContainer.appendChild(currentRect);
+        });
+
+        canvasContainer.addEventListener('mousemove', (event) => {
+            if (!isDrawing) return;
+
+            const rect = image.getBoundingClientRect();
+            const currentX = event.clientX - rect.left;
+            const currentY = event.clientY - rect.top;
+
+            const width = currentX - startX;
+            const height = currentY - startY;
+
+            currentRect.style.width = `${Math.abs(width)}px`;
+            currentRect.style.height = `${Math.abs(height)}px`;
+            currentRect.style.left = `${width < 0 ? currentX : startX}px`;
+            currentRect.style.top = `${height < 0 ? currentY : startY}px`;
+        });
+
+        canvasContainer.addEventListener('mouseup', () => {
+            if (!isDrawing) return;
+
+            isDrawing = false;
+            const scaleFactor = getScaleFactor();
+            const rect = {
+                x: parseInt(currentRect.style.left) / scaleFactor,
+                y: parseInt(currentRect.style.top) / scaleFactor,
+                width: parseInt(currentRect.style.width) / scaleFactor,
+                height: parseInt(currentRect.style.height) / scaleFactor,
+                label: ''
+            };
+
+            if (rect.width > 5 && rect.height > 5) {
+                rectangles.push(rect);
+                saveState();
+            }
+            reloadCanvas();
+        });
+
+        // Mode toggles
+        drawModeButton.addEventListener('click', () => {
+            isSelectMode = false;
+            drawModeButton.classList.add('active');
+            selectModeButton.classList.remove('active');
+        });
+
+        selectModeButton.addEventListener('click', () => {
+            isSelectMode = true;
+            selectModeButton.classList.add('active');
+            drawModeButton.classList.remove('active');
+        });
+
+        toggleEmptyLabelsButton.addEventListener('click', () => {
+            hideEmptyLabels = !hideEmptyLabels;
+            reloadCanvas();
+        });
+
+        // Export functionality
+        exportJsonBtn.addEventListener('click', () => {
+            const json = JSON.stringify({
+                
+                rectangles: rectangles,
+                xml: editor.getValue(),
+                imagePath: image.src
+            }, null, 2);
+            
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rectangles.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Undo/Redo
+        undoButton.addEventListener('click', undo);
+        redoButton.addEventListener('click', redo);
+  // Add XPATH evaluation function
+  function evaluateXpath() {
+            const xpathExpr = document.getElementById('xpathInput').value;
+            try {
+                const xmlDoc = new DOMParser().parseFromString(editor.getValue(), 'text/xml');
+                const result = document.evaluate(xpathExpr, xmlDoc, null, XPathResult.ANY_TYPE, null);
+                let node;
+                const matchingPaths = [];
+                
+                while ((node = result.iterateNext())) {
+                    matchingPaths.push(getAbsolutePath(node));
+                }
+                console.log('matchingPaths', matchingPaths);
+                const matchingRects = rectangles.filter(rect => 
+                    matchingPaths.includes(rect.absolutePath)
+                );
+                
+                console.log('matchingRects', matchingRects);
+                
+                // Clear previous highlights
+                document.querySelectorAll('.rectangle').forEach(rect => 
+                    rect.classList.remove('xpath-highlight')
+                );
+
+                if (matchingRects.length > 0) {
+                    // Highlight matching rectangles
+                    matchingRects.forEach(rect => {
+                        const index = rectangles.indexOf(rect);
+                        const rectElement = document.querySelector(`.rectangle[data-index='${index}']`);
+                        if (rectElement) rectElement.classList.add('xpath-highlight');
+                    });
+
+                    // Scroll to first matching line
+                    const firstRect = matchingRects[0];
+                    const lineNumber = findLineNumberForRect(firstRect);
+                    if (lineNumber !== -1) {
+                        editor.setCursor(lineNumber, 0);
+                        editor.scrollIntoView({ line: lineNumber, ch: 0 }, 100);
+                    }
+
+                    // Resize image to widest rectangle
+                    const maxWidth = Math.max(...matchingRects.map(rect => 
+                        rect.x + rect.width
+                    ));
+                    const panelWidth = document.getElementById('screenshot-panel').clientWidth;
+                    const scaleFactor = panelWidth / maxWidth;
+                    image.style.width = `${maxWidth * scaleFactor}px`;
+                }
+            } catch (error) {
+                console.error('XPATH evaluation error:', error);
+                alert('Invalid XPATH expression');
+            }
+        }
+
+        // Add line number finder (simplified example)
+        function findLineNumberForRect(rect) {
+            const xmlContent = editor.getValue();
+            const searchString = rect.absolutePath.split('/').pop();
+            const lines = xmlContent.split('\n');
+            
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes(searchString)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        // Add event listener for evaluate button
+        document.getElementById('evaluateXpath').addEventListener('click', evaluateXpath);
+
+        // Update resizable panels
+        $(".resizable").resizable({
+            handles: 'e, w',
+            minWidth: 200,
+            resize: function(event, ui) {
+                editor.refresh();
+                reloadCanvas();
+            }
+        });
+        // Initialize with select mode
+        selectModeButton.click();
+
+        function scaleToFit(containerSelector, contentSelector) {
+            const container = document.querySelector(containerSelector);
+            const content = document.querySelector(contentSelector);
+            
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+            const contentWidth = content.scrollWidth;
+            const contentHeight = content.scrollHeight;
+          
+            const scale = Math.min(containerWidth / contentWidth, containerHeight / contentHeight);
+          
+            content.style.transform = `scale(${scale})`;
+            content.style.transformOrigin = 'top left';
+            
+          }
+          window.addEventListener('load', () => scaleToFit('#screenshot-panel', '#canvas-container'));
+          
+        window.addEventListener('resize', () => scaleToFit('#screenshot-panel', '#canvas-container'));
+    </script>
+</body>
+</html>
