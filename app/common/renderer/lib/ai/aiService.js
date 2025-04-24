@@ -3,7 +3,8 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { CONFIG } from './config.js';
 import { createOsSpecifVisualElementSchema, createXpathLocatorSchema } from './schemas.js';
-
+import {Logger} from 
+'./logger.js'
 export class AIService {
   constructor() {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // Consider making this configurable
@@ -45,5 +46,43 @@ export class AIService {
       throw error;
     }
   }
-  
+ /**
+   * Generates a Page Object Model class using AI
+   * @param {string} model - The AI model to use
+   * @param {Array} messages - The messages to send to the AI service
+   * @param {number} temperature - Temperature setting (0-1)
+   * @returns {Promise<Object>} - The AI service response
+   */
+ async generatePOMClass(model, messages, temperature = 0) {
+  try {
+    Logger.log(`Generating POM class with model ${model}`, "info");
+    
+    // Store original base URL
+    const originalBaseURL = this.client.baseURL;
+    
+    try {
+      // Use POM-specific configuration temporarily
+      if (CONFIG.POM_MODEL && CONFIG.POM_MODEL.API && CONFIG.POM_MODEL.API.BASE_URL) {
+        this.client.baseURL = CONFIG.POM_MODEL.API.BASE_URL;
+      }
+      
+      // Use the existing client with temporarily modified baseURL
+      const response = await this.client.chat.completions.create({
+        model,
+        messages,
+        temperature,
+        max_tokens: CONFIG.GENERATION.maxOutputTokens || 4096,
+        top_p: CONFIG.GENERATION.topP || 0.1,
+      });
+      
+      return response;
+    } finally {
+      // Restore original base URL
+      this.client.baseURL = originalBaseURL;
+    }
+  } catch (error) {
+    Logger.error(`Error calling ${model} (generatePOMClass):`, error);
+    throw error;
+  }
+}
 }

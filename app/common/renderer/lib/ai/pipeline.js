@@ -14,7 +14,8 @@ const RETRY_DELAY = 2000;
 
 async function extractPageVisualElements(page, osVersions) {
   try {
-    const visual_model = 'gemini-2.0-flash'
+    //const visual_model = 'gemini-2.5-flash-preview-04-17'
+    const visual_model = CONFIG.MODEL
     const os = CONFIG.DEFAULT_OS || 'ios';
     const analysisRuns = CONFIG.ANALYSIS_RUNS || 1;
     await FileUtils.writeOutputToFile(page, "original_page_data");
@@ -64,7 +65,7 @@ async function extractPageVisualElements(page, osVersions) {
     );
     await FileUtils.writeOutputToFile(validatedPrompt, "validated_prompt");
 
-    Logger.log("Running final validation", "info");
+    Logger.log("Running visual analysis validation", "info");
     const secondResponse = await retryAICall(() =>
       aiService.analyzeVisualElements(visual_model, validatedPrompt, possibleStateIds, 1, 0)
     );
@@ -413,7 +414,11 @@ async function executeXpathPipeline  (elementsByStateByOS,osVersions) {
   return clean_results;
 }
 
-function createMappedElements(states) {
+async function executePOMClassPipeline(page)
+{
+  
+}
+export const  createMappedElements=(states) =>{
   const result = [];
   for (const state of states) {
       const os = state.osVersion.toLowerCase();
@@ -433,8 +438,10 @@ function createMappedElements(states) {
                   value: element.value,
                   name: element.name,
                   description: element.description,
-                  [`${os}_StateId`]: state.state_id,
-                  [`${os}_xpath`]: xpathEl.locatorEvaluation
+                  stateId: state.state_id,
+                  platform:os,
+                  xpath: xpathEl.locatorEvaluation
+                  
               });
           }
       }

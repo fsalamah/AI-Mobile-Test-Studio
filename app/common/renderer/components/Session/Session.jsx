@@ -23,6 +23,7 @@ import SavedSessions from './SavedSessions.jsx';
 import ServerTabCustom from './ServerTabCustom.jsx';
 import SessionStyles from './Session.module.css';
 import AppiumAnalysisPanel from '../ai/AppiumAnalysisPanel.jsx';
+import AIStudio from '../ai/AIStudio.jsx';
 
 const Session = (props) => {
   const {
@@ -55,6 +56,10 @@ const Session = (props) => {
       addCloudProvider();
       return;
     }
+    if (tab === 'ai-automation') {
+      ai();
+      return;
+    }
     await changeServerType(tab);
   };
 
@@ -63,7 +68,12 @@ const Session = (props) => {
       navigate('/inspector', {replace: true});
     }
   };
-
+  const ai = async (caps, attachSessId = null) => {
+    // if (await newSession(_.cloneDeep(caps), attachSessId)) {
+      
+    // }
+    navigate('/ai', {replace: false});
+  };
   useEffect(() => {
     const {
       setLocalServerParams,
@@ -105,6 +115,7 @@ const Session = (props) => {
             onChange={(tab) => handleSelectServerTab(tab)}
             className={SessionStyles.serverTabs}
             items={[
+              
               {
                 label: t('Appium Server'),
                 key: SERVER_TYPES.REMOTE,
@@ -124,11 +135,11 @@ const Session = (props) => {
               {
                 label: <span className="addCloudProviderTab">{t('Select Cloud Providers')}</span>,
                 key: ADD_CLOUD_PROVIDER_TAB_KEY,
-              }, {
-                label: t('AI Automation Generator'),
-                key: SESSION_BUILDER_TABS.AI,
-                className: SessionStyles.scrollingTab,
-                children: <AppiumAnalysisPanel {...props} />,
+              }, 
+              {
+                label: t('AI Automation'),
+                key: 'ai-automation',
+                children: null,
               },
             ]}
           />
@@ -168,7 +179,7 @@ const Session = (props) => {
           ]}
         />
 
-        <div className={SessionStyles.sessionFooter}>
+        <div className={SessionStyles.sessionFooter} >
           <div className={SessionStyles.desiredCapsLink}>
             <a href="#" onClick={(e) => e.preventDefault() || openLink(LINKS.CAPS_DOCS)}>
               <LinkOutlined />

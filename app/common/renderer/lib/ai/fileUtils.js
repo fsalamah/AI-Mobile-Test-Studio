@@ -29,4 +29,14 @@ export class FileUtils {
       throw err;
     }
   }
+
+  static async readFile(filePath) {
+    try {
+      const data = await fs.readFile(path.resolve(filePath), "utf8");
+      return data;
+    } catch (err) {
+      console.error("Error reading file:", err);
+      throw err;
+    }
+  }
 }

@@ -48,8 +48,16 @@ import {Logger as PipelineLogger} from "../../lib/ai/logger.js"
 import XrayComponent from "./Xray.jsx";
 import DevNamesEditorModal from "./Modals/DevNamesEditorModal.js";
 import DevNameEditor from "./DevNamesEditor.js";
-import TSKCrudTask from "./XPathGrid.js"
-import XPathGrid from "./XPathGrid.js";
+import CodeViewer from "./CodeViewer.jsx"; // Import the CodeViewer component
+
+import { IoCardOutline } from "react-icons/io5";
+import XPathHighlighter from './XPathHighlighter';
+
+import ResizableTabs from "../Xray/ResizableTabs.jsx";
+import XrayRootComponent from "../Xray/XrayRootComponent.jsx";
+import {LocatorElementList} from "./LocatorElementList.js";
+import FinalResizableTabsContainer from "../Xray/XrayRootComponent.jsx";
+import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
 
 //import Xray from "./Xray.jsx";
 const { Text, Title, Paragraph } = Typography;
@@ -278,12 +286,16 @@ export default function AppiumAnalysisPanel() {
     const [expandedKeys, setExpandedKeys] = useState([]);
     const [autoExpandParent, setAutoExpandParent] = useState(true);
     const [selectedKeys, setSelectedKeys] = useState([]);
-
+    const [isXrayModalVisible,setIsXrayModalVisible] = useState([]);
     const dispatch = useDispatch();
     const inspectorState = useSelector((state) => state.inspector);
     const [newPageForm] = Form.useForm();
     const [editPageForm] = Form.useForm();
-
+    const [viewXrayConfirmationModalVisible,setViewXrayConfirmationModalVisible] = useState(false);
+    
+    // New state variables for CodeViewer
+    const [codeLanguage, setCodeLanguage] = useState("java");
+    const [codeTitle, setCodeTitle] = useState("Code Viewer");
     
     // const [viewXrayModalVisible,setViewXrayModalVisible]=useState(false);
     const { treeData, expandedKeys: initialExpandedKeys } = useMemo(
@@ -401,7 +413,7 @@ export default function AppiumAnalysisPanel() {
     };
 
     const navigateToPageDetail = (pageId) => {
-        if (pageId && pageId !== selectedPageId) {
+        if (pageId) {
             setSelectedPageId(pageId);
             setCurrentView('pageDetail');
             setSelectedKeys([`page_${pageId}`]);
@@ -413,7 +425,36 @@ export default function AppiumAnalysisPanel() {
         setCurrentView('pageList');
         setSelectedKeys([]);
     };
-
+    
+    const navigateToPageXray = () => {
+        setCurrentView('pageXray')
+    };
+    
+    // Function to view code with CodeViewer
+    const viewCode = (page, language = "java", title = "Page Object Model") => {
+        setCurrentPageForCode(page);
+        setCodeLanguage(language);
+        setCodeTitle(title);
+        setCurrentView('codeViewer');
+    };
+    
+    // Function to navigate back from code viewer
+    const navigateFromCodeViewer = () => {
+        setCurrentView('pageDetail');
+    };
+    
+    // Function to view existing code
+    const viewExistingCode = () => {
+        if (!selectedPage) return;
+        
+        // Check if code exists in the page's aiAnalysis
+        if (selectedPage.aiAnalysis?.code) {
+            viewCode(selectedPage, "java", `Page Object Model for ${selectedPage.name}`);
+        } else {
+            message.info("No code has been generated for this page yet. Please use 'Generate Code' first.");
+        }
+    };
+    
     const startCapture = (targetStateId = null, intendedOs = null) => {
         if (!selectedPageId) {
              message.error("Please select a page before capturing a state.");
@@ -652,63 +693,61 @@ export default function AppiumAnalysisPanel() {
         setCurrentPageForCode(selectedPage);
         setViewLocatorsModalVisible(true);
     };
-    const handlePipelineLogs = (log)=>{
-        updateProgressPopupMessage(log.message)
-    }
+    
+    const handlePipelineLogs = (log) => {
+        updateProgressPopupMessage(log.message);
+    };
        
-    const startAiPipeline = async () =>{
-         //executePipeline(page, osVersions);
-         
-         PipelineLogger.subscribe(handlePipelineLogs)
-         try{
+    const startAiPipeline = async () => {
+        PipelineLogger.subscribe(handlePipelineLogs);
+        try {
             showProgressPopup("Initializing...");
             
-            setAiVisualResult( await executeVisualPipeline(selectedPage,['ios','android']))
-            //const xpathResult = await executeXpathPipeline(aiJsonResult)
-            //console.log(xpathResult)   
-            //hideProgressPopup(); 
+            setAiVisualResult(await executeVisualPipeline(selectedPage, ['ios', 'android']));
             setViewLocatorsModalVisible(true);
-            
-        }
-            catch (e)
-        {console.log(e);
-            
-        }
-        finally{PipelineLogger.unsubscribe(handlePipelineLogs)
+        } catch (e) {
+            console.log(e);
+        } finally {
+            PipelineLogger.unsubscribe(handlePipelineLogs);
             hideProgressPopup();
-            
-    }
-         
-    }
-    const proceedToAiXpath = async (aiVisualResult)=>{
-        if(selectedPage['aiAnalysis']==null)
-            selectedPage['aiAnalysis']={}
+        }
+    };
+    
+    const proceedToAiXpath = async (aiVisualResult) => {
+        if(selectedPage['aiAnalysis'] == null)
+            selectedPage['aiAnalysis'] = {};
         
         selectedPage['aiAnalysis']['visualElements'] = aiVisualResult;
         
-        updatePage(selectedPage)
+        updatePage(selectedPage);
         setViewLocatorsModalVisible(false);
-        PipelineLogger.subscribe(handlePipelineLogs)
-        try{
+        PipelineLogger.subscribe(handlePipelineLogs);
+        try {
             showProgressPopup("XPATH Detection starting...");
-        setAiXpathResult( await executeXpathPipeline(aiVisualResult,['ios','android']))
+            const res = await executeXpathPipeline(aiVisualResult, ['ios', 'android']);
+            console.log("res:", res);
+            setAiXpathResult(res);
         
-        setViewCodeModalVisible(true);
-        }
-        catch(e)
-        {console.log(e)}
-        finally
-        {
+            // temporary before the final review for locators
+            selectedPage['aiAnalysis']['locators'] = res;
+            console.log("aiXpathResult:", aiXpathResult);
+            updatePage(selectedPage);
+            navigateToPageXray();
+        } catch(e) {
+            console.log(e);
+        } finally {
             hideProgressPopup();
-            PipelineLogger.unsubscribe(handlePipelineLogs)
-            //hideProgressPopup();
+            PipelineLogger.unsubscribe(handlePipelineLogs);
         }
-    }   
-    const handleXpathSave = (data)=>{
-        setAiXpathResult( aiXpathResult)
+    };
+    
+    const handleXpathSave = (data) => {
+        setAiXpathResult(aiXpathResult);
         selectedPage['aiAnalysis']['locators'] = aiXpathResult;
-        updatePage(selectedPage)
-    }
+        
+        updatePage(selectedPage);
+    };
+    
     const chooseFile = async () => {
         try {
             if (!window.showSaveFilePicker) {
@@ -749,7 +788,6 @@ export default function AppiumAnalysisPanel() {
     // showProgressPopup("Initializing...");
     // updateProgressPopupMessage("Processing data...");
     // hideProgressPopup();
-
     
     const saveToFile = async () => {
         let handleToSave = fileHandle;
@@ -845,7 +883,109 @@ export default function AppiumAnalysisPanel() {
         );
         return <Space size="small">{badges}</Space>;
     };
-
+    
+    // Updated POM generation function that shows the code viewer after generation
+    const handleOnProceedToPom = async (page) => {
+        onUpdateSelectedPage(page);
+        
+        // Subscribe to the logger before starting
+        PipelineLogger.subscribe(handlePipelineLogs);
+        
+        // Show progress modal at the start
+        showProgressPopup("Initializing code generation...");
+        
+        try {
+            // Execute the POM pipeline
+            const result = await executePOMClassPipeline(page);
+            
+            // Update the page with the results if needed
+            if (result) {
+                console.log(result);
+                // Ensure aiAnalysis object exists
+                if (!page.aiAnalysis) {
+                    page.aiAnalysis = {};
+                }
+                // Store the generated code
+                page.aiAnalysis.code = result;
+                onUpdateSelectedPage(page);
+            }
+            
+            message.success("Page Object Model generated successfully");
+            
+            // Show the code viewer with the generated code
+            viewCode(page, "java", `Page Object Model for ${page.name}`);
+            
+        } catch (error) {
+            console.error("Error generating POM:", error);
+            message.error(`Failed to generate Page Object Model: ${error.message || 'Unknown error'}`);
+        } finally {
+            // Unsubscribe from the logger and hide the progress modal when done
+            PipelineLogger.unsubscribe(handlePipelineLogs);
+            hideProgressPopup();
+        }
+    };
+    
+    const onUpdateSelectedPage = (page) => {
+        if (!page || !page.id) {
+            console.warn("Cannot update page: Invalid page object or missing ID");
+            return;
+        }
+        
+        // Use the existing updatePage function to update the page in pages state
+        updatePage(page);
+        
+        message.success(`Page "${page.name}" updated successfully`);
+    };
+    
+    const fake = () => {
+        navigateToPageXray();
+    };
+      
+    const renderPageXray = () => {
+        return (
+            <FinalResizableTabsContainer 
+                onApplyChanges={onUpdateSelectedPage}
+                page={selectedPage}
+                onProceedToPom={handleOnProceedToPom}
+                pageChanged={onUpdateSelectedPage}
+                onExit={navigateToPageDetail} 
+            />
+        );
+    };
+    
+    const renderPageXrayModal = () => {
+        return (
+            <>
+                <Button onClick={() => setIsXrayModalVisible(true)}>Open Modal</Button>
+                
+                <FinalResizableTabsContainer
+                    visible={isXrayModalVisible}
+                    page={selectedPage}
+                    //onClose={() => setIsModalVisible(false)}
+                    onProceedToPom={handleOnProceedToPom}
+                    pageChanged={onUpdateSelectedPage}
+                    onExit={navigateToPageDetail}  
+                />
+            </>
+        );
+    };
+    
+    // Render the CodeViewer component
+    const renderCodeViewer = () => {
+        if (!currentPageForCode) return null;
+        
+        return (
+            <CodeViewer
+                page={currentPageForCode}
+                language={codeLanguage}
+                title={codeTitle}
+                onBack={navigateFromCodeViewer}
+                onSave={onUpdateSelectedPage}
+                onRegenerate={() => handleOnProceedToPom(currentPageForCode)}
+            />
+        );
+    };
+    
     const renderStatesList = () => {
         if (!selectedPage) return <Text type="secondary">Select a page from the list to view its details.</Text>;
 
@@ -853,67 +993,80 @@ export default function AppiumAnalysisPanel() {
 
         return (
             <>
-                 <div style={{ marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                     <div>
-                         <Space align="center">
-                              <Button icon={<ArrowLeftOutlined />} onClick={navigateToPageList} type="text" aria-label="Back to page list" />
-                             <Title level={4} style={{ margin: 0 }} ellipsis={{ tooltip: selectedPage.name }}>
-                                 {selectedPage.name}
-                                 {selectedPage.module && <Text type="secondary" style={{ marginLeft: 8, fontSize: '14px' }}>({selectedPage.module})</Text>}
-                             </Title>
-                         </Space>
-                         {selectedPage.description && <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0, paddingLeft: '36px' }} ellipsis={{ rows: 2}}>{selectedPage.description}</Paragraph>}
-                     </div>
-                     <Space wrap>
-                         <Tooltip title="Capture New State for this Page">
-                             <Button
-                                 type="primary"
-                                 icon={<AimOutlined />}
-                                 onClick={() => startCapture()}
-                                 disabled={isCapturing || !inspectorState?.driver}
-                                 loading={isCapturing && !captureTargetStateId}
-                             >
-                                 Capture State
-                             </Button>
-                          </Tooltip>
-                           <Tooltip title="View AI-Generated Page Object Model (Placeholder)">
-                             <Button icon={<CodeSandboxOutlined />} onClick={viewPageObjectModel}>
-                                 View POM
-                             </Button>
-                         </Tooltip>
-                         <Tooltip title="Execute AI code generation processing for this page">
-                             <Button icon={<BiSolidGraduation />} onClick={startAiPipeline}>
-                                 Generate Code
-                             </Button>
-                         </Tooltip>
-                         <Tooltip title="View AI-Generated Locators (Placeholder)">
-                              <Button icon={<FileSearchOutlined />} onClick={viewLocators}>
-                                  View Locators
-                              </Button>
-                          </Tooltip>
-                     </Space>
-                 </div>
+                <div style={{ marginBottom: '20px', paddingBottom: '0px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                    <div>
+                        <Space align="center">
+                            <Button icon={<ArrowLeftOutlined />} onClick={navigateToPageList} type="text" aria-label="Back to page list" />
+                            <Title level={4} style={{ margin: 0 }} ellipsis={{ tooltip: selectedPage.name }}>
+                                {selectedPage.name}
+                                {selectedPage.module && <Text type="secondary" style={{ marginLeft: 8, fontSize: '14px' }}>({selectedPage.module})</Text>}
+                            </Title>
+                        </Space>
+                        {selectedPage.description && <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0, paddingLeft: '36px' }} ellipsis={{ rows: 2}}>{selectedPage.description}</Paragraph>}
+                    </div>
+                    <Space wrap>
+                        <Tooltip title="Capture New State for this Page">
+                            <Button
+                                type="primary"
+                                icon={<AimOutlined />}
+                                onClick={() => startCapture()}
+                                disabled={isCapturing || !inspectorState?.driver}
+                                loading={isCapturing && !captureTargetStateId}
+                            >
+                                Capture State
+                            </Button>
+                        </Tooltip>
+                        <Tooltip title="View AI-Generated Page Object Model (Placeholder)">
+                            <Button icon={<CodeSandboxOutlined />} onClick={viewPageObjectModel}>
+                                View POM
+                            </Button>
+                        </Tooltip>
+                        <Button icon={<IoCardOutline />} onClick={fake}>
+                            FAKE
+                        </Button>
+                        <Tooltip title="Execute AI code generation processing for this page">
+                            <Button icon={<BiSolidGraduation />} onClick={startAiPipeline}>
+                                Generate Code
+                            </Button>
+                        </Tooltip>
+                        <Tooltip title="View AI-Generated Locators (Placeholder)">
+                            <Button icon={<FileSearchOutlined />} onClick={viewLocators}>
+                                View Locators
+                            </Button>
+                        </Tooltip>
+                        {/* Added View Code button */}
+                        <Tooltip title="View Generated Code">
+                            <Button 
+                                icon={<CodeOutlined />} 
+                                onClick={viewExistingCode}
+                                disabled={!selectedPage?.aiAnalysis?.code}
+                            >
+                                View Code
+                            </Button>
+                        </Tooltip>
+                    </Space>
+                </div>
 
-                 {isCapturing && (
-                     <div style={{ marginBottom: '16px', padding: '10px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                         <Spin spinning={true} size="small" />
-                         <Text style={{ marginRight: 8 }}>{captureStatusMessage}</Text>
-                         <Progress percent={capturingProgress} size="small" status="active" style={{ width: '150px' }} />
-                     </div>
-                 )}
+                {isCapturing && (
+                    <div style={{ marginBottom: '16px', padding: '10px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Spin spinning={true} size="small" />
+                        <Text style={{ marginRight: 8 }}>{captureStatusMessage}</Text>
+                        <Progress percent={capturingProgress} size="small" status="active" style={{ width: '150px' }} />
+                    </div>
+                )}
 
                 {states.length === 0 && !isCapturing ? (
                     <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
                         <Text type="secondary">No states captured for "{selectedPage.name}" yet.</Text>
                         <div style={{ marginTop: '16px' }}>
-                             <Button
-                                 type="primary"
-                                 icon={<AimOutlined />}
-                                 onClick={() => startCapture()}
-                                 disabled={isCapturing || !inspectorState?.driver}
-                             >
-                                 Capture First State
-                             </Button>
+                            <Button
+                                type="primary"
+                                icon={<AimOutlined />}
+                                onClick={() => startCapture()}
+                                disabled={isCapturing || !inspectorState?.driver}
+                            >
+                                Capture First State
+                            </Button>
                             {!inspectorState?.driver && <Text type="warning" style={{ marginLeft: 8 }}> (Connect driver to capture)</Text>}
                         </div>
                     </div>
@@ -922,15 +1075,15 @@ export default function AppiumAnalysisPanel() {
                         grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 3 }}
                         dataSource={[...states].sort((a, b) => new Date(b.timeStamp) - new Date(a.timeStamp))}
                         renderItem={(state) => {
-                             const hasIOS = !!state.versions?.ios;
-                             const hasAndroid = !!state.versions?.android;
-                             const canCaptureIOS = inspectorState?.driver?.client?.isIOS;
-                             const canCaptureAndroid = inspectorState?.driver?.client?.isAndroid;
+                            const hasIOS = !!state.versions?.ios;
+                            const hasAndroid = !!state.versions?.android;
+                            const canCaptureIOS = inspectorState?.driver?.client?.isIOS;
+                            const canCaptureAndroid = inspectorState?.driver?.client?.isAndroid;
 
-                             return (
+                            return (
                                 <List.Item key={state.id}>
                                     <Card
-                                         className="state-card"
+                                        className="state-card"
                                         title={
                                             <Space align="center">
                                                 {state.isDefault && <Tooltip title="Default State"><StarFilled style={{ color: "#faad14", fontSize: '16px', verticalAlign: 'middle' }} /></Tooltip>}
@@ -951,39 +1104,39 @@ export default function AppiumAnalysisPanel() {
                                                             </Menu.Item>
                                                         )}
                                                         <Menu.SubMenu
-                                                             key="captureVersion"
-                                                             icon={<PlusCircleOutlined />}
-                                                             title="Add/Recapture Version"
-                                                             disabled={!inspectorState?.driver || isCapturing}
-                                                         >
-                                                             <Menu.Item
-                                                                 key="captureiOS"
-                                                                 icon={<AppleOutlined />}
-                                                                 onClick={() => startCapture(state.id, 'ios')}
-                                                                 disabled={!canCaptureIOS || isCapturing}
-                                                             >
-                                                                 {hasIOS ? "Recapture iOS" : "Add iOS"}
-                                                             </Menu.Item>
-                                                             <Menu.Item
-                                                                 key="captureAndroid"
-                                                                 icon={<AndroidOutlined />}
-                                                                 onClick={() => startCapture(state.id, 'android')}
-                                                                 disabled={!canCaptureAndroid || isCapturing}
-                                                             >
-                                                                 {hasAndroid ? "Recapture Android" : "Add Android"}
-                                                             </Menu.Item>
-                                                         </Menu.SubMenu>
+                                                            key="captureVersion"
+                                                            icon={<PlusCircleOutlined />}
+                                                            title="Add/Recapture Version"
+                                                            disabled={!inspectorState?.driver || isCapturing}
+                                                        >
+                                                            <Menu.Item
+                                                                key="captureiOS"
+                                                                icon={<AppleOutlined />}
+                                                                onClick={() => startCapture(state.id, 'ios')}
+                                                                disabled={!canCaptureIOS || isCapturing}
+                                                            >
+                                                                {hasIOS ? "Recapture iOS" : "Add iOS"}
+                                                            </Menu.Item>
+                                                            <Menu.Item
+                                                                key="captureAndroid"
+                                                                icon={<AndroidOutlined />}
+                                                                onClick={() => startCapture(state.id, 'android')}
+                                                                disabled={!canCaptureAndroid || isCapturing}
+                                                            >
+                                                                {hasAndroid ? "Recapture Android" : "Add Android"}
+                                                            </Menu.Item>
+                                                        </Menu.SubMenu>
                                                         <Menu.Divider />
-                                                         <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
-                                                             <Popconfirm
-                                                                 title="Delete this state?"
-                                                                 description="Are you sure? This cannot be undone."
-                                                                 onConfirm={() => deleteState(state.id)}
-                                                                 okText="Yes, Delete" cancelText="No" placement="left"
-                                                             >
-                                                                 <div style={{ width: '100%' }}>Delete State</div>
-                                                             </Popconfirm>
-                                                         </Menu.Item>
+                                                        <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
+                                                            <Popconfirm
+                                                                title="Delete this state?"
+                                                                description="Are you sure? This cannot be undone."
+                                                                onConfirm={() => deleteState(state.id)}
+                                                                okText="Yes, Delete" cancelText="No" placement="left"
+                                                            >
+                                                                <div style={{ width: '100%' }}>Delete State</div>
+                                                            </Popconfirm>
+                                                        </Menu.Item>
                                                     </Menu>
                                                 }
                                                 trigger={['click']}
@@ -992,8 +1145,8 @@ export default function AppiumAnalysisPanel() {
                                             </Dropdown>
                                         }
                                         hoverable
-                                         style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-                                         bodyStyle={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
+                                        style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+                                        bodyStyle={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
                                     >
                                         <div style={{
                                             display: 'flex', justifyContent: 'space-around', alignItems: 'center',
@@ -1002,7 +1155,7 @@ export default function AppiumAnalysisPanel() {
                                         }}>
                                             {hasIOS ? ( <div style={{ textAlign: 'center', maxWidth: '45%' }}> <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>iOS</Text> <img src={`data:image/png;base64,${state.versions.ios.screenShot}`} alt={`iOS Screenshot for ${state.title}`} style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }} /> </div> ) : <div style={{ width: '45%'}}></div> }
                                             {hasAndroid ? ( <div style={{ textAlign: 'center', maxWidth: '45%' }}> <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>Android</Text> <img src={`data:image/png;base64,${state.versions.android.screenShot}`} alt={`Android Screenshot for ${state.title}`} style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }} /> </div> ) : <div style={{ width: '45%'}}></div> }
-                                             {!hasIOS && !hasAndroid && ( <div style={{ color: '#bfbfbf', textAlign: 'center', width: '100%' }}>No screenshots available</div> )}
+                                            {!hasIOS && !hasAndroid && ( <div style={{ color: '#bfbfbf', textAlign: 'center', width: '100%' }}>No screenshots available</div> )}
                                         </div>
 
                                         {state.description ? ( <Paragraph ellipsis={{ rows: 2, expandable: true, symbol: 'more' }} style={{ marginBottom: '8px', flexGrow: 1 }}> {state.description} </Paragraph> ) : (<div style={{flexGrow: 1}}></div>) }
@@ -1012,129 +1165,152 @@ export default function AppiumAnalysisPanel() {
                                         </div>
                                     </Card>
                                 </List.Item>
-                             );
+                            );
                         }}
                     />
-                 )}
-             </>
-         );
+                )}
+            </>
+        );
     };
 
-     const handleTreeSelect = (selectedKeysValue, info) => {
-         const selectedKey = selectedKeysValue[0];
-         if (selectedKey && selectedKey.startsWith('page_')) {
-             const pageId = selectedKey.substring('page_'.length);
-             if(selectedPageId !== pageId) { navigateToPageDetail(pageId); }
-         } else if (selectedKey && selectedKey.startsWith('module_')) {
-             setSelectedKeys(selectedKeysValue);
-         } else {
-             if (info.selected === false || (selectedKey && !selectedKey.startsWith('page_'))) {
-                  setSelectedKeys(selectedKeysValue || []);
-                  if (selectedPageId) {
-                      setSelectedPageId(null);
-                      setCurrentView('pageList');
-                  }
-             }
-         }
-     };
-
-     const onTreeExpand = (newExpandedKeys) => {
-         setExpandedKeys(newExpandedKeys);
-         setAutoExpandParent(false);
-     };
+    const handleTreeSelect = (selectedKeysValue, info) => {
+        const selectedKey = selectedKeysValue[0];
+        if (selectedKey && selectedKey.startsWith('page_')) {
+            const pageId = selectedKey.substring('page_'.length);
+            if(selectedPageId !== pageId) { navigateToPageDetail(pageId); }
+        } else if (selectedKey && selectedKey.startsWith('module_')) {
+            setSelectedKeys(selectedKeysValue);
+        } else {
+            if (info.selected === false || (selectedKey && !selectedKey.startsWith('page_'))) {
+                setSelectedKeys(selectedKeysValue || []);
+                if (selectedPageId) {
+                    setSelectedPageId(null);
+                    setCurrentView('pageList');
+                }
+            }
+        }
+    };
+    
+    const handleLocatorElementsChanged = (elements) => {
+        alert('elements chgan');
+        console.log(elements);
+    };
+    
+    const onTreeExpand = (newExpandedKeys) => {
+        setExpandedKeys(newExpandedKeys);
+        setAutoExpandParent(false);
+    };
     
     const renderTreeNodeTitle = (nodeData) => {
         const { title, key, isModule, pageData, icon } = nodeData;
 
         if (isModule) {
-             return <span className="tree-node-title-wrapper">
-                {/* {icon} */}
-                 {title}</span>;
+            return <span className="tree-node-title-wrapper">{title}</span>;
         } else {
             return (
-                 <span className="tree-node-title-wrapper page-node" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                     <span
-                         style={{ flexGrow: 1, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '5px' }}
-                         onClick={(e) => { e.stopPropagation(); navigateToPageDetail(pageData.id); }}
-                         title={title}
-                     >
-                         {/* {icon} */}
-                          {title}
-                     </span>
-                      <Space size="small" onClick={e => e.stopPropagation()} className="tree-node-actions" style={{ marginLeft: '8px' }}>
-                         <Tooltip title="Edit Page Details">
-                              <Button size="small" type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showEditPageModal(pageData); }} />
-                          </Tooltip>
-                         <Tooltip title="Delete Page">
-                              <Popconfirm
-                                 title={`Delete "${pageData.name}"?`}
-                                 description="All captured states will be deleted. This cannot be undone."
-                                 onConfirm={(e) => { e?.stopPropagation(); deletePage(pageData.id); }}
-                                 onCancel={(e) => e?.stopPropagation()}
-                                 okText="Yes, Delete" cancelText="No" placement="right"
-                              >
-                                  <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
-                              </Popconfirm>
-                          </Tooltip>
-                     </Space>
-                 </span>
+                <span className="tree-node-title-wrapper page-node" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <span
+                        style={{ flexGrow: 1, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '5px' }}
+                        onClick={(e) => { e.stopPropagation(); navigateToPageDetail(pageData.id); }}
+                        title={title}
+                    >
+                        {title}
+                    </span>
+                    <Space size="small" onClick={e => e.stopPropagation()} className="tree-node-actions" style={{ marginLeft: '8px' }}>
+                        <Tooltip title="Edit Page Details">
+                            <Button size="small" type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showEditPageModal(pageData); }} />
+                        </Tooltip>
+                        <Tooltip title="Delete Page">
+                            <Popconfirm
+                                title={`Delete "${pageData.name}"?`}
+                                description="All captured states will be deleted. This cannot be undone."
+                                onConfirm={(e) => { e?.stopPropagation(); deletePage(pageData.id); }}
+                                onCancel={(e) => e?.stopPropagation()}
+                                okText="Yes, Delete" cancelText="No" placement="right"
+                            >
+                                <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                            </Popconfirm>
+                        </Tooltip>
+                    </Space>
+                </span>
             );
         }
     };
-
+    
+    const sampleXML = `
+    <bookstore>
+      <book category="COOKING">
+        <title lang="en">Everyday Italian</title>
+        <author>Giada De Laurentiis</author>
+        <year>2005</year>
+        <price>30.00</price>
+      </book>
+      <book category="WEB">
+        <title lang="en">Learning XML</title>
+        <author>Erik T. Ray</author>
+        <year>2003</year>
+        <price>39.95</price>
+      </book>
+    </bookstore>
+  `;
     return (
-        <Layout style={{ height: '100vh', background: '#fff' }}>
-            <Sider width={300} theme="light" style={{ borderRight: '1px solid #f0f0f0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                 <div style={{ padding: '10px', borderBottom: '1px solid #f0f0f0' }}>
-                     <div style={{ marginBottom: '10px', display: 'flex', gap: '8px' }}>
-                          <Button icon={<PlusOutlined />} onClick={showNewPageModal} block type="primary" ghost> New Page </Button>
-                          <Dropdown overlay={ <Menu> <Menu.Item key="open" icon={<FolderOpenOutlined />} onClick={openSavedFile}> Open File... </Menu.Item> <Menu.Item key="save_location" icon={<SaveOutlined />} onClick={chooseFile}> Select Save Location... </Menu.Item> <Menu.Item key="save" icon={<CloudUploadOutlined />} onClick={saveToFile} disabled={saving || pages.length === 0}> {saving ? "Saving..." : "Save Project"} </Menu.Item> </Menu> } trigger={['click']} >
-                              <Button icon={<EllipsisOutlined />} aria-label="File Actions" />
-                          </Dropdown>
-                      </div>
-                      <Search placeholder="Search pages or modules..." allowClear onSearch={setSearchTerm} onChange={e => setSearchTerm(e.target.value)} prefix={<SearchOutlined />} />
-                 </div>
+        <Layout style={{ height: '100vh', background: '#fff' }} >
+            <Sider width={300} theme="light"  style={{ borderRight: '1px solid #f0f0f0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '10px', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ marginBottom: '10px', display: 'flex', gap: '8px' }}>
+                        <Button icon={<PlusOutlined />} onClick={showNewPageModal} block type="primary" ghost> New Page </Button>
+                        <Dropdown overlay={ <Menu> <Menu.Item key="open" icon={<FolderOpenOutlined />} onClick={openSavedFile}> Open File... </Menu.Item> <Menu.Item key="save_location" icon={<SaveOutlined />} onClick={chooseFile}> Select Save Location... </Menu.Item> <Menu.Item key="save" icon={<CloudUploadOutlined />} onClick={saveToFile} disabled={saving || pages.length === 0}> {saving ? "Saving..." : "Save Project"} </Menu.Item> </Menu> } trigger={['click']} >
+                            <Button icon={<EllipsisOutlined />} aria-label="File Actions" />
+                        </Dropdown>
+                    </div>
+                    <Search placeholder="Search pages or modules..." allowClear onSearch={setSearchTerm} onChange={e => setSearchTerm(e.target.value)} prefix={<SearchOutlined />} />
+                </div>
 
-                 <div style={{ flexGrow: 1, overflowY: 'auto', padding: '0 10px 10px 10px' }}>
-                     {pages.length === 0 && !searchTerm ? (
-                         <Text type="secondary" style={{ textAlign: 'center', display: 'block', marginTop: 20 }}> No pages created yet. </Text>
-                     ) : treeData.length === 0 && searchTerm ? (
-                         <Text type="secondary" style={{ textAlign: 'center', display: 'block', marginTop: 20 }}> No pages found matching "${searchTerm}". </Text>
-                     ) : (
-                         <Tree
-                             showIcon blockNode treeData={treeData} onSelect={handleTreeSelect} onExpand={onTreeExpand}
-                             expandedKeys={expandedKeys} selectedKeys={selectedKeys} autoExpandParent={autoExpandParent}
-                             titleRender={renderTreeNodeTitle} className="pages-tree" style={{ background: 'transparent' }}
-                         />
-                     )}
-                 </div>
+                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '0 10px 10px 10px' }}>
+                    {pages.length === 0 && !searchTerm ? (
+                        <Text type="secondary" style={{ textAlign: 'center', display: 'block', marginTop: 20 }}> No pages created yet. </Text>
+                    ) : treeData.length === 0 && searchTerm ? (
+                        <Text type="secondary" style={{ textAlign: 'center', display: 'block', marginTop: 20 }}> No pages found matching "${searchTerm}". </Text>
+                    ) : (
+                        <Tree
+                            showIcon blockNode treeData={treeData} onSelect={handleTreeSelect} onExpand={onTreeExpand}
+                            expandedKeys={expandedKeys} selectedKeys={selectedKeys} autoExpandParent={autoExpandParent}
+                            titleRender={renderTreeNodeTitle} className="pages-tree" style={{ background: 'transparent' }}
+                        />
+                    )}
+                </div>
             </Sider>
-
-            <Content style={{ padding: '20px', overflowY: 'auto', background: '#f0f2f5' }}>
+            {/* <XPathHighlighter xmlString={sampleXML} /> */}
+            
+            <Content style={{ padding: '10px', overflowY: 'auto', background: '#f0f2f5' }}>
                 {currentView === 'pageList' && !selectedPageId && (
                     <div style={{ textAlign: 'center', marginTop: '20vh' }}>
                         {/* <FileTextOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} /> */}
                         <Title level={4} type="secondary" style={{ marginTop: 16 }}>Select a Page</Title>
                         <Text type="secondary">Choose a page to view its states, or open a saved file.</Text>
-                         <Divider/>
-                          <Button icon={<FolderOpenOutlined />} onClick={openSavedFile}> Open Saved File... </Button>
+                        <Divider/>
+                        <Button icon={<FolderOpenOutlined />} onClick={openSavedFile}> Open Saved File... </Button>
                     </div>
                 )}
-                 {currentView === 'pageDetail' && selectedPageId && renderStatesList()}
-                 {currentView === 'pageList' && selectedPageId && (
-                     <div style={{ textAlign: 'center', marginTop: '20vh' }}> <ArrowLeftOutlined style={{ fontSize: '48px', color: '#d9d9d9' }}/> <Title level={4} type="secondary" style={{ marginTop: 16 }}>Page Deselected</Title> <Text type="secondary">Select the page again to view details.</Text> </div>
-                 )}
+                {currentView === 'pageDetail' && selectedPageId && renderStatesList()}
+                {currentView === 'pageList' && selectedPageId && (
+                    <div style={{ textAlign: 'center', marginTop: '20vh' }}> <ArrowLeftOutlined style={{ fontSize: '48px', color: '#d9d9d9' }}/> <Title level={4} type="secondary" style={{ marginTop: 16 }}>Page Deselected</Title> <Text type="secondary">Select the page again to view details.</Text> </div>
+                )}
+                {currentView === 'pageXray' && selectedPageId && renderPageXray()}
+                {currentView === 'codeViewer' && renderCodeViewer()}
             </Content>
+            
             <Modal
-        visible={progressPopupVisible}
-        footer={null}
-        closable={false}
-        centered
-        bodyStyle={{ textAlign: "center", padding: "20px" }}
-    >
-        <Spin size="large" style={{ marginBottom: "16px" }} />
-        <Text>{progressPopupMessage}</Text>
-    </Modal>
+                visible={progressPopupVisible}
+                footer={null}
+                closable={false}
+                centered
+                bodyStyle={{ textAlign: "center", padding: "20px" }}
+            >
+                <Spin size="large" style={{ marginBottom: "16px" }} />
+                <Text>{progressPopupMessage}</Text>
+            </Modal>
+            
             <Modal title="Create New Page" visible={newPageModalVisible} onOk={createNewPage} onCancel={() => setNewPageModalVisible(false)} okText="Create" destroyOnClose >
                 <Form form={newPageForm} layout="vertical" name="newPageForm">
                     <Form.Item name="name" label="Page Name" rules={[{ required: true, message: 'Please enter page name', whitespace: true }]}>
@@ -1148,7 +1324,7 @@ export default function AppiumAnalysisPanel() {
                     </Form.Item>
                 </Form>
             </Modal>
-
+            
             <Modal title={`Edit Page: ${editingPageData?.name || ''}`} visible={editPageModalVisible} onOk={editPage} onCancel={() => { setEditPageModalVisible(false); setEditingPageData(null); }} okText="Save Changes" destroyOnClose >
                 <Form form={editPageForm} layout="vertical" name="editPageForm" initialValues={editingPageData}>
                     <Form.Item name="name" label="Page Name" rules={[{ required: true, message: 'Please enter page name', whitespace: true }]}>
@@ -1164,30 +1340,45 @@ export default function AppiumAnalysisPanel() {
             </Modal>
 
             <Modal title={editingState?.id ? `Edit State: ${stateTitle}` : "New State Details"} visible={stateDetailsModalVisible} onOk={saveStateDetails} onCancel={() => { setStateDetailsModalVisible(false); setEditingState(null); }} okText="Save Details" width={600} destroyOnClose >
-                 <Form layout="vertical">
-                     <Form.Item label="State Title" required> <Input value={stateTitle} onChange={e => setStateTitle(e.target.value)} placeholder="e.g., Initial View, Error Message" /> </Form.Item>
-                     <Form.Item label="State Description (Optional)"> <TextArea rows={4} value={stateDescription} onChange={e => setStateDescription(e.target.value)} placeholder="Describe the specific condition" /> </Form.Item>
-                      {editingState && ( <Form.Item label="Captured Versions"> {getOsBadges(editingState)} {!editingState.versions?.ios && !editingState.versions?.android && <Text type="secondary">No versions captured.</Text>} </Form.Item> )}
-                 </Form>
+                <Form layout="vertical">
+                    <Form.Item label="State Title" required> <Input value={stateTitle} onChange={e => setStateTitle(e.target.value)} placeholder="e.g., Initial View, Error Message" /> </Form.Item>
+                    <Form.Item label="State Description (Optional)"> <TextArea rows={4} value={stateDescription} onChange={e => setStateDescription(e.target.value)} placeholder="Describe the specific condition" /> </Form.Item>
+                    {editingState && ( <Form.Item label="Captured Versions"> {getOsBadges(editingState)} {!editingState.versions?.ios && !editingState.versions?.android && <Text type="secondary">No versions captured.</Text>} </Form.Item> )}
+                </Form>
             </Modal>
-                 
-             <Modal title={`Page Object Model for "${currentPageForCode?.name}"`} visible={viewCodeModalVisible} onCancel={() => setViewCodeModalVisible(false)} footer={null} width="70vw" bodyStyle={{ background: '#f8f8f8', color: '#abb2bf', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
-                 {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}> {aiXpathResult!=null? JSON.stringify(aiXpathResult).toString() : 'No XPATHS Detected'} </pre> */}
-                 
-                 <XPathGrid 
-          data={aiXpathResult? aiXpathResult:(selectedPage?.aiAnalysis?.locators? selectedPage?.aiAnalysis?.locators :[])}
-          onSave={handleXpathSave}
-        />
-             </Modal>
+            
+            <Modal title={`Page locators for "${selectedPage?.name}"`} visible={viewXrayConfirmationModalVisible} onCancel={() => setViewXrayConfirmationModalVisible(false)} 
+                footer={null} width="90vw" 
+                bodyStyle={{ background: '#f8f8f8', color: '#abb2bf', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
+                {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}> {aiXpathResult!=null? JSON.stringify(aiXpathResult).toString() : 'No XPATHS Detected'} </pre> */}
+                
+                <FinalResizableTabsContainer 
+                    onApplyChanges={onUpdateSelectedPage}
+                    page={selectedPage}
+                    onProceedToPom={handleOnProceedToPom}
+                    pageChanged={onUpdateSelectedPage}
+                    onExit={navigateToPageDetail}  
+                />
+            </Modal> 
+            
+            <Modal title={`Page Object Model for "${currentPageForCode?.name}"`} visible={viewCodeModalVisible} onCancel={() => setViewCodeModalVisible(false)} footer={null} width="70vw" bodyStyle={{ background: '#f8f8f8', color: '#abb2bf', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
+                {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}> {aiXpathResult!=null? JSON.stringify(aiXpathResult).toString() : 'No XPATHS Detected'} </pre> */}
+                
+                <LocatorElementList  
+                    initialData={aiXpathResult ? aiXpathResult : (selectedPage?.aiAnalysis?.locators ? selectedPage?.aiAnalysis?.locators : [])}
+                    onElementsChanged={handleLocatorElementsChanged}
+                    onElementUpdated={handleLocatorElementsChanged}
+                    onSave={handleXpathSave}
+                />
+            </Modal>
 
-             <Modal title={`Locators for "${currentPageForCode?.name}"`} visible={viewLocatorsModalVisible} onCancel={() => setViewLocatorsModalVisible(false)} footer={null} width="60vw" bodyStyle={{ background: '#f8f8f8', color: '#333', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
-                 <DevNameEditor originalData={aiVisualResult? aiVisualResult:(selectedPage?.aiAnalysis?.visualElements? selectedPage?.aiAnalysis?.visualElements:[])} onSave={ proceedToAiXpath}/>
-                 {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}> {selectedPage?.aiAnalysis.visualElements ? JSON.stringify(selectedPage?.aiAnalysis.visualElements) : 'Please run AI Service to generate the locators'} </pre> */}
-                 
-             </Modal>
-             {/* <Modal title="Xray"      visible={viewXrayModalVisible} >
+            <Modal title={`Locators for "${currentPageForCode?.name}"`} visible={viewLocatorsModalVisible} onCancel={() => setViewLocatorsModalVisible(false)} footer={null} width="60vw" bodyStyle={{ background: '#f8f8f8', color: '#333', fontFamily: 'monospace', maxHeight: '70vh', overflowY: 'auto' }} destroyOnClose >
+                <DevNameEditor originalData={aiVisualResult ? aiVisualResult : (selectedPage?.aiAnalysis?.visualElements ? selectedPage?.aiAnalysis?.visualElements : [])} onSave={proceedToAiXpath}/>
+                {/* <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}> {selectedPage?.aiAnalysis.visualElements ? JSON.stringify(selectedPage?.aiAnalysis.visualElements) : 'Please run AI Service to generate the locators'} </pre> */}
+            </Modal>
+            {/* <Modal title="Xray" visible={viewXrayModalVisible} >
                 <Xray/>
-             </Modal> */}
+            </Modal> */}
         </Layout>
     );
 }

@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Electron: Main",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "npm", // Change to "npm"
+      "runtimeArgs": [          // Add "run", "dev:electron" to runtimeArgs
+        "run",
+        "dev:electron"
+      ],
+      "args": [],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/main.js"
+      ],
+      "console": "integratedTerminal",
+      "protocol": "inspector"
+    },
+    {
+      "name": "Electron: Renderer",
+      "type": "chrome",
+      "request": "launch",
+      "runtimeExecutable": "chrome",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMapPathOverrides": {
+        "webpack:///./src/*": "${webRoot}/*",
+        "meteor://💻app/*": "${workspaceFolder}/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Electron: Main + Renderer",
+      "configurations": ["Electron: Main", "Electron: Renderer"]
+    }
+  ]
+}

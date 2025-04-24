@@ -296,39 +296,127 @@ Current Platform: '${os.toUpperCase()}'`
       Possible kinds of elements:button,text_field,password_field,checkbox,radio_button,dropdown,dropdown_body,spinner,switch,toggle,slider,stepper,label,text,link,image,icon,modal,dialog,toast,tab,tab_bar,menu,menu_item,accordion,list,list_item,table,table_row,table_cell,grid,grid_item,card,carousel,progress_bar,activity_indicator,search_bar,datepicker,timepicker,datetimepicker,scroll_view,video,canvas,map,tooltip,floating_button,form,form_field,avatar,badge,breadcrumb,code_block,divider,navbar,pagination,overlay,drawer,expansion_panel,toolbar,app_bar,context_menu
       **IMPORTANT** OS VERSION FOR THIS PROMPT: ${os}
     `.trim();
-    const baseInstruction_=`You are a software test engineer. Your task is to analyze one or more overlapping screenshots and output a deduplicated list of every visible object, whether it’s a UI control or text string. Follow this exact procedure:
+    const baseInstruction=`UI Element Detection from Overlapping Screenshots
+You are a professional software test engineer. Your job is to analyze overlapping mobile screenshots and return a structured, deduplicated list of all visible UI elements and text strings.
 
-1. PREPARE:
-   • Ignore any status/system bar (time, battery, network) at the top of each image.  
-   • Know that OS version is: ${os}
+🔁 Full Procedure: Execute These 7 Steps in Order
+1. 🛠️ PREPARE ENVIRONMENT
+Ignore system/status bars (clock, signal, battery).
 
-2. DETECTION:
-   • Identify every object – large or small, text or graphic, control or label.  
-   • Include duplicates and overlaps initially; de‑duplication comes later.  
-   • If an object contains visible text, capture that under '"value"', and flag '"dynamic": true' if it looks like a runtime value (e.g., dates, counts).
+Device OS version: ${os}
 
-3. DE‑DUPLICATION ACROSS STATES:
-   • Screenshots may overlap states; if the same object appears in multiple images, only keep the first one you encountered.  
-   • Maintain a global registry of seen objects keyed by type + location/shape to avoid repeats.
+Images may represent overlapping UI states.
 
-4. NAMING (devName):
-   • For each object, assign a unique '"devName"' in camelCase using '<type><clearName>':
-     – '<type>' = one of [button, textField, passwordField, checkbox, …, contextMenu]  
-     – '<clearName>' = a concise, unambiguous identifier (e.g. submitButton, usernameField).  
-   • If two controls of the same type would get the same name, only keep the first instance.
+Target: ~50 meaningful elements per screen, but estimate dynamically.
 
-5. COUNT CHECK:
-   • Ensure total elements ≥ total strings.  
-   • If strings outnumber elements, re‑examine for missed containers or list items until this rule holds.
+Output must be a flat JSON array only, no explanations.
 
+2. 📊 SCREEN COMPLEXITY ASSESSMENT
+Estimate screen complexity to guide element expectations:
 
-6. ELEMENT TYPES:
-   Use only these types:  
-   button, textField, passwordField, checkbox, radioButton, dropdown, dropdownBody, spinner, switch, toggle, slider, stepper, label, text, link, image, icon, modal, dialog, toast, tab, tabBar, menu, menuItem, accordion, list, listItem, table, tableRow, tableCell, grid, gridItem, card, carousel, progressBar, activityIndicator, searchBar, datePicker, timePicker, dateTimePicker, scrollView, video, canvas, map, tooltip, floatingButton, form, formField, avatar, badge, breadcrumb, codeBlock, divider, navbar, pagination, overlay, drawer, expansionPanel, toolbar, appBar, contextMenu
+Count total visible strings on the screen.
 
-Implement this logic in a single pass over the screenshots so that you minimize missed objects and avoid redundant entries.
+Number of elements must always be ≥ number of strings.
+
+Use this to validate completeness and detect missed controls, containers, or visual structures.
+
+3. 🔍 OBJECT DETECTION
+Detect all visible UI objects and strings, even if overlapping:
+
+For each object, extract:
+
+json
+Copy
+Edit
+{
+  "type": "<elementType>",
+  "bounds": [x, y, width, height],
+  "value": "<visibleText>",       // optional
+  "dynamic": true | false,        // if the text looks runtime-generated
+  "devName": "<generatedName>"
+}
+Text handling:
+
+Normalize visible text: trim, Unicode NFC, lowercase, remove invisible characters.
+
+Detect dynamic patterns (e.g. prices, dates, counts) → set "dynamic": true.
+
+4. 🧠 TYPE CLASSIFICATION
+Assign "type" using the following rules:
+
+Use allowed values from the official list (see Step 6).
+
+If the type is unclear, use:
+
+"other" for ambiguous elements
+
+"swipeArea" for swipeable or scrollable containers (e.g., carousels, list views)
+
+Apply contextual rules:
+
+Actionable = button
+
+Nearby static label = label
+
+Decorative = icon
+
+Repeating block = listItem or card
+
+5. 🔁 CROSS-IMAGE DEDUPLICATION
+Screenshots may overlap. Avoid duplicates using this deduplication key:
+
+ini
+Copy
+Edit
+fingerprint = type + bounds (rounded to nearest 5px) + normalized value
+Track each object across images.
+
+Only keep the first occurrence of each unique object.
+
+6. 🏷️ DEVNAME GENERATION
+Assign a unique "devName" using this format:
+"<type><ClearName>" in camelCase
+
+<type> is the element type
+
+<ClearName> is a concise, readable name from context (e.g., submitButton, usernameField)
+
+If two elements would get the same name, keep only the first
+
+Avoid ordinal suffixes (e.g., button1, button2)
+
+7. ✅ OUTPUT VALIDATION
+Before output, self-check:
+
+Number of elements ≥ number of strings
+
+All devNames are unique
+
+All bounds are valid and on-screen
+
+All "value" strings are clean and complete
+
+No repeated or overlapping entries
+
+8. 🧱 ALLOWED ELEMENT TYPES
+Only use values from this list (plus swipeArea and other if needed):
+
+plaintext
+Copy
+Edit
+button, textField, passwordField, checkbox, radioButton, dropdown, dropdownBody,
+spinner, switch, toggle, slider, stepper, label, text, link, image, icon, modal,
+dialog, toast, tab, tabBar, menu, menuItem, accordion, list, listItem, table,
+tableRow, tableCell, grid, gridItem, card, carousel, progressBar, activityIndicator,
+searchBar, datePicker, timePicker, dateTimePicker, scrollView, video, canvas, map,
+tooltip, floatingButton, form, formField, avatar, badge, breadcrumb, codeBlock,
+divider, navbar, pagination, overlay, drawer, expansionPanel, toolbar, appBar, contextMenu,
+**swipeArea**, **other**
+📤 FINAL OUTPUT FORMAT
+Return a flat array of JSON
+⚠️ Only return the array. No comments, metadata, or extra text.
 `
-const baseInstruction=`# UI Analysis Engine for Test Engineers
+const baseInstruction_=`# UI Analysis Engine for Test Engineers
 
 You are a precise UI element detector for software testing. Your mission is to create a comprehensive catalog of interactive and visual elements from screenshots, prioritizing accuracy and completeness.
 
@@ -540,6 +628,97 @@ Current OS Version: ${os}`
       content,
     };
   }
-
+/**
+ * Creates prompts for generating Page Object Model classes
+ * @param {string} pageBaseClass - The base class name that the POM should extend
+ * @param {boolean} hasPageBase - Whether a PageBase implementation is provided
+ * @param {string} pageMetadataBase64 - Base64 encoded page metadata
+ * @param {string} screenshotsInfoBase64 - Base64 encoded screenshots info
+ * @param {string} guideTextBase64 - Base64 encoded guide text
+ * @param {string} locatorsJsonBase64 - Base64 encoded locators JSON
+ * @param {string|null} pageBaseBase64 - Optional Base64 encoded PageBase implementation
+ * @param {Array} screenshots - Array of screenshot objects with platform and base64 data
+ * @returns {Array} - Messages array for the AI service
+ */
+static createPOMGenerationPrompt(
+  pageBaseClass,
+  hasPageBase,
+  pageMetadataBase64,
+  screenshotsInfoBase64,
+  guideTextBase64,
+  locatorsJsonBase64,
+  pageBaseBase64,
+  screenshots
+) {
+  // Adjust system prompt based on whether PageBase is provided
+  let systemPrompt = `Please read and follow the coding guideline in the files provided. The files include: 1) Locators for the elements in JSON format, 2) Multiple screenshots from different states and platforms showing the page functionality, `;
+  
+  if (hasPageBase) {
+    systemPrompt += `3) The PageBase class implementation that the POM class must extend, and 4) A guide with coding standards. You will be creating a Java Page Object Model class that extends the provided ${pageBaseClass} class.`;
+  } else {
+    systemPrompt += `3) A guide with coding standards. You will be creating a Java Page Object Model class that extends the ${pageBaseClass} class.`;
+  }
+  
+  // Prepare messages for AI service
+  const messages = [
+    {
+      "role": "system",
+      "content": systemPrompt
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": `Create a Java Page Object Model class based on the guideline document, the provided locators, and screenshots. Follow the scaffolding pattern in testobjects not providing any argument in findTestObject() and also follow the Common.getLangString method for strings. Extract the strings from the page and only place strings that you find on the page. Do not implement the package name and the imports. Implement all the page methods such as element verification, navigation, form operations, etc. in the page method section. The class MUST extend ${pageBaseClass} ${hasPageBase ? "and utilize its methods appropriately as shown in the provided PageBase implementation" : ""}. If you are not sure about a specific method, implement its definition and throw a not implemented exception.`
+        },
+        {
+          "type": "text",
+          "text": "The class structure should follow these guidelines:\n1. Start with the getString methods region\n2. Then the locators region\n3. Then the page action methods\n4. Then the verification methods\n\nThe page methods should include element verification, navigation, form operations, etc. **IMPORTANT** Segregate methods by type into #REGION <Region Name> from other methods and always have a perform page method. In all cases, always refer to the guideline attached."
+        },
+        {
+          "type": "text",
+          "text": `Page metadata: data:text/json;base64,${pageMetadataBase64}`
+        },
+        {
+          "type": "text",
+          "text": `Screenshots information: data:text/json;base64,${screenshotsInfoBase64}`
+        }
+      ]
+    }
+  ];
+  
+  // Add PageBase implementation if available
+  if (hasPageBase && pageBaseBase64) {
+    messages[1].content.push({
+      "type": "text",
+      "text": `PageBase implementation: data:text/plain;base64,${pageBaseBase64}`
+    });
+  }
+  
+  // Add guide content
+  messages[1].content.push({
+    "type": "text",
+    "text": `Guide content: data:text/plain;base64,${guideTextBase64}`
+  });
+  
+  // Add locators
+  messages[1].content.push({
+    "type": "text",
+    "text": `Locators: data:text/json;base64,${locatorsJsonBase64}`
+  });
+  
+  // Add ALL screenshots as image_url types
+  for (const screenshot of screenshots) {
+    messages[1].content.push({
+      "type": "image_url",
+      "image_url": {
+        "url": `data:image/png;base64,${screenshot.screenShot}`
+      }
+    });
+  }
+  
+  return messages;
+}
 }
 

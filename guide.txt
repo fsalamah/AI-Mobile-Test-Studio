@@ -1,0 +1,852 @@
+Contents
+Test Design	2
+1.	Page Object Package and Class Structure	2
+2.	Page Object Class Contents	2
+3.	Perform Methods	2
+4.	Test Case Templates	3
+5.	PageBase (Imports and common methods)	3
+6.	Test Data	3
+7.	Object Scaffolding	3
+8.	DOs & DON’Ts	5
+Naming Convention	6
+1.	Page Object Class	6
+2. String Methods	6
+3. Locator Methods	7
+4. Perform Methods	7
+Appendix	8
+1.	Perform Page example	8
+2.	Perform E2E flow example	9
+3.	Sample Review Issues:	10
+4.	PageBase Methods Documentation	11
+
+ 
+Test Design
+1.	Page Object Package and Class Structure
+-	Each module in the system must be created in its own package. The main page of each module must have the name <ModuleName>HomePage.groovy
+-	Each page MUST consist of a single mobile page and must NOT cover other pages. For example, once a button is clicked and the page changed, the new displayed page must be treated as a separate page.
+-	In modules where many pages are common such as Transfer module. The pages should not be duplicated and should be named normally without adding (Common), for example, the Select Beneficiary Page is the same page for International, within Arab Bank and Domestic Transfer page. Separate pages must not be implemented in this case and the page name should be SelectBeneficiaryPage. Let’s assume that Cliq has a significantly different Select Beneficiary Page that the implementation of the previous page will not work, then in this case create a CliqSelectBeneficiaryPage.
+-	Hint: System modules that has shared pages can be Cards, Transfers, Accounts, etc..
+2.	Page Object Class Contents
+1.	Page Strings 
+2.	Page Locators: object locators with clear naming. Test object files must not be reused across different pages. Each page must have its own independent Test Object Files. 
+3.	Page Methods:
+a.	Object Interraction Methods: click<ObjectName>/setText<ObjectName>/swipeTo<ObjectName>(…..)
+b.	Perform Page Method: each page that has a sequence of actions to be performed must have perform<PageName> that performs the page functionality.
+c.	Perform E2E Method: This method should ideally exist in a module home page. The purpose of the method is performing an entire flow. For example, performE2E_InternationalTransfer(arg1,arg2,arg3……..,isSubmit=true)
+3.	Perform Methods
+There are two types of perform method: Page specific and E2E.
+a.	perform<PageName>Page
+ this method must exist for each page that has series of actions resulting in a submit/next/confirm/etc.. and should be utilized in any test case requiring an action on the page. The method should take as an argument all of the test data required for the page. For example, if the page has First Name, Last Name, and Nationality. The method should have all of the mentioned fields as parameters. To allow this method to be flexible, each parameter of these can be passed as null. In case the parameter is null, then the method should ignore filling the field. This is useful for scenarios when this method is needed to perform field validations, or requiring partial data updates. 
+Example Code: Appendix: 1- Perform Page example
+b.	performE2E_<FlowName>
+a method that performs an entire flow in the module. Such as perform international transfer this method will proceed with the flow of international transfer from the first page where the flow starts until the international transfer is completed. The method must have all the test data required for the flow as arguments (parameters) and must utilize the page methods from the pages involved in this E2E transaction. No custom control handling code should be implemented in this function. All the calls should be to existing page methods.
+Example Code: Appendix: 2- Perform E2E example
+ 
+4.	Navigation Methods
+What is a navigation method? A method used to navigate from pageA to pageB to avoid duplicating test cases only for the sake of reaching a page. This can lead to unnecessary time wasted in verifying irrelevant points and maintainability issues. Reusing test cases should only be done through test case templates and is only applicable when test cases share similar execution logic but different input/output parameters.
+5.	Test Case Templates 
+What is a test case template: a method that takes the test data as parameters and uses a number of different page or perform methods to execute a full test case. 
+When to use a test case template: When the same flow repeats with different data. For example, Pay a bill in USD, Pay a bill in AED, Pay a bill in INR. In this case create a method tcTemplate_payBillInCurrency(String currency) and reuse this method in Katalon test cases. 
+Advantage: when a test case logic is copy pasted multiple times it is time-consuming to update and maintain, using a template will reduce the maintenance and increase the test reliability.
+Where: Under each module create a class called TestCaseTemplates.groovy and implement the module test case templates.
+6.	 Test Data
+1-	Test Data for a suite must be defined as global variables. The data must be assigned at the suite setup hook level. If any specific requirements is needed for the test data it must be mentioned in the comments in the suite setup. 
+
+7.	PageBase (Imports and common methods)
+Purpose: 
+1-	Avoid creating common pages and common elements. 
+2-	Avoid import issues (such as duplicate import, confusion between framework libraries and Katalon libraries)
+3-	Provide a short-hand for frequently used methods such as getLangString and Loginfo
+
+8.	Object Scaffolding
+Scaffolding is a framework feature that helps organize test object files and reduce errors due to wrong object path. It can be used to create test object files automatically based on the page object model class. To make use of the scaffolding we need to perform 2 steps:
+1.	Define your page objects in the page class without specifying the path. For example:
+public static TestObject getButtonRequestCard()
+{
+	//Note how the find test object method is called without a path here
+	return findTestObject()
+}
+2.	Execute the method:
+com.acabes.utilities.ObjectScaffold.scaffold()
+from any dummy test case. 
+The folder structure and test object files will be created automatically.
+ 
+9.	Review Process
+1.	Automation scripts need to be submitted through pull requests
+2.	Before merging the code, the pull request needs to be reviewed against the automation guideline. Violations of the guideline need to be communicated to the engineer and updated in their code. Only then the pull request can be accepted and the code can be merged.
+10.	Implementation Process (BT Implementation)
+
+1.	Package Hierarchy: Create a package per module for example, pom.insurance, this should be your general module that may include submodules based on logical grouping (for example, pom.insurance.lifeInsurance and pom.insurance.travelInsurance)
+2.	Page Identification: Identify pages in your flow and give them names. Give attention for common pages that could be reused across different modules or submodules. 
+3.	Page Creation: Start creating the page that your flow starts from if it is not already created, remember to extend PageBase, and fill the page based on the guideline approach (Strings , Locators, then page methods including the performPage method) fill the page Strings at this point through having an inspector attached to the page to copy paste the texts.
+(Notice how NO Path is required for scaffolded test objects)
+4.	 
+5.	Object Scaffolding: After creating the page class run the scaffold com.acabes.utilities.ObjectScaffold.scaffold()Your page objects will be available under Object Repository/(Same as your Package Path), you may choose to fill the xpaths manually at this point or fill it in the execution time through the maintenance mode. 
+(note you can execute the test case below that has the scaffold method call to create the test object files)
+ 
+6.	Page Methods: Start implementing your page methods, remember, always have a performPage / click<object> / verify<Object/group of Objects/condition> 
+ 
+7.	(Optional) Xpath through maintenance: Your test object files are now created automatically with dummy selectors. You can run your test and fill the objects through the maintenance mode by providing the command that starts with RL:Your object xpath value. The xpath will be automatically updated in the object. (Hint: attach Appium inspector to get the page objects quickly and accurately through the same session)
+ 
+
+
+
+8.	Suite: Fill the suite with the test case are about to implement, once you have started the implementation take note of each test data input you are providing to your test case, if the input may change, (for example, a string that may be written in Arabic/English such as a country name, a specific account/card number, a specific user, etc..) use GlobalVariables to pass these but do not store the value of the test data value in the profile, instead have your global variable defined and then assign it in the suite Setup hook as in the following example. Remember to set skipped = false
+   
+9.	Test Case Creation: Now you can start using your page methods to build your test case, your test case should now be easily created through calling your page methods and verifications.  Note: if the test case is repetitive, please use the test case template approach and pass the data. 
+ 
+
+11.	DOs & DON’Ts
+ 
+	DONT	DO
+1	Do NOT define an object/variable/method name that can be confused. 
+For example, public static 
+getConfirm()
+veify()	Define clear names that others can understand without confusion
+getButtonConfirm ()
+getLabelPageTitleConfirm ()
+
+verifyOtpPageContent()
+verifyCardsSection()
+2	Do NOT define a method that does something different or additional to its name	A method name should reflect its absolute purpose and function. A method called verifyXyz() should only verify. A method called performAbc() should perform Abc.
+3	Do NOT copy and paste code that could be re-used as a method unless absolutely necessary	Follow DRY (DO NOT REPEAT YOURSELF) create reusable methods such as perform methods, and test case templates. This is easier to maintain and understand.
+4	Do NOT define methods that handles multiple pages unless it is a perform method or a page method calling a user control related sub-page such as select account from a list or select a country. 	Each page has its own methods that handles the page controls. 
+Each page has a perform method allowing test cases, E2E flows, and parent pages to interact with the page.
+5	Do NOT tap an object by the location of an object behind the page, or by reference to its container. DON’T use tapWithingPoint or tapByCoordinates.	Find the proper locator of the element. If a locator doesn’t exist then use ImageAI to interact with the element by image.
+6	Do NOT swipe without a target of the swipe. 	Always swipe to specific object/text
+7	Do NOT reuse object files for different pages	Each page must have its own object files
+8	DO NOT implement methods like hideKeyboard(), verifyEqual, etc..  for each page 	Those are all available in the framework library Mobile. Use them from the Mobile library, if a specific method is not working for a specific scenario please refer to your lead, it can be updated on the framework level.
+9	Do NOT use @Keyword before a method definition	Start your method definition as the following
+public static <return data type> <methodName>()
+10	Do NOT write code that handles exceptional cases without comment explaining what the code is doing	Comment on methods and lines of code that may be complicated or handle specific cases or need to be updated so that your colleagues understand your code.
+11	DO NOT put your test data inside the test case code, Page class 	In the suite startup() method assign the GlobalVariables used as test data in the test cases of your suite
+12	In general, DO NOT write any ambiguous code. If you think your colleagues will not understand what the code does.  	If the code is complicated, use clear naming, comments to explain so that your code can be understood by your colleagues.
+13	Do not reuse Katalon Test Cases	Use test case templates and create new Katalon test case calling the template
+ 
+
+Naming Convention
+Purpose: Align the team to a standard code-naming convention shared across all projects, to enhance the ability to read, understand & maintain automation code.
+
+1.	Page Object Class 
+•	Format:  <PageName>Page
+•	Example: LoginPage, HomePage, ProfilePage, SettingsPage
+
+2. String Methods
+•	Format: getString<ControlName><ControlType><Label/Title/PlaceHolder/Text>()
+•	Control Types: Input, Button, Checkbox, Dropdown, etc.
+•	Example:
+•	getStringLoginButtonLabel()
+•	getStringAmountInputPlaceHolder()
+•	getStringErrorMessageTitle()
+•	getStringTransferErrorMessageText()
+ 
+3. Locator Methods
+•	Format: get<ControlType><ControlName>()
+•	Control Types: Input, Button, Checkbox, Dropdown, ListView, ListItem, Recycler, Card, TextView,Image,Toggle, Radio, Calendar. 
+•	NOTE: Those names will be used by us regardless of the mobile OS to convey the control type.
+•	Example:
+•	getLabelConfirmTitle()
+•	getInputUsername()
+•	getButtonLogin()
+•	getCheckboxRememberMe()
+•	getDropdownCountry()
+
+4. Perform Methods
+1.	Methods that interact with multiple elements representing a group of user interactions with the page.
+2.	Format: perform<InterractionName>() | perfromE2E_<FlowName>
+3.	Example:
+•	performLoginPage(String username, String password, boolean submit = true)
+•	performPayCreditCardPage(String fromAccount, double amount, boolean submit = true)
+•	peform_InternationalTransfer(arg1,arg2, etc..)
+5. Test Case Template
+•	Explanation: This is used when a test case is repeated many times with different parameters. For example, Verify Account Type. Same steps, different account types. In this case, there is no need to repeat the test. Only create a test case template and call it inside Katalon test case to maintain traceability with Jira. 
+•	Format: tcTemplate_<TestCaseName>()
+
+Appendix
+1.	Perform Page example
+•	Note how each parameter in this method is checked for null, if null the field will be skipped.
+•	Note how there is a method for each page element handling the element (setDateOfBirth, eneterNameOnCardField,etc..)
+•	Note how this method is only interacting with methods inside itself, not with other pages.
+public static void performRequestSupplementaryCardPage (
+    String cardHolderName,
+    String nameOnCardField,
+    String nationalityCountry,
+    String nationalId,
+    boolean isSetDOB,
+    boolean isSetRelationship,
+    boolean isSubmit
+) {
+    if (nameOnCardField != null) {
+        KeywordUtil.logInfo("Enter valid name in Supplementary Card Holder Name field");
+        KeywordUtil.logInfo("Enter card holder name");
+        RequestSupplementaryDetailsPage.enterNameOnCardField(nameOnCardField);
+    }
+ 
+    // Swipe to the top part of the form to show cardHolderName
+    Gestures.pageSwipeDown();
+ 
+    if (cardHolderName != null) {
+        KeywordUtil.logInfo(String.format("Enter $\"{cardHolderName\"} in Supplementary Card Holder Name field", cardHolderName));
+        RequestSupplementaryDetailsPage.enterSupplementaryCardHolderName(cardHolderName, false);
+    }
+ 
+    // Swipe to the bottom part of the form to show other fields
+    Gestures.pageSwipeDown();
+ 
+    if (nationalityCountry != null) {
+        RequestSupplementaryDetailsPage.selectNationality(nationalityCountry);
+    }
+ 
+    if (nationalId != null) {
+        KeywordUtil.logInfo("Enter valid National ID");
+        RequestSupplementaryDetailsPage.enterNationalID(nationalId, false);
+    }
+ 
+    // Swipe to the bottom of the page again to ensure the date of birth control is in view
+    Gestures.pageSwipeUp(1);
+ 
+    if (isSetDOB == true) {
+        RequestSupplementaryDetailsPage.setDateOfBirth();
+    }
+ 
+    if (isSetRelationship == true) {
+        // This control is a dropdown and requires custom implementation; therefore, it has its own function
+        selectRelationship();
+    }
+ 
+    // Check if the form should be submitted
+    if (isSubmit == true) {
+        Page.clickButtonOk();
+    }
+}
+ 
+
+
+
+
+2.	Perform E2E flow example
+•	Note how this method is easy to understand because each page has a perform method.
+public static void performe2e_InternationalTransferPaySomeoneNew(
+    String beneficiaryCountry, 
+    String beneficiaryAccountNumber, 
+    String swiftCode, 
+    String companyName, 
+    String transferAmount, 
+    String transferCurrency, 
+    String feePayer, 
+    boolean isCompany,
+    String beneficiaryName, 
+    String beneficiaryCity, 
+    String beneficiaryState, 
+    String paymentPurposeOption, 
+    String paymentPurposeDescription) {
+ 
+    // Click "Pay Someone New"
+    TransferFromAndToPage.clickPaySomeoneNew(true);
+ 
+    // Enter Beneficiary Details
+    AddBeneficiaryDetailsPage.performEnterBeneficiaryDetails(
+        beneficiaryCountry, 
+        beneficiaryAccountNumber, 
+        swiftCode, 
+        isCompany, 
+        companyName, 
+        transferAmount, 
+        beneficiaryName, 
+        beneficiaryCity, 
+        beneficiaryState
+    );
+  
+    // Fill the payment purpose page
+    com.acabes.poms.trasnfers.TransferPurposePage.performTransferPurposePage(
+        paymentPurposeOption, 
+        paymentPurposeDescription
+    );
+ 
+    // Fill the transfer amount page
+    TransferAmountPage.performTransferAmountPage(transferCurrency, transferAmount);
+ 
+    // Fill the payment option page
+    PaymentOptionPage.performPaymentOptionsPage(feePayer, transferAmount, transferCurrency);
+}
+ 
+ 
+
+3.	Sample Review Issues:
+
+a.	A Verify Method doing multiple actions, a method should only do what is in its name (verify ONLY Verifies, it doesn’t click buttons and perform actions) 
+b.	The method is implemented under the wrong page
+c.	The method covers multiple other separate pages
+d.	The confirm button is clicked through the common page confirm button, but cannot be clicked because the button needs to be scrolled to in the bottom of the page. A method clickConfirmButton needs to ben implemented and the swiping needs to be handled there.
+
+
+ 
+	@Keyword
+	public static void verifyTheConfirmAndSuccessScreen() {
+		com.acabes.pages.Common.waitForElementPresent(InternationalConfirmationPage.getConfirmDetails(),60)
+		com.acabes.pages.internationalTransfer.InternationalConfirmationPage.verifySubmitPageContentsNewMethodTwo()
+		KeywordUtil.logInfo('Take ScreenShot')
+		com.acabes.framework.Common.screenshot()
+		com.acabes.pages.Common.clickConfirmButton()
+		com.acabes.pages.OtpPage.PerformOtp('666666', false)
+		//com.acabes.pages.SecondaryPasswordPage.enterSecondPassword()
+		//CommonPages.hideKeyboard()
+		com.acabes.pages.Common.clickSubmitButton()
+		com.acabes.pages.Common.waitForElementPresent(InternationalConfirmationPage.getTransferSuccessFullPopUp(),60)
+		Mobile.delay(7)
+		com.acabes.pages.internationalTransfer.InternationalConfirmationPage.verifySucessPopUp()
+		KeywordUtil.logInfo('Take ScreenShot')
+		com.acabes.framework.Common.screenshot()
+}
+
+
+ 
+4.	 PageBase Methods Documentation
+When extending the PageBase on your Page class you will have those methods from your page ready without making any import:
+Group	Method Name	Parameters
+Element Interaction (Taps/Clicks)	clickButtonOk
+Clicks the "OK" button using a TestObject with specified failure handling.	failureHandling (FailureHandling, default: STOP_ON_FAILURE)
+	clickButtonClose
+Clicks the close button (either "X" or back arrow) using image recognition with specified failure handling.	failureHandling (FailureHandling, default: CONTINUE_ON_FAILURE)
+	clickByText
+Clicks an element based on its text content with options for exact matching, timeout, and failure handling.	text (String), isExactMatch (boolean, default: true), timeout_s (int, default: 5), failureHandling (FailureHandling, default: OPTIONAL)
+	clickImageControlByIndex
+Clicks an image control at the specified index based on image recognition.	imageMatchIndex (int), imagePath (String)
+	tapHorizontalPageFilterTag
+Taps a horizontal page filter tag within a container, optionally performing the click.	filterContainer (TestObject), tagName (String), click (boolean, default: true)
+Element Retrieval	findTestObject
+Locates and returns a TestObject using various lookup methods.	None / objectId (String) / objectId (String), variables (Map<String, Object>) / variables (Map<String, Object>)
+	getElementsWithText
+Retrieves a list of MobileElements based on their text content with options for exact matching and timeout.	text (String), isExactMatch (boolean), timeout_s (int, nullable)
+	GetLangString
+Returns the localized string based on the current language.	en (String), ar (String) / en (String)
+Text/Localization	logInfo
+Logs an informational message.	info (String)
+Logging/Reporting	markError
+Logs an error message.	error (String)
+	markErrorAndStop
+Logs an error message and stops execution.	error (String)
+	markWarning
+Logs a warning message.	error (String)
+	markPassed
+Logs a pass message.	message (String)
+	markFailed
+Logs a fail message.	message (String)
+	markFailedAndStop
+Logs a fail message and stops execution.	message (String)
+	switchKeyboardLanguageToEnglish
+Switches the keyboard language to English (iOS only).	None
+Device/Environment Control	dismissServiceErrorPopUpIfExist
+Dismisses a service error popup if it exists.	None
+Screenshot	takeScreenshot
+Takes a screenshot and returns the file path.	None
+
+
+Documentation for all the methods of the framework:
+ObjectRepositoryExtensions Class
+•	readIgnoredObjects()
+o	Purpose: Reads ignored object paths from a ".mntcignore" file.   
+o	Params: None
+o	Returns: A String array of ignored file paths.   
+•	getTest()
+o	Purpose: Returns information about the caller (likely the test case or keyword).   
+o	Params: None
+o	Returns: A String with caller information.   
+•	extractVars(String input)
+o	Purpose: Extracts variable names from a string.   
+o	Params: 
+	input: The string to extract variables from.   
+o	Returns: An ArrayList of variable names.   
+•	prependObjectRepositoryIfNotPresent(String testObjectRelativeId)
+o	Purpose: Adds "/Object Repository/" to the beginning of a test object ID if it's not already present.   
+o	Params: 
+	testObjectRelativeId: The relative ID of the test object.   
+o	Returns: The modified test object ID.   
+•	handleScaffoldedObjects(String testObjectRelativeId)
+o	Purpose: Handles logic for scaffolded objects, potentially updating or migrating test objects.   
+o	Params: 
+	testObjectRelativeId: The relative ID of the test object.   
+o	Returns: The (potentially modified) test object ID.   
+•	findTestObject(String testObjectRelativeId, Map<String, Object> variables)
+o	Purpose: Finds a test object using its ID and a map of variables. Includes handling for missing files and user input.   
+o	Params: 
+	testObjectRelativeId: The relative ID of the test object.   
+	variables: A map of variables to substitute in the object locator.   
+o	Returns: The found TestObject.   
+•	getCustomObject(String testObjectRelativeId)
+o	Purpose: Retrieves a test object using a relative ID.   
+o	Params: 
+	testObjectRelativeId: The relative ID of the test object.   
+o	Returns: The retrieved TestObject.   
+•	findTestObject(String objectPath)
+o	Purpose: Finds a test object by its path, with handling for file existence and user input.   
+o	Params: 
+	objectPath: The path to the test object.   
+o	Returns: The found TestObject.   
+•	checkForObjectOnThePage(TestObject to, boolean shoudExist, String filePath)
+o	Purpose: Checks if a test object exists on the page and interacts with the user for actions like retrying or ignoring.   
+o	Params: 
+	to: The TestObject to check for.   
+	shoudExist: A boolean indicating whether the object should exist or not.   
+	filePath: The file path of the test object.   
+o	Returns: A boolean indicating whether to continue execution.   
+•	getTranslation(String key)
+o	Purpose: Retrieves a translated string based on a key.   
+o	Params: 
+	key: The key to look up in the translations.   
+o	Returns: The translated string.   
+•	readProperty(String key)
+o	Purpose: Reads a property value from a properties file.   
+o	Params: 
+	key: The key of the property to read.   
+o	Returns: The property value.   
+•	getScanner()
+o	Purpose: Returns an instance of the ScannerSingleton class.   
+o	Params: None
+o	Returns: A Scanner object.   
+•	fileExists(String initialPath)
+o	Purpose: Checks if a file exists and allows the user to correct the path.   
+o	Params: 
+	initialPath: The initial file path to check.   
+o	Returns: The valid file path (or null if the user chooses to exit).   
+•	logToBS(String level, String message)
+o	Purpose: Logs messages to the console and optionally to BrowserStack.   
+o	Params: 
+	level: The log level (e.g., "info", "warn", "error").   
+	message: The message to log.   
+o	Returns: Void
+•	saveAndOpenPageXML(String textToSave)
+o	Purpose: Saves text to an XML file and opens it.   
+o	Params: 
+	textToSave: The text to save to the XML file.   
+o	Returns: Void
+•	drawSquareOnImage(String imagePath, int x, int y, int width, int height)
+o	Purpose: Draws a yellow square on an image.   
+o	Params: 
+	imagePath: The path to the image file.   
+	x: The x-coordinate of the square.   
+	y: The y-coordinate of the square.   
+	width: The width of the square.   
+	height: The height of the square.   
+o	Returns: Void
+•	openFile(String filePath)
+o	Purpose: Opens a file using the default system application.   
+o	Params: 
+	filePath: The path to the file to open.   
+o	Returns: Void
+•	convertMobileToSelenium(MobileTestObject to)
+o	Purpose: Converts a Katalon MobileTestObject to a Selenium By locator.   
+o	Params: 
+	to: The MobileTestObject to convert.   
+o	Returns: A Selenium By locator.   
+o	Throws: IllegalArgumentException if the locator strategy is unsupported.   
+•	createTestObjectByXpath(String objectName, String xpath)
+o	Purpose: Creates a TestObject with an XPath locator.   
+o	Params: 
+	objectName: The name of the test object.   
+	xpath: The XPath locator string.   
+o	Returns: The created TestObject.   
+•	createTestObjectByXpath(String xpath)
+o	Purpose: Creates a TestObject with an XPath locator (overload).   
+o	Params: 
+	xpath: The XPath locator string.   
+o	Returns: The created TestObject.   
+•	getOsSpecificTestObject(String IosXpath, String androidXpath)
+o	Purpose: Returns a TestObject based on the operating system.   
+o	Params: 
+	IosXpath: The XPath for iOS.   
+	androidXpath: The XPath for Android.   
+o	Returns: A TestObject.   
+•	printLocatorXMLDetails(String locatorPath)
+o	Purpose: Prints the locator details from an XML file.   
+o	Params: 
+	locatorPath: The path to the XML file.   
+o	Returns: Void
+•	updateLocatorFile(String locatorPath, String locatorVal, String locatorStrategy)
+o	Purpose: Updates the locator and locator strategy in an XML file.   
+o	Params: 
+	locatorPath: The path to the XML file.   
+	locatorVal: The new locator value.   
+	locatorStrategy: The new locator strategy.   
+o	Returns: Void
+•	findTestObject()
+o	Purpose: Calls findTestObject("").   
+o	Params: None
+o	Returns: A TestObject.   
+•	findTestObject(Map<String, Object> variables)
+o	Purpose: Calls findTestObject(null, variables).   
+o	Params: 
+	variables: A map of variables.   
+o	Returns: A TestObject.   
+MobileBuiltInKeywordsExtensions Class
+•	delay(Number second)
+o	Purpose: Overrides the delay method to log the delay.   
+o	Params: 
+	second: The number of seconds to delay.   
+o	Returns: Void
+o	Throws: StepFailedException   
+•	swipe(int startX, int startY, int endX, int endY, FailureHandling flowControl)
+o	Purpose: Overrides the swipe method to adjust swipe direction based on language.   
+o	Params: 
+	startX: The starting X coordinate.   
+	startY: The starting Y coordinate.   
+	endX: The ending X coordinate.   
+	endY: The ending Y coordinate.   
+	flowControl: How to handle failures.   
+o	Returns: Void
+o	Throws: StepFailedException   
+•	swipe(int startX, int startY, int endX, int endY)
+o	Purpose: Overrides the swipe method (another overload) to adjust swipe direction based on language.   
+o	Params: 
+	startX: The starting X coordinate.   
+	startY: The starting Y coordinate.   
+	endX: The ending X coordinate.   
+	endY: The ending Y coordinate.   
+o	Returns: Void
+o	Throws: StepFailedException   
+•	takeScreenshot()
+o	Purpose: Overrides takeScreenshot to conditionally take screenshots.   
+o	Params: None
+o	Returns: Void
+o	Throws: StepFailedException   
+•	hideKeyboard()
+o	Purpose: Overrides hideKeyboard to handle keyboard hiding, including handling exceptions and different UI elements.   
+o	Params: None
+o	Returns: Void
+o	Throws: StepFailedException   
+•	fintElemenstByTextEqual(String text)
+o	Purpose: Finds elements by text.   
+o	Params: 
+	text: The text to search for.   
+o	Returns: A TestObject.   
+•	getTestObjectByTextContains(String text)
+o	Purpose: This method is declared but has an empty implementation.   
+o	Params: 
+	text: The text to search for.   
+o	Returns: A TestObject.   
+•	hideKeyboard(FailureHandling failureHandling)
+o	Purpose: Overrides hideKeyboard to include failure handling.   
+o	Params: 
+	failureHandling: How to handle failures.   
+o	Returns: Void
+o	Throws: StepFailedException   
+ImageAI Class
+•	setMinSimilarity(int value)
+o	Purpose: Sets the minimum similarity for image matching.   
+o	Params: 
+	value: The minimum similarity value (as an integer).   
+o	Returns: Void
+•	getMinSimilarity()
+o	Purpose: Gets the minimum similarity for image matching.   
+o	Params: None
+o	Returns: The minimum similarity value (as a double).   
+•	ImageAI(AppiumDriver driver)
+o	Purpose: Constructor for the ImageAI class.   
+o	Params: 
+	driver: An AppiumDriver instance.   
+•	getImageAI()
+o	Purpose: Gets an instance of the ImageAI class (Singleton pattern).   
+o	Params: None
+o	Returns: An ImageAI instance.   
+•	clickByImage(String targetImgPath, FailureHandling failureHandling)
+o	Purpose: Clicks on an element identified by an image.   
+o	Params: 
+	targetImgPath: Path to the target image.   
+	failureHandling: How to handle failures (optional).   
+o	Returns: Void
+•	clickByImage(String targetImgPath, int minSimilarityValue, FailureHandling failureHandling)
+o	Purpose: Clicks on an element with a specified minimum similarity.   
+o	Params: 
+	targetImgPath: Path to the target image.   
+	minSimilarityValue: The minimum similarity value.   
+	failureHandling: How to handle failures (optional).   
+o	Returns: Void
+•	getCoords(BufferedImage baseImg, String targetImgPath, FailureHandling failureHandling)
+
+Documentation for ObjectScaffold Class
+The ObjectScaffold class is designed to assist in scaffolding test objects and managing their paths, especially in the context of mobile automation. Below is the documentation for each method in the class, including details about its parameters and functionality.
+________________________________________
+Class: ObjectScaffold
+Methods:
+________________________________________
+1. listClassesWithPackagePrefix(String packagePrefix)
+•	Description:
+Lists all fully qualified class names in the current classpath that start with the specified package prefix.
+•	Parameters:
+•	packagePrefix (String): The package name prefix to filter by.
+•	Returns:
+A list of fully qualified class names that match the given package prefix.
+•	Details:
+This method scans the classpath (directories and JAR files) to find all .class files whose names start with the provided packagePrefix. It supports both directory-based and JAR-based classpath entries.
+________________________________________
+2. getPomRoot(String pomPackagePrefix)
+•	Description:
+Retrieves the root directory for POM (Page Object Model) files based on the provided package prefix.
+•	Parameters:
+•	pomPackagePrefix (String): The package prefix used to determine the POM root.
+•	Returns:
+A string representing the root directory for POM files. If a global variable poms_root is set, it will be returned; otherwise, the method extracts the last segment of the pomPackagePrefix.
+________________________________________
+3. getObjectPathFromFullyQualifiedGetter(String getter)
+•	Description:
+Converts a fully qualified getter method name into a test object path.
+•	Parameters:
+•	getter (String): The fully qualified getter method name (e.g., com.acabes.poms.cards.requestnewcard.RequestNewCardPage.getInputFirstName).
+•	Returns:
+A string representing the test object path derived from the getter method name.
+•	Details:
+•	Removes the get prefix from the method name.
+•	Replaces dots (.) with slashes (/) to form a file-like path.
+•	Prepends the POM root and appends the execution OS (iOS or Android).
+________________________________________
+4. scaffold()
+•	Description:
+Scaffolds test objects by creating .rs files for each getter method in classes matching the pomPackagePrefix.
+•	Details:
+•	Lists all classes starting with the pomPackagePrefix.
+•	For each class, retrieves getter methods returning TestObject.
+•	Creates .rs files for both Android and iOS platforms if they don't already exist.
+•	Uses a predefined XML template for the test object files.
+•	Notes:
+•	The isMobileMutliPlatform flag determines whether separate files are created for Android and iOS.
+•	Files are created under the Object Repository directory.
+________________________________________
+5. getFunctionsWithReturnType(String fullyQualifiedClassName, String functionPrefix, String returnType)
+•	Description:
+Retrieves all method names in the specified class that start with the given prefix and have the specified return type.
+•	Parameters:
+•	fullyQualifiedClassName (String): The fully qualified name of the class to inspect.
+•	functionPrefix (String): The prefix of the method names to filter by (e.g., get).
+•	returnType (String): The return type of the methods to filter by (e.g., com.kms.katalon.core.testobject.TestObject).
+•	Returns:
+A list of method names that match the criteria.
+•	Details:
+•	Iterates through all methods in the specified class.
+•	Filters methods based on the provided functionPrefix and returnType.
+•	Prints the method signatures to the console for debugging purposes.
+•	Error Handling:
+If the class is not found, it logs an error message and returns an empty list.
+________________________________________
+6. findTestObjectGetterMethodName()
+•	Description:
+Identifies the caller method name that invoked the findTestObject function.
+•	Returns:
+A string representing the fully qualified caller method name (e.g., com.acabes.poms.cards.requestnewcard.RequestNewCardPage.getInputFirstName).
+Returns "Unknown Caller" if the method cannot determine the caller.
+•	Details:
+•	Analyzes the current thread's stack trace to locate the caller method.
+•	Ensures the caller method starts with the pomPackagePrefix and has a name starting with get.
+•	Logs additional debug information such as the file name, line number, and method name.
+•	Error Handling:
+If an exception occurs during stack trace analysis, it logs the error and returns "Unknown Caller".
+________________________________________
+Constants and Variables:
+1.	pomPackagePrefix
+•	Default value: 'pom'
+•	Represents the package prefix used to identify POM-related classes.
+2.	isMobileMutliPlatform
+•	Default value: true
+•	Determines whether separate .rs files are created for Android and iOS platforms.
+________________________________________
+Usage Notes:
+•	The ObjectScaffold class is particularly useful for automating the creation and management of test objects in a structured Page Object Model (POM) framework.
+•	It relies heavily on conventions, such as the use of get prefixes for getter methods and the presence of a pom package prefix.
+•	The scaffold() method is a powerful tool for generating test object files automatically, reducing manual effort and ensuring consistency.
+________________________________________
+
+Sample Page Object Model Implementation:
+package com.acabes.utilities
+
+import static com.kms.katalon.core.checkpoint.CheckpointFactory.findCheckpoint
+import static com.kms.katalon.core.testcase.TestCaseFactory.findTestCase
+import static com.kms.katalon.core.testdata.TestDataFactory.findTestData
+import static com.kms.katalon.core.testobject.ObjectRepository.findTestObject
+import static com.kms.katalon.core.testobject.ObjectRepository.findWindowsObject
+
+import com.acabes.framework.Common
+import com.kms.katalon.core.annotation.Keyword
+import com.kms.katalon.core.checkpoint.Checkpoint
+import com.kms.katalon.core.cucumber.keyword.CucumberBuiltinKeywords as CucumberKW
+import com.kms.katalon.core.mobile.keyword.MobileBuiltInKeywords as Mobile
+import com.kms.katalon.core.model.FailureHandling
+import com.kms.katalon.core.testcase.TestCase
+import com.kms.katalon.core.testdata.TestData
+import com.kms.katalon.core.testng.keyword.TestNGBuiltinKeywords as TestNGKW
+import com.kms.katalon.core.testobject.TestObject
+import com.kms.katalon.core.webservice.keyword.WSBuiltInKeywords as WS
+import com.kms.katalon.core.webui.keyword.WebUiBuiltInKeywords as WebUI
+import com.kms.katalon.core.windows.keyword.WindowsBuiltinKeywords as Windows
+import java.lang.management.ManagementFactory
+
+import static org.mockito.Mockito.RETURNS_DEFAULTS
+
+import java.lang.management.ClassLoadingMXBean
+
+import groovy.io.FileType
+import java.util.jar.JarFile
+
+import com.kms.katalon.core.testobject.TestObject
+
+import internal.GlobalVariable
+
+public class ObjectScaffold {
+    /**
+     * List all fully qualified class names in the current classpath
+     * with a package name starting with the given prefix.
+     *
+     * @param packagePrefix The package name prefix to filter by.
+     * @return A list of fully qualified class names.
+     */
+    public static List<String> listClassesWithPackagePrefix(String packagePrefix) {
+        def classNames = []
+        def classPath = System.getProperty("java.class.path")
+        def separator = System.getProperty("path.separator")
+
+        classPath.split(separator).each { path ->
+            def file = new File(path)
+
+            if (file.isDirectory()) {
+                file.eachFileRecurse(FileType.FILES) { f ->
+                    if (f.name.endsWith('.class')) {
+                        def relativePath = f.path - file.path - File.separator
+                        def className = relativePath.replace(File.separator, '.').replace('.class', '')
+                        if (className.startsWith(packagePrefix)) {
+                            classNames << className
+                        }
+                    }
+                }
+            } else if (file.name.endsWith('.jar')) {
+                def jarFile = new JarFile(file)
+                jarFile.entries().each { entry ->
+                    if (!entry.isDirectory() && entry.name.endsWith('.class')) {
+                        def className = entry.name.replace('/', '.').replace('.class', '')
+                        if (className.startsWith(packagePrefix)) {
+                            classNames << className
+                        }
+                    }
+                }
+            }
+        }
+
+        return classNames
+    }
+
+    def static getPomRoot(String pomPackagePrefix) {
+
+        if(com.acabes.framework.Common.getGlobalVar("poms_root") == null)
+            return pomPackagePrefix.substring(pomPackagePrefix.lastIndexOf('.') + 1)
+        return com.acabes.framework.Common.getGlobalVar("poms_root").toString()
+    }
+    public  static String getObjectPathFromFullyQualifiedGetter(String getter) {
+        println "METHOD NAME:" +getter
+
+        def getterArray = getter.split(/\./)
+        getterArray[getterArray.size()-1]= getterArray[getterArray.size()-1].replace("get","")
+        getter = getterArray.join(".")
+        println "OBJECT NAME:" +getter
+        //com.acabes.poms.cards.requestnewcard.RequestNewCardPage.getInputFirstName
+        return getPomRoot(pomPackagePrefix)+"/"+Common.getExecutionOS()+ getter.replace(pomPackagePrefix, "").replace(".", "/");
+    }
+
+
+
+
+    private static final    String pomPackagePrefix = 'pom'
+    public static void scaffold() {
+
+        boolean isMobileMutliPlatform = true
+
+        def pageClassList = listClassesWithPackagePrefix(pomPackagePrefix)
+
+        def pomsRoot= getPomRoot(pomPackagePrefix)
+
+        for(def pageClass : pageClassList) {
+            println pageClass
+            def methods= getFunctionsWithReturnType(pageClass, 'get', 'com.kms.katalon.core.testobject.TestObject')
+            for (def method : methods ) {
+
+                def paths = []
+                def objectName = method.toString().replaceFirst('get', '')
+                def path =  pageClass.replace(pomPackagePrefix,'').replace('.','/')+'/' +objectName
+                if(isMobileMutliPlatform==true) {
+
+                    paths<<'Object Repository/'+pomsRoot+'/'+'android'+path +'.rs'
+                    paths<<'Object Repository/'+pomsRoot+'/'+'ios'+path+'.rs'
+                }
+
+                for(def toPath:paths) {
+                    println toPath
+                    if(com.acabes.utilities.FileUtilities.fileExists(toPath)==false)
+                        com.acabes.utilities.FileUtilities.writeToFile(toPath, com.acabes.utilities.XmlUtilities.getTestObjectXMLTemplate(objectName, '/*[1=2]', 'XPATH'))
+                    //com.acabes.utilities.FileUtilities.writeToFile(toPath, '')
+                }
+            }
+            //println paths
+        }
+    }
+
+    /**
+     * Prints all function names in the specified class that start with the given prefix
+     * and have the specified return type.
+     *
+     * @param fullyQualifiedClassName The fully qualified class name.
+     * @param functionPrefix The prefix of the function names to filter by.
+     * @param returnType The return type of the functions to filter by.
+     */
+    def static getFunctionsWithReturnType(String fullyQualifiedClassName, String functionPrefix, String returnType) {
+        try {
+            def clazz = Class.forName(fullyQualifiedClassName)
+            def methodNames = []
+            clazz.methods.each { method ->
+                if (method.name.startsWith(functionPrefix) && method.returnType.name == returnType) {
+                    println "$\"{method.name\"}($\"{method.parameterTypes*.name.join(', ')\"}) : $\"{method.returnType.name\"}"
+                    methodNames<<method.name
+                }
+            }
+
+            return methodNames
+        } catch (ClassNotFoundException e) {
+            println "Class not found: $\"{fullyQualifiedClassName\"}"
+        }
+    }
+
+    def static String findTestObjectGetterMethodName() {
+        String pomRoot = ObjectScaffold.getPomRoot(ObjectScaffold.pomPackagePrefix)
+        //BY CONVENTION SHOULD START WITH THE POM PREFIX AND HAVE AN END STARTING WITH GET
+        def stackTrace = Thread.currentThread().getStackTrace()
+        def lineNumber = -1;
+        int c =0;
+        try {
+            for(def l :stackTrace.toList()) {
+
+                //-2 because the get method last part will be split to 2 pieces i.e. [po, page, getObj(page, groovy:10)]
+                if(l.toString().startsWith(pomRoot)== true && l.toString().split("\\.")[l.toString().split("\\.").length-2].startsWith("get")== true) {
+                    lineNumber=c;
+                }
+                c= c+1;
+            }
+
+            // The index 2 gives the immediate caller of this function.
+            // Adjust this index if you need to go deeper in the stack.
+            if ( lineNumber>-1) {
+                def callerElement = stackTrace[lineNumber]
+                println callerElement.getFileName()
+                println callerElement.lineNumber
+                println callerElement.methodName
+
+                println callerElement.nativeMethod
+                println Utilities.getAbsoluteClassSourceLocation(callerElement.className.toString())
+
+                //Utilities.printMethodCall( Utilities.getAbsoluteClassSourceLocation(callerElement.className), callerElement.lineNumber)
+                return "$\"{callerElement.className\"}.$\"{callerElement.methodName\"}"
+            }
+        }
+        catch(Exception e) {
+            println( 'FAILED to get object caller method in scaffolding ding ding!')
+            
+            e.printStackTrace()
+            return "Unknown Caller"
+        }
+        return "Unknown Caller"
+    }
+}

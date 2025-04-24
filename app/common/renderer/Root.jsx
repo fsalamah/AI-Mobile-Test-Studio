@@ -7,6 +7,7 @@ import InspectorPage from './containers/InspectorPage';
 import SessionPage from './containers/SessionPage';
 import i18n from './i18next';
 import {ipcRenderer} from './polyfills';
+import AIStudio from './components/ai/AIStudio.jsx';
 
 ipcRenderer.on('appium-language-changed', (event, message) => {
   if (i18n.language !== message.language) {
@@ -22,7 +23,7 @@ const Root = ({store}) => (
           <Route path="/" element={<SessionPage />} />
           <Route path="/session" element={<SessionPage />} />
           <Route path="/inspector" element={<InspectorPage />} />
-          <Route path="/inspector" element={<InspectorPage />} />
+          <Route path="/ai" element={<AIStudio />} />
         </Routes>
       </Suspense>
     </MemoryRouter>

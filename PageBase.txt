@@ -1,0 +1,226 @@
+package pom.base
+
+import static java.util.concurrent.TimeUnit.SECONDS
+
+import java.awt.geom.Point2D
+
+import org.openqa.selenium.WebElement
+import org.openqa.selenium.remote.RemoteWebDriver
+
+import com.acabes.framework.Common
+import com.acabes.framework.Gestures
+import com.acabes.framework.Gestures.SwipeDirection
+import com.acabes.framework.Gestures.SwipeLength
+import com.acabes.framework.ImageAI
+import com.acabes.framework.MobileBuiltInKeywordsExtensions
+import com.acabes.framework.CustomWebElement
+import com.kms.katalon.core.mobile.keyword.internal.MobileDriverFactory
+import com.kms.katalon.core.model.FailureHandling
+import com.kms.katalon.core.testobject.TestObject
+import com.kms.katalon.core.util.KeywordUtil
+import static com.acabes.framework.ObjectRepositoryExtensions.findTestObject
+
+import internal.GlobalVariable
+import io.appium.java_client.MobileElement
+
+public abstract class PageBase {
+
+	public static final Class<com.kms.katalon.core.testobject.TestObject> TestObject =  com.kms.katalon.core.testobject.TestObject.class;
+	public static final Class<com.acabes.framework.Common> Common =  com.acabes.framework.Common.class;
+	public static final Class<com.acabes.framework.MobileBuiltInKeywordsExtensions> Mobile =com.acabes.framework.MobileBuiltInKeywordsExtensions.class;
+	public static final Class<internal.GlobalVariable> GlobalVariable = internal.GlobalVariable.class;
+	public static final Class<com.kms.katalon.core.model.FailureHandling> FailureHandling = com.kms.katalon.core.model.FailureHandling.class;
+	public static final Class<com.kms.katalon.core.util.KeywordUtil> KeywordUtil =  com.kms.katalon.core.util.KeywordUtil.class;
+	public static final Class<com.acabes.framework.Gestures.SwipeSpeed> SwipeSpeed = com.acabes.framework.Gestures.SwipeSpeed.class;
+	public static final Class<com.acabes.framework.Gestures.SwipeLength> SwipeLength = com.acabes.framework.Gestures.SwipeLength.class;
+	public static final Class<com.acabes.framework.Gestures.SwipeDirection> SwipeDirection = com.acabes.framework.Gestures.SwipeDirection.class;
+	public static final Class<com.acabes.framework.Gestures> Gestures = com.acabes.framework.Gestures.class;
+	public static final Class<com.acabes.framework.ImageAI> ImageAI = com.acabes.framework.ImageAI.class;
+
+
+
+	public static void tapPageSideToRefreshDOM() {
+		Gestures.tapPoint(MobileDriverFactory.getDriver(), new Point2D.Double(10,640))
+	}
+
+	def static getButtonOk () {
+
+		return findTestObject("${GlobalVariable.MobileOS}/Common/024-button Ok")
+	}
+
+	public static void dismissPopup() {
+		def result = ImageAI.getCoordsForAllMatchingElements("popup_screen_top_handle_collection/popup_handle_${Common.getExecutionOS()}.png")
+
+
+		if(result.size() > 0 ) {
+
+			result[0].y =result[0].y +60;
+			ImageAI.TapPoint(result[0])
+		}
+	}
+
+	public static void clickButtonOk(FailureHandling failureHandling= FailureHandling.STOP_ON_FAILURE, timeout = GlobalVariable.wait_long) {
+		Mobile.tap(buttonOk, timeout, failureHandling)
+	}
+
+	public static void clickButtonClose(FailureHandling failureHandling = FailureHandling.CONTINUE_ON_FAILURE) {
+		//Mobile.tap(buttonClose, GlobalVariable.wait_long)
+		//check of X close button
+		def buttonClose = ImageAI.getCoordsForAllMatchingElements("button_close/button_close_${GlobalVariable.Language}_${Common.getExecutionOS()}.png");
+
+		if(buttonClose.size()>0) {
+			KeywordUtil.logInfo("Close button detected, clicking close");
+			ImageAI.TapPoint(buttonClose[0])
+			return;
+		}
+		else {
+			//check for arrow close button
+			buttonClose = ImageAI.getCoordsForAllMatchingElements("button_close/button_back_${Common.getExecutionOS()}_${GlobalVariable.Language}.png");
+
+			if(buttonClose.size()>0) {
+				KeywordUtil.logInfo("back arrow button detected, clicking back");
+				ImageAI.TapPoint(buttonClose[0])
+				return;
+			}
+		}
+
+		Common.failureHandlingHelper(failureHandling, " button close (Not detected on the page)")
+	}
+
+	public static TestObject findTestObject() {
+		return com.acabes.framework.ObjectRepositoryExtensions.findTestObject();
+	}
+
+	public static TestObject findTestObject(String objectId) {
+		return com.acabes.framework.ObjectRepositoryExtensions.findTestObject(objectId);
+	}
+
+	public static TestObject findTestObject(String objectId, Map<String, Object> variables) {
+		return com.acabes.framework.ObjectRepositoryExtensions.findTestObject(objectId,variables);
+	}
+
+	public static TestObject findTestObject( Map<String, Object> variables) {
+		return com.acabes.framework.ObjectRepositoryExtensions.findTestObject( variables);
+	}
+
+
+
+
+	public static void clickByText(String text, boolean isExactMatch=true, int timeout_s =5,FailureHandling failureHandling = FailureHandling.OPTIONAL) {
+		List<WebElement> result =  getElementsWithText(text,isExactMatch,timeout_s)
+
+		if(result.size()<1) {
+			if(failureHandling == FailureHandling.STOP_ON_FAILURE)
+				KeywordUtil.markErrorAndStop("Text: ${text} could NOT be located on the page");
+			else if(failureHandling == FailureHandling.CONTINUE_ON_FAILURE )
+				KeywordUtil.markError("Text: ${text} could NOT be located on the page");
+			else
+				KeywordUtil.markWarning("Text: ${text} could NOT be located on the page");
+		}
+		else {
+			println("Clicking ${result[0]}");
+			KeywordUtil.logInfo("Clicking element with text ${text}, element ${result[0]}")
+			((WebElement)result[0]).click();
+		}
+	}
+	private static String osSpecificTextLocator(String text,boolean isExactMatch) {
+		String result="";
+		if(isExactMatch==true)
+			result = "//*[@text='${text}' or ((@name ='${text}' or @label='${text}' or @value='${text}'))]";
+		else
+			result = "//*[contains(@text,'${text}') or ((contains(@name,'${text}') or contains(@label,'${text}') or contains(@value,'${text}')))]";
+		return result;
+	}
+
+	public static List<MobileElement> getElementsWithText(String text, boolean isExactMatch, int timeout_s = null) {
+
+		def driver = MobileDriverFactory.getDriver();
+
+		if(timeout_s != null ) {
+			driver.manage().timeouts().implicitlyWait(timeout_s, SECONDS)
+		}
+
+
+		String xpath = "";
+		xpath = osSpecificTextLocator( text, isExactMatch);
+		List<WebElement> result =  driver.findElementsByXPath(xpath);
+
+		return result;
+	}
+
+
+	public static void clickImageControlByIndex(int imageMatchIndex, String imagePath) {
+		def imageAI = new ImageAI(MobileDriverFactory.getDriver());
+
+		def showButtonsArray = imageAI.getCoordsForAllMatchingElements(imagePath, FailureHandling.OPTIONAL);
+		if(showButtonsArray.size()>imageMatchIndex)
+			imageAI.TapPoint(showButtonsArray[imageMatchIndex])
+		else
+			KeywordUtil.markError("Failed to find a match of the image provided ${imagePath}")
+	}
+
+	public static String GetLangString(String en, String ar) {
+		return Common.GetLangString(en, ar)
+	}
+	public static String GetLangString(String en) {
+		return Common.GetLangString(en)
+	}
+
+	public static void logInfo(String info) {
+		KeywordUtil.logInfo(info)
+	}
+	public static void markError(String error) {
+		KeywordUtil.markError(error)
+	}
+	public static void markErrorAndStop(String error) {
+		KeywordUtil.markErrorAndStop(error)
+	}
+	public static void markWarning(String error) {
+
+		KeywordUtil.markWarning(error)
+	}
+	public static void markPassed(String message) {
+		KeywordUtil.markPassed(message)
+	}
+	public static void markFailed(String message) {
+		KeywordUtil.markFailed(message)
+	}
+	public static void markFailedAndStop(String message) {
+		KeywordUtil.markFailedAndStop(message)
+	}
+	public static void switchKeyboardLanguageToEnglish() {
+		if(GlobalVariable.Language=='Arabic' && GlobalVariable.MobileOS.toString().toUpperCase() =='IOS') {
+
+			RemoteWebDriver driver = MobileDriverFactory.getDriver()
+			driver.manage().timeouts().implicitlyWait(1,SECONDS)
+			if(driver.findElementsByXPath("//*[contains(@value,'English') and @label='لوحة المفاتيح التالية']").toArray().length>0) {
+				driver.findElementByXPath("//*[contains(@value,'English') and @label='لوحة المفاتيح التالية']").click();
+			}
+		}
+	}
+
+	public static void ismissServiceErrorPopUpIfExist() {
+		String servceUnavilabel = GetLangString("Service Unavilable","الخدمة غير متوفرة")
+
+		if(getElementsWithText(servceUnavilabel, false,10).size()>0) {
+			logInfo("Service unavilalbe popup found")
+			clickButtonOk()
+			markWarning("Service Unavilable Dismissed")
+		}
+		else {
+			logInfo("Serive unavilabel pop-up not found")
+		}
+	}
+
+	public static void tapHorizontalPageFilterTag(TestObject filterContainer,String tagName, click = true) {
+		//Reset swiping position
+		Gestures.swipeWithinObject(filterContainer, SwipeLength.VERY_LONG, SwipeDirection.END)
+
+		WebElement tagElement = Gestures.swipeToText(filterContainer, SwipeDirection.START, SwipeLength.LONG, tagName)
+		if(click==true)
+			tagElement.click()
+	}
+	public static String takeScreenshot() {
+		return MobileBuiltInKeywordsExtensions.takeScreenshot();
+	}
+}
