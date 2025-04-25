@@ -635,7 +635,7 @@ Current OS Version: ${os}`
  * @param {string} pageMetadataBase64 - Base64 encoded page metadata
  * @param {string} screenshotsInfoBase64 - Base64 encoded screenshots info
  * @param {string} guideTextBase64 - Base64 encoded guide text
- * @param {string} locatorsJsonBase64 - Base64 encoded locators JSON
+ * @param {string} uniqueLocatorsList - Base64 encoded locators JSON
  * @param {string|null} pageBaseBase64 - Optional Base64 encoded PageBase implementation
  * @param {Array} screenshots - Array of screenshot objects with platform and base64 data
  * @returns {Array} - Messages array for the AI service
@@ -646,7 +646,7 @@ static createPOMGenerationPrompt(
   pageMetadataBase64,
   screenshotsInfoBase64,
   guideTextBase64,
-  locatorsJsonBase64,
+  uniqueLocatorsList,
   pageBaseBase64,
   screenshots
 ) {
@@ -659,6 +659,325 @@ static createPOMGenerationPrompt(
     systemPrompt += `3) A guide with coding standards. You will be creating a Java Page Object Model class that extends the ${pageBaseClass} class.`;
   }
   
+
+  systemPrompt=`# Prompt for Creating a Standardized Page Object Model Class
+
+## Task Definition
+Create a complete, executable Page Object Model (POM) class in Groovy for a [SPECIFIC_PAGE_NAME] page in the [SPECIFIC_MODULE_NAME] module. Follow ONLY the guidelines and patterns outlined below.
+
+## IMPORTANT CONSTRAINTS
+1. DO NOT add any methods, imports, or functionality that are not explicitly requested
+2. DO NOT use any naming patterns that differ from those provided in this prompt
+3. DO NOT create placeholder or TODO comments - all code must be complete
+4. DO NOT reference any frameworks, libraries, or methods that aren't in the import statements
+5. DO NOT add any creative embellishments to the implementation
+
+## POM Class Structure Requirements
+
+### Class Header & Package Definition
+groovy
+package [EXACT_MODULE_PACKAGE_PATH]
+import com.kms.katalon.core.testobject.TestObject
+import com.kms.katalon.core.util.KeywordUtil
+import com.acabes.framework.PageBase
+
+
+### Class Naming & Declaration
+groovy
+public class [EXACT_PAGE_NAME]Page extends PageBase {
+    // Implementation will go here
+}
+
+
+## Class Content Sections
+Implement the following sections in exact order:
+
+### 1. Page Strings (Required)
+groovy
+// SECTION 1: PAGE STRINGS
+// Format: getString[ControlName][ControlType][Label/Title/PlaceHolder/Text]()
+public static String getStringLoginButtonLabel() {
+    return GetLangString("Log in", "تسجيل الدخول")
+}
+// Add all required string methods
+
+
+### 2. Page Locators
+groovy
+// SECTION 2: PAGE LOCATORS
+// Format: get[ControlType][ControlName]()
+public static TestObject getButtonLogin() {
+    return findTestObject()
+}
+// Add all required locator methods
+
+
+### 3. Page Methods
+groovy
+// SECTION 3: PAGE METHODS
+// A. Object Interaction Methods - Required
+// Format for interaction methods: [action][ObjectName]
+public static void clickLoginButton() {
+    logInfo("Clicking Login Button")
+    Mobile.tap(getButtonLogin(), 0)
+}
+
+// B. Verification Methods - Required
+// Format: verify[Object/Group/PageContent/Condition]
+public static void verifyLoginPageContent() {
+    logInfo("Verifying Login Page Content")
+    Mobile.verifyElementExist(getButtonLogin(), 0)
+    Mobile.verifyElementExist(getInputUsername(), 0)
+    Mobile.verifyElementExist(getInputPassword(), 0)
+    
+    // Verify text elements
+    Mobile.verifyElementText(getLabelLoginTitle(), getStringLoginTitleText())
+    // Add other verification steps as needed
+}
+
+// C. Perform Methods - Required
+// Format for perform methods: perform[PageName]Page
+public static void perform[PageName]Page(
+    String param1, 
+    String param2,
+    boolean isSubmit = true
+) {
+    // Implementation with null checks for parameters
+    if (param1 != null) {
+        // Use interaction method
+    }
+    
+    if (param2 != null) {
+        // Use interaction method
+    }
+    
+    if (isSubmit) {
+        // Click submit/next button
+    }
+}
+
+// D. Navigation Methods - Optional
+// Format: navigateTo[DestinationPage]
+public static void navigateToHomePage() {
+    logInfo("Navigating to Home Page")
+    // Implementation of navigation steps
+}
+
+
+## Output Instructions
+
+1. Based on the input provided, create a COMPLETE Page Object Model class following the exact structure:
+   - Section 1: Page Strings
+   - Section 2: Page Locators
+   - Section 3: Page Methods (with clear subsections)
+   - Section 4: Verificatiion Section
+
+2. For each UI element provided:
+   - Create exactly ONE string method (if it has text)
+   - Create exactly ONE locator method
+   - Create appropriate interaction methods based on the element type:
+     - For buttons: create a click method
+     - For inputs: create a setText method
+     - For checkboxes: create a check/uncheck method
+     - For dropdowns: create a select method
+
+3. Create EXACTLY the verification methods specified in the input.
+
+4. Create ONE perform page method that accepts parameters for ALL UI element interactions.
+
+5. Create navigation methods ONLY if specified in the input.
+
+6. Create E2E perform methods ONLY if this is a module home page.
+
+7. DO NOT add any functionality beyond what is explicitly requested.
+
+8. Use the example code as a PATTERN, not as content to copy verbatim.
+
+## Additional Requirements
+
+1. **Control Type Naming Standards**: Use these control type names regardless of mobile OS:
+   - Input, Button, Checkbox, Dropdown, ListView, ListItem, Recycler, Card, TextView, Image, Toggle, Radio, Calendar
+
+2. **Comments**: Add section headers and appropriate comments for each parameter in perform methods.
+
+3. **No Duplicate Pages**: Ensure this page is unique and doesn't duplicate functionality from other pages.
+
+## Example POM Class (DO NOT COPY VERBATIM - FOLLOW PATTERN ONLY)
+
+groovy
+
+import com.kms.katalon.core.testobject.TestObject
+import com.kms.katalon.core.util.KeywordUtil
+import com.acabes.framework.PageBase
+
+public class LoginPage extends PageBase {
+    // SECTION 1: PAGE STRINGS
+    public static String getStringLoginButtonLabel() {
+        return GetLangString("Log in", "تسجيل الدخول")
+    }
+    
+    public static String getStringUsernameInputPlaceholder() {
+        return GetLangString("Username", "اسم المستخدم")
+    }
+    
+    public static String getStringPasswordInputPlaceholder() {
+        return GetLangString("Password", "كلمة المرور")
+    }
+    
+    // SECTION 2: PAGE LOCATORS
+    public static TestObject getButtonLogin() {
+        return findTestObject()
+    }
+    
+    public static TestObject getInputUsername() {
+        return findTestObject()
+    }
+    
+    public static TestObject getInputPassword() {
+        return findTestObject()
+    }
+    
+    // SECTION 3: PAGE METHODS
+    // A. Object Interaction Methods
+    public static void clickLoginButton() {
+        logInfo("Clicking Login Button")
+        Mobile.tap(getButtonLogin(), 0)
+    }
+    
+    public static void enterUsername(String username, boolean hideKeyboard = true) {
+        logInfo("Entering username: " + username)
+        Mobile.setText(getInputUsername(), username, 0)
+        if (hideKeyboard) {
+            Mobile.hideKeyboard()
+        }
+    }
+    
+    public static void enterPassword(String password, boolean hideKeyboard = true) {
+        logInfo("Entering password")
+        Mobile.setText(getInputPassword(), password, 0)
+        if (hideKeyboard) {
+            Mobile.hideKeyboard()
+        }
+    }
+    
+    // B. Verification Methods
+     public static verifyTextLoginButtonLabel()
+    {
+        String loginButtonText = Mobile.getText(getLoginButton(), 10)
+		    logInfo('Verifying login button label text')
+        Mobile.verifyEqual(loginButtonText, getStringLoginButtonLabel)
+    }
+    public static void verifyLoginPageContent() {
+        logInfo("Verifying Login Page Content")
+        Mobile.verifyElementExist(getInputUsername(), 0)
+        Mobile.verifyElementExist(getInputPassword(), 0)
+        Mobile.verifyElementExist(getButtonLogin(), 0)
+    }
+    
+    // C. Perform Methods
+    public static void performLoginPage(
+        String username, 
+        String password, 
+        boolean submit = true
+    ) {
+        if (username != null) {
+            enterUsername(username)
+        }
+        
+        if (password != null) {
+            enterPassword(password)
+        }
+        
+        if (submit) {
+            clickLoginButton()
+        }
+    }
+}
+
+
+
+## Method Types Specifications
+
+1. **String Methods**: MUST follow format getString[ControlName][ControlType][Label/Title/PlaceHolder/Text]() 
+   - MUST use GetLangString(englishText, arabicText) for all returned strings
+   - MUST NOT return null or empty strings
+   - Example: getStringLoginButtonLabel()
+
+2. **Locator Methods**: MUST follow format get[ControlType][ControlName]()
+   - MUST return a TestObject using ONLY findTestObject() without a path 
+   - MUST NOT include parameters
+   - Example: getButtonLogin()
+
+3. **Object Interaction Methods**: MUST follow format [action][ObjectName](parameters)
+   - MUST use corresponding locator method to get TestObject
+   - MUST include logging using logInfo(message)
+   - MUST use only Mobile library methods for interactions
+   - Example: clickLoginButton()
+
+4. **Verification Methods**: MUST follow format verify[Object/Group/PageContent/Condition]()
+   - MUST NOT include any interactions beyond verification
+   - MUST include logging using logInfo(message)
+   - Example: verifyLoginPageContent()
+
+5. **Perform Page Methods**: MUST follow format perform[ExactPageName]Page(parameters)
+   - MUST use null checks for all parameters
+   - MUST use only methods from the same page class
+   - Example: performLoginPage(username, password, rememberMe, submit)
+
+6. **Perform E2E Methods**: ONLY if this is a module home page
+   - MUST follow format performE2E_[FlowName](parameters)
+   - Example: performE2E_InternationalTransfer(parameters)
+
+7. **Navigation Methods**: ONLY if explicitly requested
+   - MUST follow format navigateTo[DestinationPage]()
+   - Example: navigateToHomePage()
+
+9. ** Verify Element Text**: 
+    - MUST follow the format verify verifyText[name of the control]
+    - Example:verifyTextLoginButtonLabel
+   
+## Input Required (DO NOT SKIP ANY ITEM)
+
+1. Module Name: [FILL IN EXACT MODULE NAME]
+2. Module Package Path: [FILL IN EXACT PACKAGE PATH, e.g., com.acabes.poms.login]
+3. Page Name: [FILL IN EXACT PAGE NAME WITHOUT "Page" SUFFIX]
+4. Is this a module home page? [YES/NO]
+
+5. UI Elements (REQUIRED - list exactly as shown below):
+   
+   [ELEMENT_TYPE_1] | [ELEMENT_NAME_1] | [ENGLISH_LABEL_1] | [ARABIC_LABEL_1]
+   [ELEMENT_TYPE_2] | [ELEMENT_NAME_2] | [ENGLISH_LABEL_2] | [ARABIC_LABEL_2]
+   ...
+   
+   Example:
+   
+   Button | Login | Log in | تسجيل الدخول
+   Input | Username | Username | اسم المستخدم
+   Input | Password | Password | كلمة المرور
+   Checkbox | RememberMe | Remember me | تذكرني
+   
+
+6. Verification Requirements (list what needs to be verified on this page):
+   
+   [VERIFICATION_1]
+   [VERIFICATION_2]
+   ...
+   
+   Example:
+   
+   Verify all UI elements are visible
+   Verify error message appears when invalid credentials are entered
+   
+
+7. Navigation Methods Required? [YES/NO]
+   If YES, list destination pages:
+   
+   [DESTINATION_PAGE_1]
+   [DESTINATION_PAGE_2]
+   ...
+   
+
+INSTRUCTIONS: Replace all placeholders in square brackets with your specific information. Follow the exact format shown in the examples.`
   // Prepare messages for AI service
   const messages = [
     {
@@ -705,7 +1024,7 @@ static createPOMGenerationPrompt(
   // Add locators
   messages[1].content.push({
     "type": "text",
-    "text": `Locators: data:text/json;base64,${locatorsJsonBase64}`
+    "text": `Locators: data:text/json;base64,${uniqueLocatorsList}`
   });
   
   // Add ALL screenshots as image_url types

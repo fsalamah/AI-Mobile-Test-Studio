@@ -34,7 +34,7 @@ const CodeViewer = ({
     if (page && page.aiAnalysis && page.aiAnalysis.code) {
       setCode(page.aiAnalysis.code);
     }
-  }, [page]);
+  }, [page, page?.aiAnalysis?.code]); // Add dependency on page.aiAnalysis.code
 
   // Function to download the code as a file
   const downloadCode = () => {
@@ -97,6 +97,17 @@ const CodeViewer = ({
         }
       };
       onSave(updatedPage);
+    }
+  };
+
+  // Handle regenerate button click
+  const handleRegenerate = async () => {
+    if (onRegenerate) {
+      // Call the regenerate function
+      await onRegenerate();
+      
+      // Note: We don't need to update the code here as the useEffect will
+      // automatically update when page.aiAnalysis.code changes
     }
   };
 
@@ -188,7 +199,7 @@ const CodeViewer = ({
           {onRegenerate && (
             <button 
               title="Regenerate Code"
-              onClick={onRegenerate}
+              onClick={handleRegenerate}
               style={{
                 border: '1px solid #d9d9d9',
                 borderRadius: '2px',

@@ -104,7 +104,10 @@ async function executePOMClassPipeline(page, guideFilePath = CONFIG.POM_GUIDE, p
       xpath: loc.xpath || {},
       value: loc.value || ''
     }));
-    
+    // Create an array of unique devName and description pairs from locatorsJson
+    const uniqueLocators = Array.from(
+      new Map(locatorsJson.map(loc => [loc.devName, { devName: loc.devName, description: loc.description }])).values()
+    );
     // Prepare page metadata for the AI
     const pageMetadata = {
       name: page.name || '',
@@ -114,7 +117,9 @@ async function executePOMClassPipeline(page, guideFilePath = CONFIG.POM_GUIDE, p
     };
     
     // Convert data to base64
-    const locatorsJsonBase64 = Buffer.from(JSON.stringify(locatorsJson)).toString('base64');
+    
+    const locatorsJsonBase64 = Buffer.from(JSON.stringify(uniqueLocators)).toString('base64');
+    
     const pageMetadataBase64 = Buffer.from(JSON.stringify(pageMetadata)).toString('base64');
     
     // Include all screenshot info including the stateId, which platform, and any available description
