@@ -1,3 +1,4 @@
+// Fix for CodeViewer.jsx
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeftOutlined, 
@@ -29,12 +30,16 @@ const CodeViewer = ({
 }) => {
   const [code, setCode] = useState("");
 
+  // Improved effect to handle code loading more reliably
   useEffect(() => {
     // Load code from page.aiAnalysis.code if available
     if (page && page.aiAnalysis && page.aiAnalysis.code) {
       setCode(page.aiAnalysis.code);
+    } else {
+      // Reset code when page is invalid or has no code
+      setCode("");
     }
-  }, [page, page?.aiAnalysis?.code]); // Add dependency on page.aiAnalysis.code
+  }, [page]); // Simplify by just tracking the page object
 
   // Function to download the code as a file
   const downloadCode = () => {
@@ -152,7 +157,7 @@ const CodeViewer = ({
             fontSize: '16px',
             fontWeight: '500'
           }}>
-            {title}
+            {title} {page?.name ? `- ${page.name}` : ''}
           </h2>
         </div>
         
@@ -172,6 +177,7 @@ const CodeViewer = ({
               justifyContent: 'center',
               fontSize: '14px'
             }}
+            disabled={!code}
           >
             <DownloadOutlined style={{ fontSize: '14px' }} />
           </button>
@@ -191,6 +197,7 @@ const CodeViewer = ({
                 justifyContent: 'center',
                 fontSize: '14px'
               }}
+              disabled={!code}
             >
               <SaveOutlined style={{ fontSize: '14px' }} />
             </button>
@@ -230,13 +237,14 @@ const CodeViewer = ({
               justifyContent: 'center',
               fontSize: '14px'
             }}
+            disabled={!page}
           >
             <FileOutlined style={{ fontSize: '14px' }} />
           </button>
         </div>
       </div>
       
-      {/* Code content area */}
+      {/* Code content area with visual feedback when code is empty */}
       <div className="code-content" style={{ 
         flex: '1 1 auto',
         overflow: 'auto',
@@ -244,19 +252,32 @@ const CodeViewer = ({
         backgroundColor: '#282c34',
         position: 'relative'
       }}>
-        <pre style={{
-          margin: 0,
-          padding: '16px',
-          fontSize: '14px',
-          lineHeight: '1.5',
-          fontFamily: "Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace",
-          overflowX: 'auto',
-          color: '#abb2bf'
-        }}>
-          <code className={`language-${language}`}>
-            {code}
-          </code>
-        </pre>
+        {code ? (
+          <pre style={{
+            margin: 0,
+            padding: '16px',
+            fontSize: '14px',
+            lineHeight: '1.5',
+            fontFamily: "Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace",
+            overflowX: 'auto',
+            color: '#abb2bf'
+          }}>
+            <code className={`language-${language}`}>
+              {code}
+            </code>
+          </pre>
+        ) : (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: '#6a737d',
+            fontSize: '16px'
+          }}>
+            No code available for this page
+          </div>
+        )}
       </div>
     </div>
   );

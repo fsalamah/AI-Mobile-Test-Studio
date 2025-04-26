@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
  * 
  * Renders a base64 PNG image with highlight boxes drawn over specified XML nodes
  * using HTML div elements instead of canvas.
+ * Features enhanced border animations including a glowing effect and fluid animation.
  * Handles both Android and iOS Appium XML node formats.
  * 
  * @param {Object} props
@@ -139,13 +140,20 @@ const ImageHighlighter = ({
           node.getAttribute('y') !== null && 
           node.getAttribute('width') !== null && 
           node.getAttribute('height') !== null) {
+        // First calculate the original bounds
         const x = parseFloat(node.getAttribute('x')) * pixelRatio * aspectRatioAfterResize;
         const y = parseFloat(node.getAttribute('y')) * pixelRatio * aspectRatioAfterResize;
         const width = parseFloat(node.getAttribute('width')) * pixelRatio * aspectRatioAfterResize;
         const height = parseFloat(node.getAttribute('height')) * pixelRatio * aspectRatioAfterResize;
         
-        log({ parsed: 'using x,y,width,height', x, y, width, height });
-        return { x, y, width, height };
+        // Expand by 5px in all directions
+        const expandedX = x - 5;
+        const expandedY = y - 5;
+        const expandedWidth = width + 10;  // 5px on left + 5px on right
+        const expandedHeight = height + 10;  // 5px on top + 5px on bottom
+        
+        log({ parsed: 'using x,y,width,height', original: { x, y, width, height }, expanded: { x: expandedX, y: expandedY, width: expandedWidth, height: expandedHeight } });
+        return { x: expandedX, y: expandedY, width: expandedWidth, height: expandedHeight };
       } 
       // Case 2: Node has bounds attribute like "[x1,y1][x2,y2]"
       else if (node.getAttribute('bounds') !== null) {
@@ -158,12 +166,18 @@ const ImageHighlighter = ({
           const x2 = parseInt(match[3], 10) * pixelRatio * aspectRatioAfterResize;
           const y2 = parseInt(match[4], 10) * pixelRatio * aspectRatioAfterResize;
           
-          log({ parsed: 'using bounds', x1, y1, x2, y2 });
+          // Expand by 5px in all directions
+          const expandedX1 = x1 - 5;
+          const expandedY1 = y1 - 5;
+          const expandedX2 = x2 + 5;
+          const expandedY2 = y2 + 5;
+          
+          log({ parsed: 'using bounds', original: { x1, y1, x2, y2 }, expanded: { x1: expandedX1, y1: expandedY1, x2: expandedX2, y2: expandedY2 } });
           return {
-            x: x1,
-            y: y1,
-            width: x2 - x1,
-            height: y2 - y1
+            x: expandedX1,
+            y: expandedY1,
+            width: expandedX2 - expandedX1,
+            height: expandedY2 - expandedY1
           };
         }
       }
@@ -222,6 +236,55 @@ const ImageHighlighter = ({
     }
   }, [dimensions, debug]);
 
+  // Create CSS styles for the animated glowing and fluid border effects with contrasting colors
+  const createCSSStyles = () => {
+    return `
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 5px 0px rgba(255, 119, 0, 0.6);
+          opacity: 0.7;
+        }
+        50% {
+          box-shadow: 0 0 15px 5px rgba(255, 200, 0, 0.9);
+          opacity: 0.9;
+        }
+        100% {
+          box-shadow: 0 0 5px 0px rgba(255, 0, 128, 0.6);
+          opacity: 0.7;
+        }
+      }
+      
+      @keyframes borderFlow {
+        0% {
+          border-image-source: linear-gradient(0deg, #00ff88,rgb(200, 255, 0), #5500ff, #00ff88);
+        }
+        25% {
+          border-image-source: linear-gradient(90deg, #00ff88,rgb(225, 255, 0), #5500ff, #00ff88);
+        }
+        50% {
+          border-image-source: linear-gradient(180deg, #00ff88,rgb(225, 255, 0), #5500ff, #00ff88);
+        }
+        75% {
+          border-image-source: linear-gradient(270deg, #00ff88,rgb(251, 255, 0), #5500ff, #00ff88);
+        }
+        100% {
+          border-image-source: linear-gradient(360deg, #00ff88,rgb(234, 255, 0), #5500ff, #00ff88);
+        }
+      }
+      
+      .highlight-box {
+        animation: pulse 2s infinite ease-in-out;
+        border: 3px solid transparent;
+        border-image: linear-gradient(90deg, #00ff88, #ff00aa, #5500ff, #00ff88);
+        border-image-slice: 1;
+        animation: borderFlow 4s infinite linear, pulse 2s infinite ease-in-out;
+        background-color: rgba(255, 255, 0, 0.15);
+        pointer-events: none;
+        position: absolute;
+      }
+    `;
+  };
+
   return (
     <div 
       ref={containerRef} 
@@ -236,6 +299,9 @@ const ImageHighlighter = ({
         backgroundColor: '#f5f5f5' // Light background to show image boundaries
       }}
     >
+      {/* Inject CSS styles for animations */}
+      <style>{createCSSStyles()}</style>
+
       {!base64Png && (
         <div style={{ textAlign: 'center', color: '#999' }}>
           No screenshot available
@@ -256,19 +322,16 @@ const ImageHighlighter = ({
             onLoad={handleImageLoad}
           />
           
-          {/* Highlight boxes */}
+          {/* Animated highlight boxes */}
           {highlightBoxes.map((box) => (
             <div
               key={box.id}
+              className="highlight-box"
               style={{
-                position: 'absolute',
                 left: box.x,
                 top: box.y,
                 width: box.width,
-                height: box.height,
-                border: '2px solid rgba(0, 120, 255, 0.8)',
-                backgroundColor: 'rgba(255, 255, 0, 0.2)',
-                pointerEvents: 'none' // Allow clicking through the highlight
+                height: box.height
               }}
             />
           ))}
@@ -281,7 +344,7 @@ const ImageHighlighter = ({
                 bottom: 10,
                 left: 10,
                 padding: '5px 10px',
-                backgroundColor: 'rgba(255,0,0,0.7)',
+                backgroundColor: 'rgba(255, 247, 0, 0.7)',
                 color: 'white',
                 borderRadius: '4px',
                 fontSize: '12px'

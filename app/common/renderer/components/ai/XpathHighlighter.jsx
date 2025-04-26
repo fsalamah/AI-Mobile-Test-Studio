@@ -68,6 +68,53 @@ export default function XMLViewer({
         setXpath(initialXPath);
     }, [initialXPath]);
 
+    // Method to evaluate an XPath expression and return results
+    const evaluateXPathExpression = (xpathToEvaluate) => {
+        // Set the xpath in the search box
+        handleXPathChange(xpathToEvaluate);
+        
+        // If XML hasn't been parsed yet
+        if (!parsedXml) {
+            return {
+                xpathExpression: xpathToEvaluate,
+                numberOfMatches: 0,
+                matchingNodes: [],
+                isValid: false
+            };
+        }
+        
+        try {
+            // Ensure we have a valid XPath query
+            const xpathQuery = xpathToEvaluate.trim() || '/';
+            const result = evaluateXPath(
+                xpathQuery,
+                parsedXml,
+                null,
+                XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+                null
+            );
+            
+            const matchingNodesList = [];
+            for (let i = 0; i < result.snapshotLength; i++) {
+                matchingNodesList.push(result.snapshotItem(i));
+            }
+            
+            return {
+                xpathExpression: xpathToEvaluate,
+                numberOfMatches: result.snapshotLength,
+                matchingNodes: matchingNodesList,
+                isValid: true
+            };
+        } catch (error) {
+            return {
+                xpathExpression: xpathToEvaluate,
+                numberOfMatches: 0,
+                matchingNodes: [],
+                isValid: false
+            };
+        }
+    };
+
     // Expose methods to external code
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -75,7 +122,8 @@ export default function XMLViewer({
                 updateXml,
                 updateXPathVersion,
                 setXPathQuery: handleXPathChange,
-                getXPathQuery: () => xpath
+                getXPathQuery: () => xpath,
+                evaluateXPathExpression
             };
         }
         return () => {

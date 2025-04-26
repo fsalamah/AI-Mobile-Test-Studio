@@ -229,12 +229,60 @@ async function generateXpathForStateElements(aiService, screenshotBase64, xmlTex
 }
 
 function groupElementsByStateAndOs(data, page) {
+  console.log("=== STARTING ELEMENT GROUPING BY STATE AND OS ===");
+  console.log(`Input data contains ${data.length} items`);
+  console.log(`Page contains ${page.states?.length || 0} states`);
+  
+  // Log all input data to inspect for patterns
+  console.log("Input data elements:");
+  data.forEach((item, index) => {
+    console.log(`${index}: ${item.devName}`);
+  });
+  
+  // Debug the structure of the first state if available
+  if (page.states && page.states.length > 0) {
+    console.log("First state structure sample:", JSON.stringify(page.states[0], null, 2));
+  } else {
+    console.log("WARNING: No states found in page object");
+  }
+
   const groupedData = {};
+  // Track elements with unknown state IDs
+  const elementsWithUnknownStates = [];
+
+  // First phase: Group elements by state ID and OS
+  console.log("\n=== PHASE 1: GROUPING ELEMENTS ===");
   for (const item of data) {
     const stateIdsObj = item.state_ids || item.state_Ids || {};
+    const keys = Object.keys(stateIdsObj);
+    
+    if (keys.length === 0) {
+      console.log(`WARNING: Item with devName "${item.devName}" has no state IDs`);
+      continue;
+    }
+    
+    console.log(`\nProcessing item: ${item.devName}`);
+    console.log(`State IDs object: ${JSON.stringify(stateIdsObj)}`);
+    
+    // Flag to check if this item has any unknown states
+    let hasUnknownState = false;
+
     for (const os in stateIdsObj) {
       const stateId = stateIdsObj[os];
+      if (!stateId) {
+        console.log(`WARNING: Empty state ID for OS "${os}" in item "${item.devName}"`);
+        continue;
+      }
+      
+      // Check if this is an unknown state
+      if (stateId === "unknown") {
+        console.log(`DETECTED UNKNOWN STATE: Element "${item.devName}" has unknown state for OS "${os}"`);
+        hasUnknownState = true;
+      }
+      
       const key = `${stateId}-${os}`;
+      console.log(`Creating group key: ${key} (State ID: ${stateId}, OS: ${os})`);
+
       if (!groupedData[key]) {
         groupedData[key] = {
           state_id: stateId,
@@ -242,30 +290,110 @@ function groupElementsByStateAndOs(data, page) {
           elements: [],
           processingStatus: 'pending'
         };
+        console.log(`Created new group for key: ${key}`);
       }
+
       const { state_ids, state_Ids, ...rest } = item;
       groupedData[key].elements.push(rest);
+      console.log(`Added element to group ${key}`);
     }
+    
+    // If this item has unknown state, save the entire item for detailed inspection
+    if (hasUnknownState) {
+      elementsWithUnknownStates.push({
+        ...item,
+        _index: data.indexOf(item) // Save original index for reference
+      });
+    }
+  }
+
+  // Second phase: Resolve state data for each group
+  console.log("\n=== PHASE 2: RESOLVING STATE DATA ===");
+  console.log(`Number of groups to process: ${Object.keys(groupedData).length}`);
+  
+  // Log all available state IDs and OS versions for reference
+  if (page.states && page.states.length > 0) {
+    const availableStates = page.states.map(s => ({
+      id: s.id,
+      versions: s.versions ? Object.keys(s.versions) : []
+    }));
+    console.log("Available states and versions:", JSON.stringify(availableStates, null, 2));
   }
 
   for (const key in groupedData) {
     const { state_id, osVersion } = groupedData[key];
-    const state = page.states.find(s => s.id === state_id && s.versions[osVersion]);
+    console.log(`\nResolving state data for group: ${key}`);
+    console.log(`Looking for state ID: "${state_id}" with OS version: "${osVersion}"`);
 
-    if (state) {
-      groupedData[key].screenshot = state.versions[osVersion].screenShot;
-      groupedData[key].pageSource = state.versions[osVersion].pageSource;
-      groupedData[key].stateDescription = state.description;
-      groupedData[key].stateTitle = state.title;
-      groupedData[key].pageDescription = page.description;
-      groupedData[key].pageTitle = page.name;
-      groupedData[key].processingStatus = 'ready';
-    } else {
+    // First check if we can find the state by ID
+    const stateById = page.states?.find(s => s.id === state_id);
+    
+    if (!stateById) {
+      console.log(`ERROR: No state found with ID: "${state_id}"`);
+      if (page.states && page.states.length > 0) {
+        console.log(`Available state IDs: ${page.states.map(s => s.id).join(', ')}`);
+      }
       groupedData[key].processingStatus = 'missing_state_data';
-      Logger.log(`Warning: Missing state data for ${key}`, "warn");
+      continue;
     }
+    
+    console.log(`Found state with ID: "${state_id}", title: "${stateById.title || 'unnamed'}"`);
+    
+    // Check if the state has a versions object
+    if (!stateById.versions) {
+      console.log(`ERROR: State with ID "${state_id}" has no versions object`);
+      groupedData[key].processingStatus = 'missing_versions_object';
+      continue;
+    }
+    
+    // Check if the specific OS version exists
+    if (!stateById.versions[osVersion]) {
+      console.log(`ERROR: State with ID "${state_id}" has no version for OS "${osVersion}"`);
+      console.log(`Available versions: ${Object.keys(stateById.versions).join(', ')}`);
+      
+      // Try case-insensitive match
+      const foundVersion = Object.keys(stateById.versions).find(
+        v => v.toLowerCase() === osVersion.toLowerCase()
+      );
+      
+      if (foundVersion) {
+        console.log(`Found case-insensitive match: "${foundVersion}"`);
+        // Use the correctly cased version
+        groupedData[key].osVersion = foundVersion;
+        groupedData[key].screenshot = stateById.versions[foundVersion].screenShot;
+        groupedData[key].pageSource = stateById.versions[foundVersion].pageSource;
+        groupedData[key].stateDescription = stateById.description;
+        groupedData[key].stateTitle = stateById.title;
+        groupedData[key].pageDescription = page.description;
+        groupedData[key].pageTitle = page.name;
+        groupedData[key].processingStatus = 'ready';
+        console.log(`Successfully resolved state data using case-insensitive match`);
+      } else {
+        groupedData[key].processingStatus = 'missing_os_version';
+      }
+      continue;
+    }
+    
+    // Successfully found the state and version
+    console.log(`Found version "${osVersion}" for state ID "${state_id}"`);
+    groupedData[key].screenshot = stateById.versions[osVersion].screenShot;
+    groupedData[key].pageSource = stateById.versions[osVersion].pageSource;
+    groupedData[key].stateDescription = stateById.description;
+    groupedData[key].stateTitle = stateById.title;
+    groupedData[key].pageDescription = page.description;
+    groupedData[key].pageTitle = page.name;
+    groupedData[key].processingStatus = 'ready';
+    console.log(`Successfully resolved state data for group ${key}`);
   }
 
+  // Final statistics
+  console.log("\n=== GROUPING COMPLETED ===");
+  const statistics = Object.values(groupedData).reduce((stats, group) => {
+    stats[group.processingStatus] = (stats[group.processingStatus] || 0) + 1;
+    return stats;
+  }, {});
+  
+  console.log("Processing status statistics:", statistics);
   return Object.values(groupedData);
 }
 

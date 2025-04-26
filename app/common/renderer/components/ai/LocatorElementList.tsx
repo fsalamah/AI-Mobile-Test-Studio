@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   List, 
   Card, 
@@ -42,7 +42,12 @@ export const LocatorElementList = ({
   onHandleEvaluate, 
   onElementUpdated, 
   initialElements,
-  onElementsChanged // Prop for tracking all element changes
+  onElementsChanged, // Prop for tracking all element changes
+  xpathState, // Add xpathState to track evaluation status
+  matchedNodes, // Add matchedNodes to track current matched nodes
+  currentStateId, // Current state ID for filtering relevant elements
+  currentPlatform, // Current platform for filtering relevant elements
+  evaluateXPath // Direct access to the XPath evaluation function
 }) => {
   // Ensure elements is always initialized as an array
   const [elements, setElements] = useState(initialElements || []);
@@ -73,15 +78,21 @@ export const LocatorElementList = ({
     value: id
   }));
 
+  // Update elements when initialElements prop changes
+  useEffect(() => {
+    if (initialElements && JSON.stringify(initialElements) !== JSON.stringify(elements)) {
+      setElements(initialElements);
+    }
+  }, [initialElements]);
+
   // Custom setElements function that also triggers the event
-  const updateElementsAndNotify = (newElements) => {
-    
+  const updateElementsAndNotify = useCallback((newElements) => {
     setElements(newElements);
     // Always trigger the event when elements change
-    if (onElementsChanged) {alert('update')
+    if (onElementsChanged) {
       onElementsChanged([...newElements]);
     }
-  };
+  }, [onElementsChanged]);
 
   // Initial trigger of onElementsChanged with initial elements
   useEffect(() => {
@@ -99,11 +110,11 @@ export const LocatorElementList = ({
     const filteredElements = !searchTerm.trim() ? elementsToProcess : elementsToProcess.filter(element => {
       const lowercasedSearch = searchTerm.toLowerCase();
       return (
-        element.devName.toLowerCase().includes(lowercasedSearch) ||
-        element.name.toLowerCase().includes(lowercasedSearch) ||
-        element.value.toLowerCase().includes(lowercasedSearch) ||
+        element.devName?.toLowerCase().includes(lowercasedSearch) ||
+        element.name?.toLowerCase().includes(lowercasedSearch) ||
+        element.value?.toLowerCase().includes(lowercasedSearch) ||
         element.description?.toLowerCase().includes(lowercasedSearch) ||
-        element.xpath.xpathExpression.toLowerCase().includes(lowercasedSearch) ||
+        element.xpath?.xpathExpression?.toLowerCase().includes(lowercasedSearch) ||
         stateLookup[element.stateId]?.toLowerCase().includes(lowercasedSearch)
       );
     });
@@ -120,7 +131,7 @@ export const LocatorElementList = ({
     // Sort elements by devName within each state group
     Object.keys(grouped).forEach(stateId => {
       grouped[stateId].sort((a, b) => 
-        a.devName.toLowerCase().localeCompare(b.devName.toLowerCase())
+        (a.devName || '').toLowerCase().localeCompare((b.devName || '').toLowerCase())
       );
     });
     
@@ -134,6 +145,39 @@ export const LocatorElementList = ({
     setGroupedElements(grouped);
     setSortedStateIds(sortedIds);
   }, [elements, searchTerm]);
+
+  // Effect to update elements when xpathState changes to COMPLETE
+  useEffect(() => {
+    if (xpathState?.status === 'COMPLETE' && xpathState.lastResult) {
+      const { xpathExpression, numberOfMatches, isValid, matchingNodes } = xpathState.lastResult;
+      
+      // Find and update elements that match this XPath expression
+      const updatedElements = elements.map(item => {
+        if (
+          item.xpath?.xpathExpression === xpathExpression && 
+          item.stateId === currentStateId &&
+          item.platform === currentPlatform
+        ) {
+          // Update this element with new evaluation results
+          return {
+            ...item,
+            xpath: {
+              ...item.xpath,
+              numberOfMatches,
+              isValid,
+              matchingNodes
+            }
+          };
+        }
+        return item;
+      });
+      
+      // Update elements only if there's a change
+      if (JSON.stringify(updatedElements) !== JSON.stringify(elements)) {
+        updateElementsAndNotify(updatedElements);
+      }
+    }
+  }, [xpathState, currentStateId, currentPlatform, elements, updateElementsAndNotify]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
@@ -152,10 +196,15 @@ export const LocatorElementList = ({
         description: element.description,
         stateId: element.stateId,
         platform: element.platform,
-        xpathExpression: element.xpath.xpathExpression
+        xpathExpression: element.xpath?.xpathExpression || ''
       });
     } else {
       form.resetFields();
+      // Set default values for new elements
+      form.setFieldsValue({
+        platform: currentPlatform,
+        stateId: currentStateId
+      });
     }
   };
 
@@ -169,7 +218,7 @@ export const LocatorElementList = ({
       item => 
         item.devName === values.devName && 
         item.platform === values.platform && 
-        (!editingElement || item.devName !== editingElement.devName || item.platform !== editingElement.platform)
+        (!editingElement || item.id !== editingElement.id)
     );
 
     if (isDuplicate) {
@@ -183,6 +232,7 @@ export const LocatorElementList = ({
         validateUniqueness(values);
         
         const newElement = {
+          id: editingElement?.id || `element_${Date.now()}`, // Ensure we have a unique ID
           devName: values.devName,
           value: values.value,
           name: values.name,
@@ -191,18 +241,16 @@ export const LocatorElementList = ({
           platform: values.platform,
           xpath: {
             xpathExpression: values.xpathExpression,
-            numberOfMatches: editMode && editingElement ? editingElement?.xpath?.numberOfMatches : 0,
-            matchingNodes: editMode && editingElement ? editingElement?.xpath?.matchingNodes : [],
-            isValid: editMode && editingElement ? editingElement?.xpath?.isValid : false
+            numberOfMatches: editMode && editingElement?.xpath ? editingElement.xpath.numberOfMatches : 0,
+            matchingNodes: editMode && editingElement?.xpath ? editingElement.xpath.matchingNodes : [],
+            isValid: editMode && editingElement?.xpath ? editingElement.xpath.isValid : false
           }
         };
 
         if (editMode) {
           // Update existing element
           const updatedElements = elements.map(item => 
-            item.devName === editingElement.devName && item.platform === editingElement.platform 
-              ? newElement 
-              : item
+            item.id === editingElement.id ? newElement : item
           );
           
           // Update elements and notify
@@ -210,20 +258,50 @@ export const LocatorElementList = ({
           
           // Trigger xpath change event if xpath was modified
           if (editingElement?.xpath?.xpathExpression !== values.xpathExpression) {
-            onXPathChange && onXPathChange(editingElement);
+            // Evaluate the new XPath expression immediately
+            evaluateXPath && evaluateXPath(values.xpathExpression, result => {
+              // Update the element with the evaluation results
+              const elementWithResults = {
+                ...newElement,
+                xpath: {
+                  ...newElement.xpath,
+                  numberOfMatches: result.numberOfMatches,
+                  isValid: result.isValid,
+                  matchingNodes: result.matchingNodes || []
+                }
+              };
+              
+              // Update the elements list with the latest results
+              const updatedElementsWithResults = elements.map(item => 
+                item.id === elementWithResults.id ? elementWithResults : item
+              );
+              
+              updateElementsAndNotify(updatedElementsWithResults);
+            });
           }
           
           // Trigger element updated event
           onElementUpdated && onElementUpdated(newElement);
         } else {
-          // Add new element
-          const updatedElements = [...elements, newElement];
-          
-          // Update elements and notify
-          updateElementsAndNotify(updatedElements);
-          
-          // Trigger element updated event for new element
-          onElementUpdated && onElementUpdated(newElement);
+          // Add new element and evaluate its XPath
+          evaluateXPath && evaluateXPath(values.xpathExpression, result => {
+            const newElementWithResults = {
+              ...newElement,
+              xpath: {
+                ...newElement.xpath,
+                numberOfMatches: result.numberOfMatches,
+                isValid: result.isValid,
+                matchingNodes: result.matchingNodes || []
+              }
+            };
+            
+            // Add the new element with evaluation results
+            const updatedElements = [...elements, newElementWithResults];
+            updateElementsAndNotify(updatedElements);
+            
+            // Trigger element updated event for new element
+            onElementUpdated && onElementUpdated(newElementWithResults);
+          });
         }
 
         message.success(`Element ${editMode ? 'updated' : 'added'} successfully!`);
@@ -236,9 +314,7 @@ export const LocatorElementList = ({
   };
 
   const handleDelete = (element) => {
-    const updatedElements = elements.filter(item => 
-      !(item.devName === element.devName && item.platform === element.platform)
-    );
+    const updatedElements = elements.filter(item => item.id !== element.id);
     
     // Update elements and notify
     updateElementsAndNotify(updatedElements);
@@ -248,23 +324,59 @@ export const LocatorElementList = ({
 
   const handleEvaluate = (element) => {
     message.info(`Evaluating XPath for ${element.devName}`);
-    onHandleEvaluate && onHandleEvaluate(element); 
+    
+    // First make sure we're looking at the right state and platform
+    if (element.stateId !== currentStateId || element.platform !== currentPlatform) {
+      // This will trigger a state change in the parent component
+      onHandleEvaluate && onHandleEvaluate(element);
+    } else {
+      // We're already in the right state, just evaluate the XPath
+      evaluateXPath && evaluateXPath(element.xpath.xpathExpression, result => {
+        // Update this specific element with the evaluation results
+        const elementWithResults = {
+          ...element,
+          xpath: {
+            ...element.xpath,
+            numberOfMatches: result.numberOfMatches,
+            isValid: result.isValid,
+            matchingNodes: result.matchingNodes || []
+          }
+        };
+        
+        // Update the elements list with the result
+        const updatedElements = elements.map(item => 
+          item.id === element.id ? elementWithResults : item
+        );
+        
+        updateElementsAndNotify(updatedElements);
+      });
+    }
   };
 
   const handleView = (element) => {
-    message.info(`Viewing details for ${element.devName}`);
+    // First make sure we're looking at the right state and platform
+    if (element.stateId !== currentStateId || element.platform !== currentPlatform) {
+      onHandleEvaluate && onHandleEvaluate(element);
+    }
+    
+    // Then highlight the element's XPath
+    if (element.xpath?.xpathExpression) {
+      evaluateXPath && evaluateXPath(element.xpath.xpathExpression);
+    }
+    
+    message.info(`Viewing ${element.devName}`);
   };
 
   // Start inline editing
   const startEditing = (element, field) => {
-    const itemId = `${element.platform}-${element.devName}`;
+    const itemId = element.id;
     setEditingItemId(itemId);
     setEditingField(field);
     
     if (field === 'xpathExpression') {
-      setEditingValue(element.xpath.xpathExpression);
+      setEditingValue(element.xpath?.xpathExpression || '');
     } else {
-      setEditingValue(element[field]);
+      setEditingValue(element[field] || '');
     }
   };
 
@@ -283,7 +395,7 @@ export const LocatorElementList = ({
         const isDuplicate = elements.some(
           item => item.devName === editingValue && 
                 item.platform === element.platform && 
-                item.devName !== element.devName
+                item.id !== element.id
         );
         
         if (isDuplicate) {
@@ -293,35 +405,44 @@ export const LocatorElementList = ({
         }
       }
 
-      const updatedElements = elements.map(item => {
-        if (item.devName === element.devName && item.platform === element.platform) {
-          if (field === 'xpathExpression') {
-            // Update xpath and trigger events
-            const updatedItem = {
-              ...item,
-              xpath: {
-                ...item.xpath,
-                xpathExpression: editingValue
-              }
-            };
-            // Trigger the xpath change event
-            onXPathChange && onXPathChange(editingValue);
-            // Trigger element updated event
-            onElementUpdated && onElementUpdated(updatedItem);
-            return updatedItem;
-          } else {
-            // Update other fields
+      if (field === 'xpathExpression') {
+        // Evaluate the new XPath immediately
+        evaluateXPath && evaluateXPath(editingValue, result => {
+          // Update the element with the evaluation results and the new XPath
+          const updatedElements = elements.map(item => {
+            if (item.id === element.id) {
+              return {
+                ...item,
+                xpath: {
+                  ...item.xpath,
+                  xpathExpression: editingValue,
+                  numberOfMatches: result.numberOfMatches,
+                  isValid: result.isValid,
+                  matchingNodes: result.matchingNodes || []
+                }
+              };
+            }
+            return item;
+          });
+          
+          // Update elements and notify
+          updateElementsAndNotify(updatedElements);
+        });
+      } else {
+        // Update other fields
+        const updatedElements = elements.map(item => {
+          if (item.id === element.id) {
             const updatedItem = { ...item, [field]: editingValue };
             // Trigger element updated event
             onElementUpdated && onElementUpdated(updatedItem);
             return updatedItem;
           }
-        }
-        return item;
-      });
-      
-      // Update elements and notify
-      updateElementsAndNotify(updatedElements);
+          return item;
+        });
+        
+        // Update elements and notify
+        updateElementsAndNotify(updatedElements);
+      }
       
       cancelEditing();
     } catch (error) {
@@ -329,9 +450,6 @@ export const LocatorElementList = ({
     }
   };
 
-  // Generate a unique ID for each item to use in edit mode tracking
-  const getItemId = (item) => `${item.platform}-${item.devName}`;
-  
   // Get match status color and text for better visual indication
   const getMatchStatus = (numberOfMatches) => {
     if (numberOfMatches === undefined || numberOfMatches === null) return { color: '#f5222d', text: '0' };
@@ -350,7 +468,7 @@ export const LocatorElementList = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY:'scroll', maxHeight:'100%' ,padding:'8px'}}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY:'scroll', maxHeight:'100%', padding:'8px'}}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
         <Title level={5} style={{ margin: 0 }}>Element List</Title>
         <Input 
@@ -398,8 +516,16 @@ export const LocatorElementList = ({
             size="small"
             dataSource={groupedElements[stateId]}
             renderItem={item => {
-              const itemId = getItemId(item);
+              const itemId = item.id;
               const matchStatus = getMatchStatus(item.xpath?.numberOfMatches);
+              
+              // Highlight if this is the current state/platform and matches were found
+              const isActive = (
+                item.stateId === currentStateId && 
+                item.platform === currentPlatform && 
+                xpathState?.lastResult?.xpathExpression === item.xpath?.xpathExpression &&
+                xpathState?.status === 'COMPLETE'
+              );
               
               return (
                 <List.Item
@@ -408,7 +534,10 @@ export const LocatorElementList = ({
                 >
                   <Card 
                     size="small" 
-                    style={{ width: '100%' }}
+                    style={{ 
+                      width: '100%',
+                      borderLeft: isActive ? '2px solid #1890ff' : 'none'
+                    }}
                     bodyStyle={{ padding: '4px' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -465,7 +594,7 @@ export const LocatorElementList = ({
                               <span style={{ 
                                 fontWeight: 'bold', 
                                 fontSize: '12px',
-                                color: (item.xpath?.matchingNodes>0?'#1890ff':'inherit'),
+                                color: (item.xpath?.numberOfMatches > 0 ? '#1890ff' : 'inherit'),
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap'
@@ -501,7 +630,7 @@ export const LocatorElementList = ({
                           />
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Tooltip title={item.xpath.xpathExpression}>
+                            <Tooltip title={item.xpath?.xpathExpression}>
                               <div style={{ 
                                 fontSize: '9px', 
                                 fontFamily: 'monospace',
@@ -511,7 +640,7 @@ export const LocatorElementList = ({
                                 whiteSpace: 'nowrap',
                                 maxWidth: '100%'
                               }}>
-                                {item.xpath.xpathExpression}
+                                {item.xpath?.xpathExpression}
                               </div>
                             </Tooltip>
                             <Button 
@@ -538,6 +667,7 @@ export const LocatorElementList = ({
                           icon={<ExperimentOutlined style={{ fontSize: '10px' }} />} 
                           onClick={() => handleEvaluate(item)}
                           style={{ padding: '0 4px', height: '22px' }}
+                          loading={xpathState?.status === 'PROCESSING' && xpathState?.currentXPath === item.xpath?.xpathExpression}
                         />
                         <Button 
                           size="small"

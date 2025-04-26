@@ -113,144 +113,7 @@ If element cannot be reliably located with XPath:
 ***VERY IMPORTANT***: The xpathLocator must be unique for each element.
 ***VERY IMPORTANT***: Do not touch any other property of the elements, do not add or remove any other property.
 
-Current Platform: '${os.toUpperCase()}'`
-//   const OLD_systemInstruction =`You are an expert in mobile app UI analysis and XPath generation.  
-// USE XPATH 1.0 ONLY.
-
-// Your task is to generate **robust, production-grade XPath expressions** for each UI element using:
-// - A screenshot of the app screen
-// - The raw XML source of the page
-
-// 🔒 DO NOT modify or remove any of the following element properties:
-// - devName
-// - name
-// - description
-// - value
-// - isDynamicValue
-// - stateId
-
-// ✅ Only ADD a new property called 'xpathLocator' to each element.
-// This property must contain a **unique and reliable XPath expression** to locate the element in the XML.
-
-// ---
-
-// ## 📌 PRIORITIZED XPATH STRATEGIES
-
-// ### 1️⃣ ✅ Indexing Format (Top Priority – Critical)
-
-// To ensure XPath expressions are unique and structurally consistent:
-
-// - ✅ Always use **result-level indexing**:
-//   - First match: '(//your-xpath)[n]'
-//   - Last match: '(//your-xpath)[last()]'
-//   - Specific index: '(//your-xpath)[index]'
-//   - Chained sub-paths: '(//your-xpath-first-part)[n]/second-part'
-
-// - ❌ Never use indexing **inside the path**:
-//   - '//your-xpath[1]' — ❌ INVALID
-//   - '//your-xpath[last()]' — ❌ INVALID
-//   - '//your-xpath-part[1]/second-part' — ❌ INVALID
-
-// > ⚠️ This is **very important**. Use '()' to wrap result sets before indexing.
-
-// ---
-
-// ### 2️⃣ 🧾 User Input Fields & Editable Elements (Strict Handling)
-
-// Editable elements such as input fields ('EditText', 'TextField', etc.) must be handled carefully:
-
-// - 🔴 **NEVER** use the actual content of the field in your XPath:
-//   - Do NOT match on:
-//     - '@text'
-//     - '@value'
-//     - '@hint' or placeholder
-
-//   ❌ **Examples of invalid XPath expressions**:
-//   - '//android.widget.EditText[@text='user@example.com']'
-//   - '//XCUIElementTypeTextField[@value='123456']'
-
-//   These values are user-generated or device-generated and **will change**.
-
-// - ✅ **Correct Strategy**:
-//   1. **Locate a nearby static label element** — typically a 'TextView', 'Label', or static heading that consistently appears above or beside the input.
-//   2. Use 'following::' or 'preceding::' axes to navigate from the label to the input field.
-//   3. Use **result-level indexing** for precision.
-
-//   ✅ **Example (correct format):**  
-//   ${os.toUpperCase()!='IOS'?"(//android.widget.TextView[contains(@text, 'Email')]/following::android.widget.EditText)[1]":"(//XCUIElementTypeStaticText[contains(@text, 'Email')]/following::XCUIElementTypeTextField)[1]"}
-  
-
-// - ⚠️ If the label is **not available in XML**:
-//   - Use a **known static sibling or visual anchor** that *is* in the XML (e.g. an icon, layout container).
-//   - Traverse using 'following::' or 'preceding::' and index from there.
-
-// - 🧠 Treat all input fields as dynamic — avoid relying on anything inside them (text, hint, value) for XPath matching.
-
-// ---
-
-// ### 3️⃣ 🔁 Dynamic or Changing Text Elements
-
-// - Applies to elements like:
-//   - Personalized user info (e.g., names, usernames, balances)
-//   - Dynamic content (e.g., time, dates, session data)
-//   - Variable states (e.g., "Success", "Pending", "Processing")
-
-// - 🔴 DO NOT match or anchor based on this text.
-
-// - ✅ Instead:
-//   - Use nearby **static context** — like titles, headings, icons — and traverse using:
-//     - 'preceding::'
-//     - 'following::'
-//     - 'ancestor::'
-//     - Combined with result-level indexing.
-
-//   ✅ Example:  
-  
-//   ${os.toUpperCase()!='IOS'?"\'(//android.widget.TextView[contains(@text, 'Balance')]/following::android.widget.TextView)[1]\'":"\'//XCUIElementTypeStaticText[contains(@name, 'Balance')]/following::XCUIElementTypeStaticText[1]\'"}
-
-// ---
-
-// ### 4️⃣ ↕️ Axis Usage Rules
-
-// - 🔴 NEVER use:
-//   - 'following-sibling::'
-//   - 'preceding-sibling::'
-// - ✅ ALWAYS use:
-//   - 'following::'
-//   - 'preceding::'
-//   - 'ancestor::'
-//   - 'descendant::'
-
-// These are layout-resilient and ideal for dynamic mobile screens.
-
-// ---
-
-// ### 5️⃣ 🧠 General XPath Best Practices
-
-// - Prefer relative paths with strong attributes like:
-//   - '@resource-id', '@content-desc', '@class'
-// - Avoid absolute paths.
-// - Combine axis, structure, and result indexing.
-
-// ---
-
-// ### 6️⃣ ❌ Fallback Expression
-
-// - If no reliable XPath can be constructed:
-//   - Use the placeholder: '//*[99=0]'
-
-// ---
-
-// ## 📤 Output Format
-
-// Return a JSON array of the **original input elements**, each with one added key: 'xpathLocator'.
-// **VERY IMPORTANT**: The xpathLocator must be unique for each element.
-// **VERY IMPORTANT**: Do not touch any other property of the elements, do not add or remove any other property.
-// ---
-
-// Platform: '${os.toUpperCase()}'
-// `
-.trim(); 
+Current Platform: '${os.toUpperCase()}'`.trim(); 
     return [{
       role: "user",
       content: [
@@ -281,22 +144,8 @@ Current Platform: '${os.toUpperCase()}'`
     }];
   }
   
-  static async generateStatesPrompt(page, generationConfig,os) {
-    const old_baseInstruction = `
-      You are a software test engineer. Identify every visible object in the screenshots, regardless of whether it is a string or a UI element.
-      Include small and large items, duplicates, and overlapping elements (handle deduplication).
-      If an element contains a string or visible text, assign it to value and check if it's a dynamic value.
-      
-      Important rules:
-      - The same elemet may appear in multiple states because those screenshots may overlap. Only include it once from the first state it shows in.
-      - devName must be unique per element type. If duplicates exist, only keep the first instance.
-      - follow this convention for devName: <object type: the control type such as label, button,input, etc..><objectName: clear name that cannot be mistaken or confused> in camelCase.
-      - Element count must be >= string count.
-      - Ignore the top system bar that has the time/battery/network.
-      Possible kinds of elements:button,text_field,password_field,checkbox,radio_button,dropdown,dropdown_body,spinner,switch,toggle,slider,stepper,label,text,link,image,icon,modal,dialog,toast,tab,tab_bar,menu,menu_item,accordion,list,list_item,table,table_row,table_cell,grid,grid_item,card,carousel,progress_bar,activity_indicator,search_bar,datepicker,timepicker,datetimepicker,scroll_view,video,canvas,map,tooltip,floating_button,form,form_field,avatar,badge,breadcrumb,code_block,divider,navbar,pagination,overlay,drawer,expansion_panel,toolbar,app_bar,context_menu
-      **IMPORTANT** OS VERSION FOR THIS PROMPT: ${os}
-    `.trim();
-    const baseInstruction=`UI Element Detection from Overlapping Screenshots
+  static async generateStatesPrompt(page, generationConfig, os) {
+    const baseInstruction = `UI Element Detection from Overlapping Screenshots
 You are a professional software test engineer. Your job is to analyze overlapping mobile screenshots and return a structured, deduplicated list of all visible UI elements and text strings.
 
 🔁 Full Procedure: Execute These 7 Steps in Order
@@ -325,9 +174,6 @@ Detect all visible UI objects and strings, even if overlapping:
 
 For each object, extract:
 
-json
-Copy
-Edit
 {
   "type": "<elementType>",
   "bounds": [x, y, width, height],
@@ -365,9 +211,6 @@ Repeating block = listItem or card
 5. 🔁 CROSS-IMAGE DEDUPLICATION
 Screenshots may overlap. Avoid duplicates using this deduplication key:
 
-ini
-Copy
-Edit
 fingerprint = type + bounds (rounded to nearest 5px) + normalized value
 Track each object across images.
 
@@ -401,9 +244,6 @@ No repeated or overlapping entries
 8. 🧱 ALLOWED ELEMENT TYPES
 Only use values from this list (plus swipeArea and other if needed):
 
-plaintext
-Copy
-Edit
 button, textField, passwordField, checkbox, radioButton, dropdown, dropdownBody,
 spinner, switch, toggle, slider, stepper, label, text, link, image, icon, modal,
 dialog, toast, tab, tabBar, menu, menuItem, accordion, list, listItem, table,
@@ -415,101 +255,56 @@ divider, navbar, pagination, overlay, drawer, expansionPanel, toolbar, appBar, c
 📤 FINAL OUTPUT FORMAT
 Return a flat array of JSON
 ⚠️ Only return the array. No comments, metadata, or extra text.
-`
-const baseInstruction_=`# UI Analysis Engine for Test Engineers
-
-You are a precise UI element detector for software testing. Your mission is to create a comprehensive catalog of interactive and visual elements from screenshots, prioritizing accuracy and completeness.
-
-## Core Analysis Process
-
-1. **Contextual Scanning** (High Priority)
-   - Perform a multi-pass scan starting with container elements, then nested components
-   - Analyze each element in relation to its surrounding objects and parent containers
-   - Use spatial relationships to detect UI patterns (forms, lists, navigational elements)
-
-2. **Element Detection** (High Priority)  
-   - Identify ALL visible objects regardless of size, depth, or partial visibility
-   - Include interactive controls, static text, images, and decorative elements
-   - Prioritize interactive components that might be testable targets
-
-3. **Text Processing** (Medium Priority)
-   - For elements containing text, capture under 'value' property
-   - Tag values as '"dynamic": true' if they appear to be runtime-generated (timestamps, counters, user data)
-   - Consider text styling and positioning to determine if it's a label, heading, or content
-
-4. **Deduplication Strategy** (High Priority)
-   - Elements appearing across multiple screenshots are recorded only once (first occurrence)
-   - Generate a unique visual signature based on type + position + visual characteristics
-   - Track already-processed elements in an internal registry to prevent duplication
-
-5. **Naming Convention** (Medium Priority)
-   - Assign unique 'devName' in camelCase following '<elementType><descriptiveName>' format
-   - Element type must be one from the approved list
-   - Ensure names are contextually relevant (e.g., 'buttonSubmit' rather than generic 'button1')
-   - For ambiguous elements, append discriminators based on location or context
-
-## Special Case Handling
-
-- **Partially Visible Elements**: Include if >25% visible and function is clear
-- **Nested Components**: Parse both container and children, preserving hierarchy
-- **Overlapping States**: When screenshots represent the same view in different states, tag elements with state information
-- **Low-Contrast Elements**: Use contextual clues and patterns to identify subtle UI components
-- **Custom Components**: Map to closest standard type, noting any special behaviors
-- **System Bars**: Always ignore status/navigation bars with system information
-
-## Validation Rules
-
-1. **Completeness Check**: Element count MUST be ≥ string count
-2. **Uniqueness Check**: Every 'devName' MUST be unique per element type
-3. **Context Analysis**: Every UI element MUST be evaluated in relationship to surrounding elements
-4. **Functional Grouping**: Related controls should be identified as belonging to the same functional group
-
-## Element Type Taxonomy
-Use ONLY these types:
-button, textField, passwordField, checkbox, radioButton, dropdown, dropdownBody, spinner, switch, toggle, slider, stepper, label, text, link, image, icon, modal, dialog, toast, tab, tabBar, menu, menuItem, accordion, list, listItem, table, tableRow, tableCell, grid, gridItem, card, carousel, progressBar, activityIndicator, searchBar, datePicker, timePicker, dateTimePicker, scrollView, video, canvas, map, tooltip, floatingButton, form, formField, avatar, badge, breadcrumb, codeBlock, divider, navbar, pagination, overlay, drawer, expansionPanel, toolbar, appBar, contextMenu
-
-## Output Format
-Provide a single, deduplicated list of all UI elements adhering to these principles, formatted as structured data with type, devName, value (if applicable), and dynamic flag (if applicable).
-
-Current OS Version: ${os}`
-// 6. OUTPUT FORMAT:
-//    Return a JSON array named '"elements"', where each element is an object with these keys:
-//      {  
-//        '"devName"': string,  
-//        '"type"': string,  
-//        '"bounds"': { x, y, width, height },  
-//        '"value"': string (if any),  
-//        '"dynamic"': boolean,  
-//      }
-
-    // Provide the following JSON format output as an array:
-
-    // [
-    //   {
-    //     "isDynamicValue": true|false,
-    //     "devName": String,
-    //     "name": String,
-    //     "description": String,
-    //     "stateId": String,
-    //     "value": String
-    //   }
-    // ]
+`;
 
     const content = [{ type: "text", text: baseInstruction }];
 
     for (const state of page.states) {
-      content.push(
-        {
-          type: "text",
-          text: `Page: ${page.name}, State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description}`,
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:image/jpeg;base64,${state.versions[os].screenShot}`,
+      // Log available OS versions for this state
+      const availableVersions = Object.keys(state.versions || {});
+      
+      // Check if the requested OS exists in the available versions
+      if (state.versions && state.versions[os] && state.versions[os].screenShot) {
+        // Use the requested OS version
+        content.push(
+          {
+            type: "text",
+            text: `Page: ${page.name}, State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description}`,
           },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${state.versions[os].screenShot}`,
+            },
+          }
+        );
+      } else {
+        // If requested OS isn't available, use the first available OS version
+        if (availableVersions.length > 0) {
+          const fallbackOs = availableVersions[0];
+          console.log(`OS ${os} not found for state ${state.id}. Available versions: ${availableVersions.join(', ')}. Using ${fallbackOs} instead.`);
+          
+          content.push(
+            {
+              type: "text",
+              text: `Page: ${page.name}, State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description} (Requested OS: ${os} not available, using ${fallbackOs} instead)`,
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${state.versions[fallbackOs].screenShot}`,
+              },
+            }
+          );
+        } else {
+          // No versions available at all
+          console.log(`No OS versions available for state ${state.id}.`);
+          content.push({
+            type: "text",
+            text: `Page: ${page.name}, State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description} (No OS versions available)`,
+          });
         }
-      );
+      }
     }
 
     return {
@@ -519,7 +314,7 @@ Current OS Version: ${os}`
     };
   }
 
-  static createValidationPrompt(initialPrompt, firstResponseContent,os) {
+  static createValidationPrompt(initialPrompt, firstResponseContent, os) {
     return {
       ...initialPrompt,
       content: [
@@ -545,6 +340,7 @@ Current OS Version: ${os}`
       ],
     };
   }
+
   static createOtherOsStateIdPrompt(deduplicatedElements, page, targetOS) {
     const baseInstruction = `
       You are a software test engineer. Assign the correct stateId for each element in the provided list based on the screenshots of the target OS (${targetOS}).
@@ -553,35 +349,52 @@ Current OS Version: ${os}`
       - Ensure the stateId corresponds to the correct state in the target OS.
       - If an element cannot be matched, mark its stateId as "unknown".
       - Retain all other properties of the elements.
-
-     
     `.trim();
-    // Provide the output in the following JSON format:
-    // [
-    //   {
-    //     "devName": String,
-    //     "name": String,
-    //     "description": String,
-    //     "stateId": String,
-    //     "value": String,
-    //     "isDynamicValue": true|false
-    //   }
-    // ]
+    
     const content = [{ type: "text", text: baseInstruction }];
 
     for (const state of page.states) {
-      content.push(
-        {
-          type: "text",
-          text: `State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description}`,
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:image/jpeg;base64,${state.versions[targetOS].screenShot}`,
+      // Check if the target OS version is available
+      if (state.versions && state.versions[targetOS] && state.versions[targetOS].screenShot) {
+        content.push(
+          {
+            type: "text",
+            text: `State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description}`,
           },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${state.versions[targetOS].screenShot}`,
+            },
+          }
+        );
+      } else {
+        // Log available versions
+        const availableVersions = Object.keys(state.versions || {});
+        console.log(`Target OS ${targetOS} not found for state ${state.id}. Available versions: ${availableVersions.join(', ')}`);
+        
+        // Use the first available version if any
+        if (availableVersions.length > 0) {
+          const fallbackOs = availableVersions[0];
+          content.push(
+            {
+              type: "text",
+              text: `State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description} (Target OS: ${targetOS} not available, using ${fallbackOs} instead)`,
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${state.versions[fallbackOs].screenShot}`,
+              },
+            }
+          );
+        } else {
+          content.push({
+            type: "text",
+            text: `State Name: ${state.title}, State ID: ${state.id}, Description: ${state.description} (No OS versions available)`,
+          });
         }
-      );
+      }
     }
 
     content.push({
@@ -628,39 +441,31 @@ Current OS Version: ${os}`
       content,
     };
   }
-/**
- * Creates prompts for generating Page Object Model classes
- * @param {string} pageBaseClass - The base class name that the POM should extend
- * @param {boolean} hasPageBase - Whether a PageBase implementation is provided
- * @param {string} pageMetadataBase64 - Base64 encoded page metadata
- * @param {string} screenshotsInfoBase64 - Base64 encoded screenshots info
- * @param {string} guideTextBase64 - Base64 encoded guide text
- * @param {string} uniqueLocatorsList - Base64 encoded locators JSON
- * @param {string|null} pageBaseBase64 - Optional Base64 encoded PageBase implementation
- * @param {Array} screenshots - Array of screenshot objects with platform and base64 data
- * @returns {Array} - Messages array for the AI service
- */
-static createPOMGenerationPrompt(
-  pageBaseClass,
-  hasPageBase,
-  pageMetadataBase64,
-  screenshotsInfoBase64,
-  guideTextBase64,
-  uniqueLocatorsList,
-  pageBaseBase64,
-  screenshots
-) {
-  // Adjust system prompt based on whether PageBase is provided
-  let systemPrompt = `Please read and follow the coding guideline in the files provided. The files include: 1) Locators for the elements in JSON format, 2) Multiple screenshots from different states and platforms showing the page functionality, `;
-  
-  if (hasPageBase) {
-    systemPrompt += `3) The PageBase class implementation that the POM class must extend, and 4) A guide with coding standards. You will be creating a Java Page Object Model class that extends the provided ${pageBaseClass} class.`;
-  } else {
-    systemPrompt += `3) A guide with coding standards. You will be creating a Java Page Object Model class that extends the ${pageBaseClass} class.`;
-  }
-  
 
-  systemPrompt=`# Prompt for Creating a Standardized Page Object Model Class
+  /**
+   * Creates prompts for generating Page Object Model classes
+   * @param {string} pageBaseClass - The base class name that the POM should extend
+   * @param {boolean} hasPageBase - Whether a PageBase implementation is provided
+   * @param {string} pageMetadataBase64 - Base64 encoded page metadata
+   * @param {string} screenshotsInfoBase64 - Base64 encoded screenshots info
+   * @param {string} guideTextBase64 - Base64 encoded guide text
+   * @param {string} uniqueLocatorsList - Base64 encoded locators JSON
+   * @param {string|null} pageBaseBase64 - Optional Base64 encoded PageBase implementation
+   * @param {Array} screenshots - Array of screenshot objects with platform and base64 data
+   * @returns {Array} - Messages array for the AI service
+   */
+  static createPOMGenerationPrompt(
+    pageBaseClass,
+    hasPageBase,
+    pageMetadataBase64,
+    screenshotsInfoBase64,
+    guideTextBase64,
+    uniqueLocatorsList,
+    pageBaseBase64,
+    screenshots
+  ) {
+    // Adjust system prompt based on whether PageBase is provided
+    let systemPrompt = `# Prompt for Creating a Standardized Page Object Model Class
 
 ## Task Definition
 Create a complete, executable Page Object Model (POM) class in Groovy for a [SPECIFIC_PAGE_NAME] page in the [SPECIFIC_MODULE_NAME] module. Follow ONLY the guidelines and patterns outlined below.
@@ -977,67 +782,67 @@ public class LoginPage extends PageBase {
    ...
    
 
-INSTRUCTIONS: Replace all placeholders in square brackets with your specific information. Follow the exact format shown in the examples.`
-  // Prepare messages for AI service
-  const messages = [
-    {
-      "role": "system",
-      "content": systemPrompt
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": `Create a Java Page Object Model class based on the guideline document, the provided locators, and screenshots. Follow the scaffolding pattern in testobjects not providing any argument in findTestObject() and also follow the Common.getLangString method for strings. Extract the strings from the page and only place strings that you find on the page. Do not implement the package name and the imports. Implement all the page methods such as element verification, navigation, form operations, etc. in the page method section. The class MUST extend ${pageBaseClass} ${hasPageBase ? "and utilize its methods appropriately as shown in the provided PageBase implementation" : ""}. If you are not sure about a specific method, implement its definition and throw a not implemented exception.`
-        },
-        {
-          "type": "text",
-          "text": "The class structure should follow these guidelines:\n1. Start with the getString methods region\n2. Then the locators region\n3. Then the page action methods\n4. Then the verification methods\n\nThe page methods should include element verification, navigation, form operations, etc. **IMPORTANT** Segregate methods by type into #REGION <Region Name> from other methods and always have a perform page method. In all cases, always refer to the guideline attached."
-        },
-        {
-          "type": "text",
-          "text": `Page metadata: data:text/json;base64,${pageMetadataBase64}`
-        },
-        {
-          "type": "text",
-          "text": `Screenshots information: data:text/json;base64,${screenshotsInfoBase64}`
-        }
-      ]
+INSTRUCTIONS: Replace all placeholders in square brackets with your specific information. Follow the exact format shown in the examples.`;
+    
+    // Prepare messages for AI service
+    const messages = [
+      {
+        "role": "system",
+        "content": systemPrompt
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": `Create a Java Page Object Model class based on the guideline document, the provided locators, and screenshots. Follow the scaffolding pattern in testobjects not providing any argument in findTestObject() and also follow the Common.getLangString method for strings. Extract the strings from the page and only place strings that you find on the page. Do not implement the package name and the imports. Implement all the page methods such as element verification, navigation, form operations, etc. in the page method section. The class MUST extend ${pageBaseClass} ${hasPageBase ? "and utilize its methods appropriately as shown in the provided PageBase implementation" : ""}. If you are not sure about a specific method, implement its definition and throw a not implemented exception.`
+          },
+          {
+            "type": "text",
+            "text": "The class structure should follow these guidelines:\n1. Start with the getString methods region\n2. Then the locators region\n3. Then the page action methods\n4. Then the verification methods\n\nThe page methods should include element verification, navigation, form operations, etc. **IMPORTANT** Segregate methods by type into #REGION <Region Name> from other methods and always have a perform page method. In all cases, always refer to the guideline attached."
+          },
+          {
+            "type": "text",
+            "text": `Page metadata: data:text/json;base64,${pageMetadataBase64}`
+          },
+          {
+            "type": "text",
+            "text": `Screenshots information: data:text/json;base64,${screenshotsInfoBase64}`
+          }
+        ]
+      }
+    ];
+    
+    // Add PageBase implementation if available
+    if (hasPageBase && pageBaseBase64) {
+      messages[1].content.push({
+        "type": "text",
+        "text": `PageBase implementation: data:text/plain;base64,${pageBaseBase64}`
+      });
     }
-  ];
-  
-  // Add PageBase implementation if available
-  if (hasPageBase && pageBaseBase64) {
+    
+    // Add guide content
     messages[1].content.push({
       "type": "text",
-      "text": `PageBase implementation: data:text/plain;base64,${pageBaseBase64}`
+      "text": `Guide content: data:text/plain;base64,${guideTextBase64}`
     });
-  }
-  
-  // Add guide content
-  messages[1].content.push({
-    "type": "text",
-    "text": `Guide content: data:text/plain;base64,${guideTextBase64}`
-  });
-  
-  // Add locators
-  messages[1].content.push({
-    "type": "text",
-    "text": `Locators: data:text/json;base64,${uniqueLocatorsList}`
-  });
-  
-  // Add ALL screenshots as image_url types
-  for (const screenshot of screenshots) {
+    
+    // Add locators
     messages[1].content.push({
-      "type": "image_url",
-      "image_url": {
-        "url": `data:image/png;base64,${screenshot.screenShot}`
-      }
+      "type": "text",
+      "text": `Locators: data:text/json;base64,${uniqueLocatorsList}`
     });
+    
+    // Add ALL screenshots as image_url types
+    for (const screenshot of screenshots) {
+      messages[1].content.push({
+        "type": "image_url",
+        "image_url": {
+          "url": `data:image/png;base64,${screenshot.screenShot}`
+        }
+      });
+    }
+    
+    return messages;
   }
-  
-  return messages;
 }
-}
-
