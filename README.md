@@ -1,10 +1,5 @@
 # Mobile AI Studio
 
-![GitHub stars](https://img.shields.io/github/stars/yourusername/mobile-ai-studio?style=social)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Build Status](https://img.shields.io/github/workflow/status/yourusername/mobile-ai-studio/CI)
-
-
 
 > Revolutionize your mobile testing workflow with AI-powered element detection, smart labeling, and automatic page object generation.
 
