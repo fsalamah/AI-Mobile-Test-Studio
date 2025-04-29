@@ -3,6 +3,7 @@
 
 > Revolutionize your mobile testing workflow with AI-powered element detection, smart labeling, and automatic page object generation.
 
+![Chart](https://raw.githubusercontent.com/fsalamah/AI-Mobile-Test-Studio/main/docs/chart.png)
 ## ✨ Features
 
 - **📱 Screen Capture** - Take application snapshots for offline element evaluation
