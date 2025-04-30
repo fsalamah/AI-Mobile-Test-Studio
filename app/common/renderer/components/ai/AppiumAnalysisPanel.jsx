@@ -387,7 +387,12 @@ export default function AppiumAnalysisPanel() {
         setAiProgressMessage(message);
         setAiProgressVisible(true);
     };
+    
+        const setCodeViewerVisible = (isVisible)=>{
+        setCurrentPageForCode(selectedPage)
+        setCurrentView('codeViewer')
 
+    }
     const updateAiProgressMessage = (message) => {
         setAiProgressMessage(message);
     };
@@ -401,7 +406,7 @@ export default function AppiumAnalysisPanel() {
     const handleVisualAnalysisComplete = (updatedPage) => {
         // Update the page with the results
         updatePage(updatedPage);
-        
+        setXrayViewMode('pipeline-stage')
         // Navigate to the X-ray view
         setCurrentView('pageXray');
     };
@@ -736,6 +741,7 @@ export default function AppiumAnalysisPanel() {
                         inspectorState={inspectorState}
                         updatePage={updatePage}
                         onVisualAnalysisComplete={handleVisualAnalysisComplete}
+                        onSetCodeViewerVisiblity={setCodeViewerVisible}
                         // Pass the AI progress modal functions 
                         showAiProgressModal={showAiProgressModal}
                         updateAiProgressMessage={updateAiProgressMessage}

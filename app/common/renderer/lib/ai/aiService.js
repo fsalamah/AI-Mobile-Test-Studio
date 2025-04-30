@@ -5,6 +5,7 @@ import { CONFIG } from './config.js';
 import { createOsSpecifVisualElementSchema, createXpathLocatorSchema } from './schemas.js';
 import {Logger} from 
 './logger.js'
+import { createXpathRepairSchema } from "./xpathFixSchema.js";
 export class AIService {
   constructor() {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // Consider making this configurable
@@ -71,8 +72,8 @@ export class AIService {
         model,
         messages,
         temperature,
-        max_tokens: CONFIG.GENERATION.maxOutputTokens || 4096,
-        top_p: CONFIG.GENERATION.topP || 0.1,
+        max_tokens: CONFIG.GENERATION.maxOutputTokens ,
+        top_p: CONFIG.GENERATION.topP || 0.0,
       });
       
       return response;
@@ -85,4 +86,33 @@ export class AIService {
     throw error;
   }
 }
+
+  /**
+   * Repairs failed XPath expressions for elements
+   * @param {string} model - The AI model to use
+   * @param {Object} prompt - The prompt containing the repair instructions
+   * @param {string} stateId - The state ID for validation
+   * @param {number} temperature - Temperature setting (0-1)
+   * @returns {Promise<Object>} - The AI service response with repaired XPaths
+   */
+  async repairFailedXpaths(model, prompt, stateId, temperature = 0) {
+    try {
+      Logger.log(`Repairing failed XPaths with model ${model}`, "info");
+      console.log('##################################################################################################')
+      console.log(temperature)
+      console.log(model)
+      //console.log(prompt)
+      return await this.client.chat.completions.create({
+        model,
+        messages: prompt,
+         temperature,
+        // max_tokens: CONFIG.GENERATION.maxOutputTokens || 4096,
+        // top_p: CONFIG.GENERATION.topP || 0.1,
+        response_format: zodResponseFormat(createXpathRepairSchema(stateId), "XpathRepairResponse"),
+      });
+    } catch (error) {
+      Logger.error(`Error calling ${model} (repairFailedXpaths):`, error);
+      throw error;
+    }
+  }
 }

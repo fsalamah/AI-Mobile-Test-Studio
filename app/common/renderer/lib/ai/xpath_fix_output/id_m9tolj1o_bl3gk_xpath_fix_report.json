@@ -1,0 +1,69 @@
+{
+  "summary": {
+    "totalElements": 7,
+    "originalSuccessCount": 0,
+    "originalFailureCount": 7,
+    "originalSuccessRate": "0.00%",
+    "currentSuccessCount": 0,
+    "currentFailureCount": 7,
+    "currentSuccessRate": "0.00%",
+    "fixedCount": 0,
+    "fixRate": "0.00%"
+  },
+  "failureReasons": {
+    "No matches found": 7
+  },
+  "platformStats": {
+    "android": {
+      "total": 7,
+      "success": 0,
+      "failure": 7,
+      "successRate": 0
+    }
+  },
+  "fixedElements": [],
+  "stillFailingElements": [
+    {
+      "devName": "labelBalance",
+      "stateId": "id_m9tolotq_7doev",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "labelThisMonth",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "labelBalanceIn",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "label23JOD",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "labelTip",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "labelTextManageYourSpendings",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    },
+    {
+      "devName": "labelWidgets",
+      "stateId": "id_m9tomofg_dvlzn",
+      "platform": "android",
+      "xpathExpression": "//*[99=0]"
+    }
+  ]
+}

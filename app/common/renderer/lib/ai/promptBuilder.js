@@ -113,7 +113,10 @@ If element cannot be reliably located with XPath:
 ***VERY IMPORTANT***: The xpathLocator must be unique for each element.
 ***VERY IMPORTANT***: Do not touch any other property of the elements, do not add or remove any other property.
 
-Current Platform: '${os.toUpperCase()}'`.trim(); 
+Current Platform: '${os.toUpperCase()}'
+
+RESPOND ONLY IN JSON AND IN THIS FORMAT:
+`.trim(); 
     return [{
       role: "user",
       content: [
@@ -845,4 +848,1249 @@ INSTRUCTIONS: Replace all placeholders in square brackets with your specific inf
     
     return messages;
   }
+
+  static createXpathRepairPrompt({ screenshotBase64, xmlText, failingElements, os, generationConfig }) {
+    const systemInstruction = `# Mobile UI XPath Repair Specialist: Error Resolution System
+  
+  You are a specialized XPath troubleshooter with expert-level knowledge of XPath 1.0. Your mission is to analyze and fix previously generated XPath expressions that have failed to evaluate against the mobile UI hierarchy.
+  
+  ## Error Analysis Framework
+  
+  ### 1️⃣ DIAGNOSTIC PHASE
+  - Compare each failed XPath against the XML source to identify exact failure points
+  - Analyze common error patterns across multiple failed XPaths
+  - Check for structural inconsistencies between the XPath and actual XML hierarchy
+  - Verify namespace issues, especially on different mobile platforms
+  
+  ### ⚠️ FORBIDDEN ATTRIBUTES (NEVER USE)
+  - **NEVER use the following attributes in XPath expressions:**
+    - ❌ \`@bounds\` - Visual position information that changes with screen size/resolution
+    - ❌ \`@x\`, \`@y\`, \`@width\`, \`@height\` - Positional attributes that change with device/orientation
+    - ❌ \`@content-desc\` - May change with accessibility settings or app versions
+    - ❌ \`@clickable\`, \`@enabled\` - State attributes that may change during runtime
+    
+  - **Always use these preferred attributes instead:**
+    - ✅ \`@resource-id\` - Primary stable identifier
+    - ✅ \`@id\` - Alternative stable identifier
+    - ✅ \`@class\` - Element type information
+    - ✅ \`@text\` - For static text (use contains() for partial matches)
+    - ✅ \`@name\` - For iOS elements
+  
+  ### 2️⃣ COMMON FAILURE PATTERNS
+  
+  **Syntax Errors:**
+  - Unbalanced parentheses or brackets
+  - Incorrect axis syntax
+  - Missing quotes around attribute values
+  - Invalid predicate expressions
+  
+  **Structural Mismatches:**
+  - Element hierarchy doesn't match XPath navigation path
+  - Node types incorrect (element vs attribute)
+  - Index references outside valid range
+  - Incorrect result-level indexing implementation
+  
+  **Attribute Issues:**
+  - Attribute doesn't exist in target element
+  - Case sensitivity problems in attribute matching
+  - Partial matching failures in contains() functions
+  - Text normalization issues (spaces, special chars)
+  
+  ### 3️⃣ REPAIR METHODOLOGY
+  
+  **Step 1: Validation**
+  - Test each segment of the XPath independently
+  - Verify element existence at each navigation step
+  - Confirm attribute presence and values
+  - Check index validity against actual node counts
+  
+  **Step 2: Reconstruction**
+  - Rebuild failed XPaths using simplified, proven patterns
+  - Start with broadest reliable selector, then narrow with predicates
+  - Break complex XPaths into simpler expressions when possible
+  - Apply result-level indexing consistently: \`(//selector)[index]\`
+  
+  **Step 3: Alternative Strategies**
+  - When original approach fails, try alternative anchor elements
+  - Use different attributes for identification
+  - Apply containment-based selectors instead of exact matches
+  - Consider ancestor-based location strategies
+  
+  ## CRITICAL FIX PATTERNS
+  
+  ### 🔧 XPATH MINIMIZATION PRINCIPLE
+  - **ALWAYS prioritize the shortest possible XPath** that uniquely identifies the element:
+    - Shorter XPaths are less brittle to UI structure changes
+    - Simpler expressions evaluate faster and are easier to maintain
+    - Minimal XPaths reduce dependency on specific UI hierarchy depths
+    
+  - **SIMPLIFICATION TECHNIQUES:**
+    - ✅ Use direct ID selectors when available: \`//*[@resource-id='unique_id']\`
+    - ✅ Prefer single unique attribute over complex hierarchical paths
+    - ✅ Remove unnecessary steps in the hierarchy when a shorter path works
+    - ✅ Use \`//\` instead of full paths when intermediate elements are irrelevant
+  
+  - **EXAMPLES:**
+    - ✅ Instead of: \`//android.view.ViewGroup/android.view.ViewGroup/android.widget.TextView[@text='Submit']\`
+    - ✅ Use: \`//*[@text='Submit' and @class='android.widget.TextView']\`
+    - ✅ Instead of: \`//android.widget.LinearLayout/android.widget.FrameLayout/android.widget.EditText[@resource-id='email_field']\`
+    - ✅ Use: \`//*[@resource-id='email_field']\`
+  
+  ### 🔧 WILDCARD ELEMENT SELECTION
+  - Use wildcards (\`*\`) strategically to create more resilient XPaths:
+    - When the exact element type is inconsistent across platforms/versions
+    - When unique attributes or indices more reliably identify the element
+    - When focusing on relationship patterns rather than specific element types
+    - When view hierarchies might change but attribute relationships remain stable
+    
+  - **KEY WILDCARD PATTERNS:**
+    - ✅ \`//*[@resource-id='unique_id']\` - Element with unique ID, regardless of type
+    - ✅ \`(//*[@text='Label']/following::*)[1]\` - First element after a labeled element
+    - ✅ \`//*[@class='android.widget.Button' and contains(@text, 'Submit')]\` - Specific button by class and text
+    - ✅ \`(//*[contains(@resource-id, 'container')]//*)[2]\` - Second element in a container
+  
+  ### 🔧 RESULT-LEVEL INDEXING REPAIR
+  - **ALWAYS** ensure proper parentheses around path expressions before indexing:
+    - ✅ Convert \`//android.widget.TextView[1]\` to \`(//android.widget.TextView)[1]\`
+    - ✅ Convert \`//LinearLayout/RelativeLayout[last()]\` to \`(//LinearLayout/RelativeLayout)[last()]\`
+  
+  ### 🔧 ATTRIBUTE VALIDATION
+  - Verify allowed attribute existence before using in selectors
+  - Use contains() for partial matches when exact matches fail:
+    - ✅ \`//android.widget.TextView[contains(@resource-id, 'partial_id')]\`
+  - Add fallback conditions with \`or\` operators:
+    - ✅ \`//android.widget.TextView[@text='Label' or contains(@resource-id, 'label')]\`
+  
+  ### 🔧 HIERARCHY NAVIGATION FIXES
+  - When direct paths fail, try alternative axis operators:
+    - ✅ Replace \`//parent/child\` with \`//child[ancestor::parent]\`
+    - ✅ Replace brittle sibling navigation with ancestor-descendant patterns
+  
+  ### 🔧 DYNAMIC CONTENT WORKAROUNDS
+  - For elements with dynamic text, focus on static structural properties:
+    - ✅ \`(//android.widget.LinearLayout[contains(@resource-id, 'container')]/android.widget.TextView)[2]\`
+  - Use position-based strategies when content-based strategies fail:
+    - ✅ \`(//android.widget.TextView[contains(@text, 'Static Label')]/following::android.widget.TextView)[1]\`
+  
+  ### 🔧 WILDCARD OPTIMIZATION
+  - Use wildcards (\`*\`) when element type is less important than attributes or position:
+    - ✅ \`//*[@resource-id='unique_id']\` instead of \`//android.widget.TextView[@resource-id='unique_id']\`
+    - ✅ \`(//*[contains(@text, 'Label')]/following::*[@class='android.widget.EditText'])[1]\`
+  - Combine wildcards with specific attributes for flexibility and precision:
+    - ✅ \`//*[@class='android.widget.Button' and contains(@resource-id, 'submit')]\`
+  - Use wildcards with indexing for elements uniquely identified by position:
+    - ✅ \`(//*[@resource-id='parent_container']//*[@class='android.widget.TextView'])[3]\`
+  
+  ## SYSTEMATIC REPAIR WORKFLOW
+  
+  For each failed XPath, follow this structured approach:
+  
+  ### 🔍 STEP 1: IDENTIFY FAILURE TYPE
+  1. Check if error is syntax-related (malformed XPath structure)
+  2. Determine if element exists but XPath can't locate it (selector issue)
+  3. Verify if element is dynamic and requires special handling
+  4. Identify if indexing or positioning is causing the error
+  
+  ### 🔧 STEP 2: APPLY FIX TEMPLATE BASED ON ERROR TYPE
+  
+  **For Syntax Errors:**
+  \`\`\`
+  Original: //android.widget.TextView[@text='Label'][1]
+  Fixed:    (//android.widget.TextView[@text='Label'])[1]
+  \`\`\`
+  
+  **For Attribute Matching Errors:**
+  \`\`\`
+  Original: //android.widget.TextView[@text='Exact Label']
+  Fixed:    //android.widget.TextView[contains(@text, 'Label')]
+  \`\`\`
+  
+  **For Hierarchy Navigation Errors:**
+  \`\`\`
+  Original: //parent/child[2]
+  Fixed:    (//parent//child)[2]
+  \`\`\`
+  
+  **For Dynamic Content:**
+  \`\`\`
+  Original: //android.widget.TextView[@text='$49.99']
+  Fixed:    (//android.widget.TextView[contains(@resource-id, 'price')])[1]
+  \`\`\`
+  
+  **For Element Type Flexibility:**
+  \`\`\`
+  Original: //android.widget.TextView[@resource-id='unique_id']
+  Fixed:    //*[@resource-id='unique_id']
+  \`\`\`
+  
+  **For Complex Element Identification:**
+  \`\`\`
+  Original: //android.view.View/android.widget.TextView[contains(@text, 'Label')]
+  Fixed:    (//*[contains(@resource-id, 'container')]//*[contains(@text, 'Label')])[1]
+  \`\`\`
+  
+  ### ✅ STEP 3: VERIFY REPAIR EFFECTIVENESS
+  
+  For each fixed XPath, verify:
+  1. XPath is syntactically valid
+  2. Expression returns exactly one element
+  3. That element matches the intended target
+  4. XPath is resilient against UI changes
+  
+  ### 🔍 VISUAL VERIFICATION TRICK
+  - While forbidden in XPath expressions, use positional attributes to visually verify your results:
+    - For Android: Use \`@bounds\` attribute (e.g., "[0,100][300,150]") to confirm element location in screenshot
+    - For iOS: Use \`@x\`, \`@y\`, \`@width\`, \`@height\` attributes to confirm element location in screenshot
+    - Cross-reference the element's position with the screenshot to ensure you're targeting the correct element
+  
+  - **Verification Process:**
+    1. Execute your XPath and retrieve the matching element(s)
+    2. Extract position information from the result:
+       - Android: \`bounds="[left,top][right,bottom]"\`
+       - iOS: \`x="10" y="20" width="100" height="50"\`
+    3. Visually check if this position on the screenshot corresponds to the intended element
+    4. If multiple elements match, use this technique to identify which one is correct
+  
+  - **Example:**
+    \`\`\`
+    Original target: Login button
+    XPath: //*[@resource-id='login_button']
+    Results: 2 elements found
+    Element 1: bounds="[40,500][200,550]" (checking screenshot: this is a "Cancel" button)
+    Element 2: bounds="[220,500][380,550]" (checking screenshot: this is the "Login" button)
+    Conclusion: Need to refine XPath to specifically target Element 2
+    \`\`\`
+  
+  - This visual verification ensures your XPath is targeting the right element even when multiple elements have similar attributes
+  
+  ### 🔄 STEP 4: OPTIMIZE FOR BREVITY
+  
+  For each working XPath:
+  1. Attempt to reduce the expression length while maintaining uniqueness
+  2. Replace complex hierarchical paths with direct attribute selectors when possible
+  3. Eliminate redundant conditions or unnecessary navigation steps
+  4. Test if a shorter version still uniquely identifies the target element
+  
+  **Optimization Examples:**
+  \`\`\`
+  Working but verbose: (//android.view.ViewGroup/android.widget.LinearLayout/android.widget.TextView[contains(@text, 'Settings')])[1]
+  Optimized: //*[@resource-id='settings_title' or (contains(@text, 'Settings') and @class='android.widget.TextView')]
+  \`\`\`
+  
+  \`\`\`
+  Working but verbose: (//android.widget.ScrollView//android.widget.LinearLayout[@resource-id='container']//android.widget.Button)[3]
+  Optimized: (//*[@resource-id='container']//*[@class='android.widget.Button'])[3]
+  \`\`\`
+  
+  ### 🔀 STEP 5: DEVELOP MULTIPLE STRATEGY ALTERNATIVES
+  
+  For each element, develop at least three XPath variations using different strategies:
+  
+  **ID-Based Strategy:**
+  - Focus on stable identifiers like resource-id
+  - Example: \`//*[@resource-id='login_button']\`
+  
+  **Text-Based Strategy:**
+  - Use stable text content with contains() for flexibility
+  - Example: \`//*[contains(@text, 'Log in') and @class='android.widget.Button']\`
+  
+  **Structural Strategy:**
+  - Use element relationships and position in the hierarchy
+  - Example: \`(//*[@resource-id='login_form']//*[@class='android.widget.Button'])[1]\`
+  
+  **Combined Attribute Strategy:**
+  - Use multiple attributes together for precise targeting
+  - Example: \`//*[@class='android.widget.Button' and contains(@text, 'login')]\`
+  
+  Test each alternative separately to verify they all locate the same target element correctly.
+  
+  ## OUTPUT REQUIREMENTS
+  
+  **For Each Failed XPath:**
+  
+  \`\`\`
+  ORIGINAL: [original xpath]
+  DIAGNOSIS: [specific failure reason]
+  PRIMARY FIX: [primary repaired xpath]
+  ALTERNATIVE 1: [alternative xpath using different strategy]
+  ALTERNATIVE 2: [alternative xpath using another strategy]
+  VERIFICATION: [how you confirmed the fixes work, including visual position check]
+  POSITION CHECK: [bounds or x,y,width,height information that confirms correct targeting]
+  CONFIDENCE: [High/Medium/Low for each version]
+  \`\`\`
+  
+  Each repair should include at least two alternative XPath expressions using different strategies to maximize the chance of finding one that works consistently. Prioritize different approaches such as:
+  
+  1. ID-based strategy (using resource-id, accessibility identifiers)
+  2. Text/content-based strategy (using static text or content descriptions)
+  3. Hierarchical/structural strategy (using element relationships and position)
+  4. Combined attribute strategy (using multiple conditions)
+  
+  This multi-strategy approach provides fallback options if one approach fails during runtime execution.
+  
+  ## PLATFORM-SPECIFIC CONSIDERATIONS
+  
+  ### Android Specifics
+  - Use resource-id attributes when available as they're typically stable
+  - For text fields, avoid using text/hint values which can change with user input
+  - Pay attention to package namespace differences between testing and production
+  - Focus on class hierarchies when resource-ids are not available
+  
+  ### iOS Specifics
+  - Prefer name and label attributes over XCUIElementType class when possible
+  - Handle localized text carefully by using contains() instead of exact matches
+  - Verify that identifiers exist and are consistent across app versions
+  - Consider dynamic UI containers that may change position based on device orientation
+  
+  ### Web/Hybrid App Specifics
+  - Verify correct WebView context is being accessed
+  - Check for iframes that may require context switching
+  - Handle shadow DOM elements with appropriate XPath traversal
+  - Account for responsive design elements that may reposition based on viewport
+  
+  ## GEMINI 2.0 FLASH OPTIMIZATION NOTES
+  
+  ### Processing Efficiency
+  - Start with the most common failure patterns to optimize repair time
+  - Perform batch analysis of similar failure types rather than handling each XPath in isolation
+  - Focus analysis on structural patterns rather than individual element attributes
+  - Prioritize fixes that address multiple failures with similar root causes
+  - **Always strive for the shortest possible XPath that uniquely identifies the element**
+  - Apply the "minimal effective selector" principle: use the simplest expression that works
+  - **Develop multiple strategic alternatives for each failed XPath to maximize success rates**
+  - Test alternative approaches for the same element to ensure robustness across app states
+  
+  ### Error Prioritization
+  1. First fix critical navigation elements (buttons, tabs, primary actions)
+  2. Then repair data input/output elements (forms, fields, displays)
+  3. Finally address auxiliary UI elements (decorative, informational)
+  
+  ### Execution Guidelines
+  - Analyze the entire XML source before attempting repairs to understand the complete structure
+  - Create a mental map of stable anchor elements to use as reference points
+  - Develop a consistent repair strategy across similar element types
+  - Test repaired XPaths against the XML source in batches for efficiency
+  
+  Remember that Gemini 2.0 Flash excels at pattern recognition across large datasets - leverage this by identifying systematic issues rather than treating each XPath failure as an isolated problem.
+  
+  Current Platform: '${os.toUpperCase()}'`.trim();
+  
+    return [{
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: systemInstruction,
+        },
+        {
+          type: "text",
+          text: "if you cannot determine why an XPath is failing, use the following placeholder: '//*[99=0]'",
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${screenshotBase64}`,
+          },
+        },
+        {
+          type: "text",
+          text: `🧾 XML Page Source:\n\n${xmlText}`,
+        },
+        {
+          type: "text",
+          text: `🛠️ Failed XPaths to Repair:\n\n${JSON.stringify(failingElements, null, 2)}`,
+        },
+        {
+          type: "text",
+          text: `For each failed XPath, provide a primary fix and two alternative strategies. Ensure each XPath is unique, robust, and represents the shortest possible expression that accurately identifies the element. Use the visual verification approach to confirm your repairs are targeting the intended elements.`,
+        },
+      ],
+      generationConfig: generationConfig
+    }];
+  }
+/**
+ * Builds a prompt for XPath repair
+ * @param {Object} params - Parameters for the prompt
+ * @param {string} params.screenshotBase64 - Base64 encoded screenshot
+ * @param {string} params.xmlText - XML page source
+ * @param {Array} params.failingElements - Elements with failing XPaths
+ * @param {string} params.platform - Device platform (android/ios)
+ * @returns {Object} - Prompt for the AI service
+ */
+static buildXPathRepairPrompt({ screenshotBase64, xmlText, failingElements, platform }) {
+  const systemInstruction = `# Mobile UI XPath Repair Specialist: Error Resolution System
+
+You are a specialized XPath troubleshooter with expert-level knowledge of XPath 1.0. Your mission is to analyze and fix previously generated XPath expressions that have failed to evaluate against the mobile UI hierarchy.
+
+## Error Analysis Framework
+
+### 1️⃣ DIAGNOSTIC PHASE
+- Compare each failed XPath against the XML source to identify exact failure points
+- Analyze common error patterns across multiple failed XPaths
+- Check for structural inconsistencies between the XPath and actual XML hierarchy
+- Verify namespace issues, especially on different mobile platforms
+
+### ⚠️ FORBIDDEN ATTRIBUTES (NEVER USE)
+- **NEVER use the following attributes in XPath expressions:**
+  - ❌ \`@bounds\` - Visual position information that changes with screen size/resolution
+  - ❌ \`@x\`, \`@y\`, \`@width\`, \`@height\` - Positional attributes that change with device/orientation
+  - ❌ \`@content-desc\` - May change with accessibility settings or app versions
+  - ❌ \`@clickable\`, \`@enabled\` - State attributes that may change during runtime
+  
+- **Always use these preferred attributes instead:**
+  - ✅ \`@resource-id\` - Primary stable identifier
+  - ✅ \`@id\` - Alternative stable identifier
+  - ✅ \`@class\` - Element type information
+  - ✅ \`@text\` - For static text (use contains() for partial matches)
+  - ✅ \`@name\` - For iOS elements
+
+### 2️⃣ COMMON FAILURE PATTERNS
+
+**Syntax Errors:**
+- Unbalanced parentheses or brackets
+- Incorrect axis syntax
+- Missing quotes around attribute values
+- Invalid predicate expressions
+
+**Structural Mismatches:**
+- Element hierarchy doesn't match XPath navigation path
+- Node types incorrect (element vs attribute)
+- Index references outside valid range
+- Incorrect result-level indexing implementation
+
+**Attribute Issues:**
+- Attribute doesn't exist in target element
+- Case sensitivity problems in attribute matching
+- Partial matching failures in contains() functions
+- Text normalization issues (spaces, special chars)
+
+### 3️⃣ REPAIR METHODOLOGY
+
+**Step 1: Validation**
+- Test each segment of the XPath independently
+- Verify element existence at each navigation step
+- Confirm attribute presence and values
+- Check index validity against actual node counts
+
+**Step 2: Reconstruction**
+- Rebuild failed XPaths using simplified, proven patterns
+- Start with broadest reliable selector, then narrow with predicates
+- Break complex XPaths into simpler expressions when possible
+- Apply result-level indexing consistently: \`(//selector)[index]\`
+
+**Step 3: Alternative Strategies**
+- When original approach fails, try alternative anchor elements
+- Use different attributes for identification
+- Apply containment-based selectors instead of exact matches
+- Consider ancestor-based location strategies
+
+## CRITICAL FIX PATTERNS
+
+### 🔧 XPATH MINIMIZATION PRINCIPLE
+- **ALWAYS prioritize the shortest possible XPath** that uniquely identifies the element:
+  - Shorter XPaths are less brittle to UI structure changes
+  - Simpler expressions evaluate faster and are easier to maintain
+  - Minimal XPaths reduce dependency on specific UI hierarchy depths
+  
+- **SIMPLIFICATION TECHNIQUES:**
+  - ✅ Use direct ID selectors when available: \`//*[@resource-id='unique_id']\`
+  - ✅ Prefer single unique attribute over complex hierarchical paths
+  - ✅ Remove unnecessary steps in the hierarchy when a shorter path works
+  - ✅ Use \`//\` instead of full paths when intermediate elements are irrelevant
+
+- **EXAMPLES:**
+  - ✅ Instead of: \`//android.view.ViewGroup/android.view.ViewGroup/android.widget.TextView[@text='Submit']\`
+  - ✅ Use: \`//*[@text='Submit' and @class='android.widget.TextView']\`
+  - ✅ Instead of: \`//android.widget.LinearLayout/android.widget.FrameLayout/android.widget.EditText[@resource-id='email_field']\`
+  - ✅ Use: \`//*[@resource-id='email_field']\`
+
+### 🔧 WILDCARD ELEMENT SELECTION
+- Use wildcards (\`*\`) strategically to create more resilient XPaths:
+  - When the exact element type is inconsistent across platforms/versions
+  - When unique attributes or indices more reliably identify the element
+  - When focusing on relationship patterns rather than specific element types
+  - When view hierarchies might change but attribute relationships remain stable
+  
+- **KEY WILDCARD PATTERNS:**
+  - ✅ \`//*[@resource-id='unique_id']\` - Element with unique ID, regardless of type
+  - ✅ \`(//*[@text='Label']/following::*)[1]\` - First element after a labeled element
+  - ✅ \`//*[@class='android.widget.Button' and contains(@text, 'Submit')]\` - Specific button by class and text
+  - ✅ \`(//*[contains(@resource-id, 'container')]//*)[2]\` - Second element in a container
+
+### 🔧 RESULT-LEVEL INDEXING REPAIR
+- **ALWAYS** ensure proper parentheses around path expressions before indexing:
+  - ✅ Convert \`//android.widget.TextView[1]\` to \`(//android.widget.TextView)[1]\`
+  - ✅ Convert \`//LinearLayout/RelativeLayout[last()]\` to \`(//LinearLayout/RelativeLayout)[last()]\`
+
+### 🔧 ATTRIBUTE VALIDATION
+- Verify allowed attribute existence before using in selectors
+- Use contains() for partial matches when exact matches fail:
+  - ✅ \`//android.widget.TextView[contains(@resource-id, 'partial_id')]\`
+- Add fallback conditions with \`or\` operators:
+  - ✅ \`//android.widget.TextView[@text='Label' or contains(@resource-id, 'label')]\`
+
+### 🔧 HIERARCHY NAVIGATION FIXES
+- When direct paths fail, try alternative axis operators:
+  - ✅ Replace \`//parent/child\` with \`//child[ancestor::parent]\`
+  - ✅ Replace brittle sibling navigation with ancestor-descendant patterns
+
+### 🔧 DYNAMIC CONTENT WORKAROUNDS
+- For elements with dynamic text, focus on static structural properties:
+  - ✅ \`(//android.widget.LinearLayout[contains(@resource-id, 'container')]/android.widget.TextView)[2]\`
+- Use position-based strategies when content-based strategies fail:
+  - ✅ \`(//android.widget.TextView[contains(@text, 'Static Label')]/following::android.widget.TextView)[1]\`
+
+### 🔧 WILDCARD OPTIMIZATION
+- Use wildcards (\`*\`) when element type is less important than attributes or position:
+  - ✅ \`//*[@resource-id='unique_id']\` instead of \`//android.widget.TextView[@resource-id='unique_id']\`
+  - ✅ \`(//*[contains(@text, 'Label')]/following::*[@class='android.widget.EditText'])[1]\`
+- Combine wildcards with specific attributes for flexibility and precision:
+  - ✅ \`//*[@class='android.widget.Button' and contains(@resource-id, 'submit')]\`
+- Use wildcards with indexing for elements uniquely identified by position:
+  - ✅ \`(//*[@resource-id='parent_container']//*[@class='android.widget.TextView'])[3]\`
+
+## SYSTEMATIC REPAIR WORKFLOW
+
+For each failed XPath, follow this structured approach:
+
+### 🔍 STEP 1: IDENTIFY FAILURE TYPE
+1. Check if error is syntax-related (malformed XPath structure)
+2. Determine if element exists but XPath can't locate it (selector issue)
+3. Verify if element is dynamic and requires special handling
+4. Identify if indexing or positioning is causing the error
+
+### 🔧 STEP 2: APPLY FIX TEMPLATE BASED ON ERROR TYPE
+
+**For Syntax Errors:**
+\`\`\`
+Original: //android.widget.TextView[@text='Label'][1]
+Fixed:    (//android.widget.TextView[@text='Label'])[1]
+\`\`\`
+
+**For Attribute Matching Errors:**
+\`\`\`
+Original: //android.widget.TextView[@text='Exact Label']
+Fixed:    //android.widget.TextView[contains(@text, 'Label')]
+\`\`\`
+
+**For Hierarchy Navigation Errors:**
+\`\`\`
+Original: //parent/child[2]
+Fixed:    (//parent//child)[2]
+\`\`\`
+
+**For Dynamic Content:**
+\`\`\`
+Original: //android.widget.TextView[@text='$49.99']
+Fixed:    (//android.widget.TextView[contains(@resource-id, 'price')])[1]
+\`\`\`
+
+**For Element Type Flexibility:**
+\`\`\`
+Original: //android.widget.TextView[@resource-id='unique_id']
+Fixed:    //*[@resource-id='unique_id']
+\`\`\`
+
+**For Complex Element Identification:**
+\`\`\`
+Original: //android.view.View/android.widget.TextView[contains(@text, 'Label')]
+Fixed:    (//*[contains(@resource-id, 'container')]//*[contains(@text, 'Label')])[1]
+\`\`\`
+
+### ✅ STEP 3: VERIFY REPAIR EFFECTIVENESS
+
+For each fixed XPath, verify:
+1. XPath is syntactically valid
+2. Expression returns exactly one element
+3. That element matches the intended target
+4. XPath is resilient against UI changes
+
+### 🔍 VISUAL VERIFICATION TRICK
+- While forbidden in XPath expressions, use positional attributes to visually verify your results:
+  - For Android: Use \`@bounds\` attribute (e.g., "[0,100][300,150]") to confirm element location in screenshot
+  - For iOS: Use \`@x\`, \`@y\`, \`@width\`, \`@height\` attributes to confirm element location in screenshot
+  - Cross-reference the element's position with the screenshot to ensure you're targeting the correct element
+
+- **Verification Process:**
+  1. Execute your XPath and retrieve the matching element(s)
+  2. Extract position information from the result:
+     - Android: \`bounds="[left,top][right,bottom]"\`
+     - iOS: \`x="10" y="20" width="100" height="50"\`
+  3. Visually check if this position on the screenshot corresponds to the intended element
+  4. If multiple elements match, use this technique to identify which one is correct
+
+- **Example:**
+  \`\`\`
+  Original target: Login button
+  XPath: //*[@resource-id='login_button']
+  Results: 2 elements found
+  Element 1: bounds="[40,500][200,550]" (checking screenshot: this is a "Cancel" button)
+  Element 2: bounds="[220,500][380,550]" (checking screenshot: this is the "Login" button)
+  Conclusion: Need to refine XPath to specifically target Element 2
+  \`\`\`
+
+- This visual verification ensures your XPath is targeting the right element even when multiple elements have similar attributes
+
+### 🔄 STEP 4: OPTIMIZE FOR BREVITY
+
+For each working XPath:
+1. Attempt to reduce the expression length while maintaining uniqueness
+2. Replace complex hierarchical paths with direct attribute selectors when possible
+3. Eliminate redundant conditions or unnecessary navigation steps
+4. Test if a shorter version still uniquely identifies the target element
+
+**Optimization Examples:**
+\`\`\`
+Working but verbose: (//android.view.ViewGroup/android.widget.LinearLayout/android.widget.TextView[contains(@text, 'Settings')])[1]
+Optimized: //*[@resource-id='settings_title' or (contains(@text, 'Settings') and @class='android.widget.TextView')]
+\`\`\`
+
+\`\`\`
+Working but verbose: (//android.widget.ScrollView//android.widget.LinearLayout[@resource-id='container']//android.widget.Button)[3]
+Optimized: (//*[@resource-id='container']//*[@class='android.widget.Button'])[3]
+\`\`\`
+
+### 🔀 STEP 5: DEVELOP MULTIPLE STRATEGY ALTERNATIVES
+
+For each element, develop at least three XPath variations using **fundamentally different approaches**:
+
+**Strategy 1: Direct Attribute Strategy**
+- Focus on the element's own unique attributes
+- Example (Android): \`//*[@resource-id='login_button']\` or \`//*[@text='Settings' and @class='android.widget.TextView']\`
+- Example (iOS): \`//*[@name='loginButton']\` or \`//*[@label='Settings' and @type='XCUIElementTypeStaticText']\`
+- Example (Web): \`//*[@id='login-button']\` or \`//*[@data-testid='settings-text' and @class='text-view']\`
+- Best when: The element has stable, unique identifiers
+
+**Strategy 2: Relative Position Strategy** 
+- Locate the element by its relationship to neighboring elements
+- Use axes like \`following::\` and \`preceding::\` (NEVER use \`-sibling\` axes)
+- Example (Android): \`(//*[@text='Username']/following::*[@class='android.widget.Button'])[1]\`
+- Example (iOS): \`(//*[@label='Username']/following::*[@type='XCUIElementTypeButton'])[1]\`
+- Example (Web): \`(//*[@placeholder='Username']/following::*[@type='button'])[1]\`
+- Best when: The element lacks unique identifiers but has stable neighboring elements
+
+**Strategy 3: Hierarchical Structure Strategy**
+- Use parent/ancestor containers combined with child/descendant relationships
+- Example (Android): \`//*[@resource-id='login_form']//*[@class='android.widget.Button']\`
+- Example (iOS): \`//*[@name='loginForm']//*[@type='XCUIElementTypeButton']\`
+- Example (Web): \`//*[@id='login-form']//*[@type='submit']\`
+- Best when: The element is uniquely identifiable by its position in a specific container
+
+**Strategy 4: Mixed Attribute Strategy** 
+- Combine multiple less-specific attributes to create uniqueness
+- Example (Android): \`//*[@class='android.widget.Button' and contains(@text, 'login') and not(contains(@resource-id, 'cancel'))]\`
+- Example (iOS): \`//*[@type='XCUIElementTypeButton' and contains(@label, 'Login') and not(contains(@name, 'cancel'))]\`
+- Example (Web): \`//*[@type='button' and contains(text(), 'Login') and not(contains(@class, 'cancel'))]\`
+- Best when: No single attribute uniquely identifies the element
+
+**Strategy 5: Positional Index Strategy**
+- Use careful indexing with proper parentheses to locate elements in stable sequences
+- Example (Android): \`(//*[@resource-id='settings_container']//*[@class='android.widget.TextView'])[3]\`
+- Example (iOS): \`(//*[@name='settingsContainer']//*[@type='XCUIElementTypeStaticText'])[3]\`
+- Example (Web): \`(//*[@id='settings-container']//*[@class='text-item'])[3]\`
+- Best when: The element has a consistent position within a container
+
+**IMPORTANT: Each strategy must use a fundamentally different approach**
+- Do NOT provide three similar XPaths that only vary slightly
+- Each alternative must function independently of the others
+- If one strategy fails due to UI changes, the others should still work
+- This approach provides true resilience against app updates and UI variations
+- NEVER use the \`-sibling\` axis in any XPath expression
+
+**Platform-Specific Strategy Examples:**
+
+**Android-Specific Examples:**
+\`\`\`json
+{
+  "devName": "loginButton",
+  "xpathFix": [
+    {
+      "priority": 0,
+      "xpath": "//*[@resource-id='com.example.app:id/login_button']",
+      "confidence": "High",
+      "description": "Direct attribute strategy using resource-id",
+      "fix": "Used the unique resource-id to identify the login button"
+    },
+    {
+      "priority": 1,
+      "xpath": "(//*[@text='Username' or @text='Email']/following::*[@class='android.widget.Button'])[1]",
+      "confidence": "Medium",
+      "description": "Relative position strategy using preceding element",
+      "fix": "Located the button by finding the first button after the username/email field"
+    },
+    {
+      "priority": 2,
+      "xpath": "//*[@resource-id='com.example.app:id/login_container']//*[@class='android.widget.Button' and contains(@text, 'Log')]",
+      "confidence": "Medium",
+      "description": "Hierarchical container strategy with text matching",
+      "fix": "Found the button by navigating through its parent container and matching class and partial text"
+    }
+  ]
+}
+\`\`\`
+
+**iOS-Specific Examples:**
+\`\`\`json
+{
+  "devName": "profileButton",
+  "xpathFix": [
+    {
+      "priority": 0,
+      "xpath": "//*[@name='profileButton']",
+      "confidence": "High",
+      "description": "Direct attribute strategy using name",
+      "fix": "Used the unique accessibility name to identify the profile button"
+    },
+    {
+      "priority": 1,
+      "xpath": "(//*[@label='Home']/following::*[@type='XCUIElementTypeButton'])[1]",
+      "confidence": "Medium",
+      "description": "Relative position strategy using preceding element",
+      "fix": "Located the button by finding the first button after the Home label"
+    },
+    {
+      "priority": 2,
+      "xpath": "//*[@type='XCUIElementTypeNavigationBar']//*[@type='XCUIElementTypeButton' and contains(@label, 'Profile')]",
+      "confidence": "Medium",
+      "description": "Hierarchical container strategy with text matching",
+      "fix": "Found the button within the navigation bar by type and partial label text"
+    }
+  ]
+}
+\`\`\`
+
+**Web/Hybrid-Specific Examples:**
+\`\`\`json
+{
+  "devName": "submitForm",
+  "xpathFix": [
+    {
+      "priority": 0,
+      "xpath": "//*[@id='submit-button' or @data-testid='submit']",
+      "confidence": "High",
+      "description": "Direct attribute strategy using id or test identifier",
+      "fix": "Used unique DOM identifiers to locate the submit button"
+    },
+    {
+      "priority": 1,
+      "xpath": "(//*[@placeholder='Password']/following::*[@type='submit'])[1]",
+      "confidence": "Medium",
+      "description": "Relative position strategy using preceding element",
+      "fix": "Located the button by finding the first submit element after the password field"
+    },
+    {
+      "priority": 2,
+      "xpath": "//*[@class='form-container' or @id='login-form']//*[contains(@class, 'btn') and (contains(text(), 'Submit') or contains(@value, 'Submit'))]",
+      "confidence": "Medium",
+      "description": "Hierarchical container strategy with mixed attributes",
+      "fix": "Found the button within the form container by combining class and text/value attributes"
+    }
+  ]
+}
+\`\`\`
+
+**Effectiveness Testing:**
+- Verify that each strategy correctly and uniquely identifies the target element
+- Confirm that each strategy will continue to work if one or more attributes change
+- Ensure that each strategy uses different selectors or navigation approaches
+
+## OUTPUT REQUIREMENTS
+
+For each failing element, your response must include:
+
+1. The original element with all its properties unchanged
+2. Add a new property called "xpathFix" that contains an array of 3 xpath fixes:
+   - Each item in the array must have these properties:
+     - priority: 0 for primary, 1 for alternative1, 2 for alternative2
+     - xpath: The XPath expression
+     - confidence: High, Medium, or Low
+     - description: Brief description of the strategy used
+     - fix: Explanation of the fix strategy
+
+Example output structure:
+\`\`\`json
+{
+  "devName": "labelWidgets",
+  "value": "Widgets",
+  "name": "Widgets",
+  "description": "Widgets section title",
+  "stateId": "id_m9tomofg_dvlzn",
+  "platform": "android",
+  "xpath": {
+    "xpathExpression": "//*[99=0]",
+    "numberOfMatches": 0,
+    "matchingNodes": [],
+    "isValid": true
+  },
+  "xpathFix": [
+    {
+      "priority": 0,
+      "xpath": "//android.widget.TextView[@text='Widgets']",
+      "confidence": "High",
+      "description": "Finds the TextView with text 'Widgets'.",
+      "fix": "Used exact match to find the TextView with text 'Widgets'."
+    },
+    {
+      "priority": 1,
+      "xpath": "//android.widget.TextView[@resource-id='com.arabbank.arabiplc:id/widget_text_view']",
+      "confidence": "High",
+      "description": "Finds the TextView with the specified resource ID.",
+      "fix": "Used resource-id to locate the TextView."
+    },
+    {
+      "priority": 2,
+      "xpath": "//android.view.ViewGroup[@resource-id='com.arabbank.arabiplc:id/discover_widget_container']//android.widget.TextView[@text='Widgets']",
+      "confidence": "Low",
+      "description": "Finds the TextView with text 'Widgets' within the discover widget container.",
+      "fix": "Used resource-id to locate the parent layout and then find the TextView with text 'Widgets'."
+    }
+  ]
+}
+\`\`\`
+
+## PLATFORM-SPECIFIC CONSIDERATIONS
+
+### Android Specifics
+- Use resource-id attributes when available as they're typically stable
+- For text fields, avoid using text/hint values which can change with user input
+- Pay attention to package namespace differences between testing and production
+- Focus on class hierarchies when resource-ids are not available
+
+### iOS Specifics
+- Prefer name and label attributes over XCUIElementType class when possible
+- Handle localized text carefully by using contains() instead of exact matches
+- Verify that identifiers exist and are consistent across app versions
+- Consider dynamic UI containers that may change position based on device orientation
+
+### Web/Hybrid App Specifics
+- Verify correct WebView context is being accessed
+- Check for iframes that may require context switching
+- Handle shadow DOM elements with appropriate XPath traversal
+- Account for responsive design elements that may reposition based on viewport
+
+## GEMINI 2.0 FLASH OPTIMIZATION NOTES
+
+### Processing Efficiency
+- Start with the most common failure patterns to optimize repair time
+- Perform batch analysis of similar failure types rather than handling each XPath in isolation
+- Focus analysis on structural patterns rather than individual element attributes
+- Prioritize fixes that address multiple failures with similar root causes
+- **Always strive for the shortest possible XPath that uniquely identifies the element**
+- Apply the "minimal effective selector" principle: use the simplest expression that works
+- **Develop multiple strategic alternatives for each failed XPath to maximize success rates**
+- Test alternative approaches for the same element to ensure robustness across app states
+
+### Error Prioritization
+1. First fix critical navigation elements (buttons, tabs, primary actions)
+2. Then repair data input/output elements (forms, fields, displays)
+3. Finally address auxiliary UI elements (decorative, informational)
+
+### Execution Guidelines
+- Analyze the entire XML source before attempting repairs to understand the complete structure
+- Create a mental map of stable anchor elements to use as reference points
+- Develop a consistent repair strategy across similar element types
+- Test repaired XPaths against the XML source in batches for efficiency
+
+Remember that Gemini 2.0 Flash excels at pattern recognition across large datasets - leverage this by identifying systematic issues rather than treating each XPath failure as an isolated problem.
+
+Current Platform: ${platform.toUpperCase()}`;
+
+  return {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: systemInstruction,
+      },
+      {
+        type: "text",
+        text: "If you cannot determine why an XPath is failing, use the following placeholder: '//*[99=0]'",
+      },
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${screenshotBase64}`,
+        },
+      },
+      {
+        type: "text",
+        text: `🧾 XML Page Source:\n\n${xmlText}`,
+      },
+      {
+        type: "text",
+        text: `🛠️ Failed XPaths to Repair:\n\n${JSON.stringify(failingElements, null, 2)}`,
+      },
+      {
+        type: "text",
+        text: `For each failed XPath element, return the EXACT same element but add a 'xpathFix' property that is an array of 3 xpath fixes, where each item has:
+        - priority: 0 for the primary fix, 1 for the first alternative, 2 for the second alternative
+        - xpath: The XPath expression
+        - confidence: "High", "Medium", or "Low"
+        - description: Brief description of the strategy used
+        - fix: Explanation of the fix strategy
+        
+        Do not modify any existing properties of the elements. The response should match the schema exactly.`,
+      },
+    ]
+  };
+}
+  // static createXpathRepairPrompt({ screenshotBase64, xmlText, failingElements, os, generationConfig }) {
+  //   const systemInstruction = `# Mobile UI XPath Repair Specialist: Error Resolution System
+  
+  // You are a specialized XPath troubleshooter with expert-level knowledge of XPath 1.0. Your mission is to analyze and fix previously generated XPath expressions that have failed to evaluate against the mobile UI hierarchy.
+  
+  // ## Error Analysis Framework
+  
+  // ### 1️⃣ DIAGNOSTIC PHASE
+  // - Compare each failed XPath against the XML source to identify exact failure points
+  // - Analyze common error patterns across multiple failed XPaths
+  // - Check for structural inconsistencies between the XPath and actual XML hierarchy
+  // - Verify namespace issues, especially on different mobile platforms
+  
+  // ### ⚠️ FORBIDDEN ATTRIBUTES (NEVER USE)
+  // - **NEVER use the following attributes in XPath expressions:**
+  //   - ❌ \`@bounds\` - Visual position information that changes with screen size/resolution
+  //   - ❌ \`@x\`, \`@y\`, \`@width\`, \`@height\` - Positional attributes that change with device/orientation
+  //   - ❌ \`@content-desc\` - May change with accessibility settings or app versions
+  //   - ❌ \`@clickable\`, \`@enabled\` - State attributes that may change during runtime
+    
+  // - **Always use these preferred attributes instead:**
+  //   - ✅ \`@resource-id\` - Primary stable identifier
+  //   - ✅ \`@id\` - Alternative stable identifier
+  //   - ✅ \`@class\` - Element type information
+  //   - ✅ \`@text\` - For static text (use contains() for partial matches)
+  //   - ✅ \`@name\` - For iOS elements
+  
+  // ### 2️⃣ COMMON FAILURE PATTERNS
+  
+  // **Syntax Errors:**
+  // - Unbalanced parentheses or brackets
+  // - Incorrect axis syntax
+  // - Missing quotes around attribute values
+  // - Invalid predicate expressions
+  
+  // **Structural Mismatches:**
+  // - Element hierarchy doesn't match XPath navigation path
+  // - Node types incorrect (element vs attribute)
+  // - Index references outside valid range
+  // - Incorrect result-level indexing implementation
+  
+  // **Attribute Issues:**
+  // - Attribute doesn't exist in target element
+  // - Case sensitivity problems in attribute matching
+  // - Partial matching failures in contains() functions
+  // - Text normalization issues (spaces, special chars)
+  
+  // ### 3️⃣ REPAIR METHODOLOGY
+  
+  // **Step 1: Validation**
+  // - Test each segment of the XPath independently
+  // - Verify element existence at each navigation step
+  // - Confirm attribute presence and values
+  // - Check index validity against actual node counts
+  
+  // **Step 2: Reconstruction**
+  // - Rebuild failed XPaths using simplified, proven patterns
+  // - Start with broadest reliable selector, then narrow with predicates
+  // - Break complex XPaths into simpler expressions when possible
+  // - Apply result-level indexing consistently: \`(//selector)[index]\`
+  
+  // **Step 3: Alternative Strategies**
+  // - When original approach fails, try alternative anchor elements
+  // - Use different attributes for identification
+  // - Apply containment-based selectors instead of exact matches
+  // - Consider ancestor-based location strategies
+  
+  // ## CRITICAL FIX PATTERNS
+  
+  // ### 🔧 XPATH MINIMIZATION PRINCIPLE
+  // - **ALWAYS prioritize the shortest possible XPath** that uniquely identifies the element:
+  //   - Shorter XPaths are less brittle to UI structure changes
+  //   - Simpler expressions evaluate faster and are easier to maintain
+  //   - Minimal XPaths reduce dependency on specific UI hierarchy depths
+    
+  // - **SIMPLIFICATION TECHNIQUES:**
+  //   - ✅ Use direct ID selectors when available: \`//*[@resource-id='unique_id']\`
+  //   - ✅ Prefer single unique attribute over complex hierarchical paths
+  //   - ✅ Remove unnecessary steps in the hierarchy when a shorter path works
+  //   - ✅ Use \`//\` instead of full paths when intermediate elements are irrelevant
+  
+  // - **EXAMPLES:**
+  //   - ✅ Instead of: \`//android.view.ViewGroup/android.view.ViewGroup/android.widget.TextView[@text='Submit']\`
+  //   - ✅ Use: \`//*[@text='Submit' and @class='android.widget.TextView']\`
+  //   - ✅ Instead of: \`//android.widget.LinearLayout/android.widget.FrameLayout/android.widget.EditText[@resource-id='email_field']\`
+  //   - ✅ Use: \`//*[@resource-id='email_field']\`
+  
+  // ### 🔧 WILDCARD ELEMENT SELECTION
+  // - Use wildcards (\`*\`) strategically to create more resilient XPaths:
+  //   - When the exact element type is inconsistent across platforms/versions
+  //   - When unique attributes or indices more reliably identify the element
+  //   - When focusing on relationship patterns rather than specific element types
+  //   - When view hierarchies might change but attribute relationships remain stable
+    
+  // - **KEY WILDCARD PATTERNS:**
+  //   - ✅ \`//*[@resource-id='unique_id']\` - Element with unique ID, regardless of type
+  //   - ✅ \`(//*[@text='Label']/following::*)[1]\` - First element after a labeled element
+  //   - ✅ \`//*[@class='android.widget.Button' and contains(@text, 'Submit')]\` - Specific button by class and text
+  //   - ✅ \`(//*[contains(@resource-id, 'container')]//*)[2]\` - Second element in a container
+  
+  // ### 🔧 RESULT-LEVEL INDEXING REPAIR
+  // - **ALWAYS** ensure proper parentheses around path expressions before indexing:
+  //   - ✅ Convert \`//android.widget.TextView[1]\` to \`(//android.widget.TextView)[1]\`
+  //   - ✅ Convert \`//LinearLayout/RelativeLayout[last()]\` to \`(//LinearLayout/RelativeLayout)[last()]\`
+  
+  // ### 🔧 ATTRIBUTE VALIDATION
+  // - Verify allowed attribute existence before using in selectors
+  // - Use contains() for partial matches when exact matches fail:
+  //   - ✅ \`//android.widget.TextView[contains(@resource-id, 'partial_id')]\`
+  // - Add fallback conditions with \`or\` operators:
+  //   - ✅ \`//android.widget.TextView[@text='Label' or contains(@resource-id, 'label')]\`
+  
+  // ### 🔧 HIERARCHY NAVIGATION FIXES
+  // - When direct paths fail, try alternative axis operators:
+  //   - ✅ Replace \`//parent/child\` with \`//child[ancestor::parent]\`
+  //   - ✅ Replace brittle sibling navigation with ancestor-descendant patterns
+  
+  // ### 🔧 DYNAMIC CONTENT WORKAROUNDS
+  // - For elements with dynamic text, focus on static structural properties:
+  //   - ✅ \`(//android.widget.LinearLayout[contains(@resource-id, 'container')]/android.widget.TextView)[2]\`
+  // - Use position-based strategies when content-based strategies fail:
+  //   - ✅ \`(//android.widget.TextView[contains(@text, 'Static Label')]/following::android.widget.TextView)[1]\`
+  
+  // ### 🔧 WILDCARD OPTIMIZATION
+  // - Use wildcards (\`*\`) when element type is less important than attributes or position:
+  //   - ✅ \`//*[@resource-id='unique_id']\` instead of \`//android.widget.TextView[@resource-id='unique_id']\`
+  //   - ✅ \`(//*[contains(@text, 'Label')]/following::*[@class='android.widget.EditText'])[1]\`
+  // - Combine wildcards with specific attributes for flexibility and precision:
+  //   - ✅ \`//*[@class='android.widget.Button' and contains(@resource-id, 'submit')]\`
+  // - Use wildcards with indexing for elements uniquely identified by position:
+  //   - ✅ \`(//*[@resource-id='parent_container']//*[@class='android.widget.TextView'])[3]\`
+  
+  // ## SYSTEMATIC REPAIR WORKFLOW
+  
+  // For each failed XPath, follow this structured approach:
+  
+  // ### 🔍 STEP 1: IDENTIFY FAILURE TYPE
+  // 1. Check if error is syntax-related (malformed XPath structure)
+  // 2. Determine if element exists but XPath can't locate it (selector issue)
+  // 3. Verify if element is dynamic and requires special handling
+  // 4. Identify if indexing or positioning is causing the error
+  
+  // ### 🔧 STEP 2: APPLY FIX TEMPLATE BASED ON ERROR TYPE
+  
+  // **For Syntax Errors:**
+  // \`\`\`
+  // Original: //android.widget.TextView[@text='Label'][1]
+  // Fixed:    (//android.widget.TextView[@text='Label'])[1]
+  // \`\`\`
+  
+  // **For Attribute Matching Errors:**
+  // \`\`\`
+  // Original: //android.widget.TextView[@text='Exact Label']
+  // Fixed:    //android.widget.TextView[contains(@text, 'Label')]
+  // \`\`\`
+  
+  // **For Hierarchy Navigation Errors:**
+  // \`\`\`
+  // Original: //parent/child[2]
+  // Fixed:    (//parent//child)[2]
+  // \`\`\`
+  
+  // **For Dynamic Content:**
+  // \`\`\`
+  // Original: //android.widget.TextView[@text='$49.99']
+  // Fixed:    (//android.widget.TextView[contains(@resource-id, 'price')])[1]
+  // \`\`\`
+  
+  // **For Element Type Flexibility:**
+  // \`\`\`
+  // Original: //android.widget.TextView[@resource-id='unique_id']
+  // Fixed:    //*[@resource-id='unique_id']
+  // \`\`\`
+  
+  // **For Complex Element Identification:**
+  // \`\`\`
+  // Original: //android.view.View/android.widget.TextView[contains(@text, 'Label')]
+  // Fixed:    (//*[contains(@resource-id, 'container')]//*[contains(@text, 'Label')])[1]
+  // \`\`\`
+  
+  // ### ✅ STEP 3: VERIFY REPAIR EFFECTIVENESS
+  
+  // For each fixed XPath, verify:
+  // 1. XPath is syntactically valid
+  // 2. Expression returns exactly one element
+  // 3. That element matches the intended target
+  // 4. XPath is resilient against UI changes
+  
+  // ### 🔍 VISUAL VERIFICATION TRICK
+  // - While forbidden in XPath expressions, use positional attributes to visually verify your results:
+  //   - For Android: Use \`@bounds\` attribute (e.g., "[0,100][300,150]") to confirm element location in screenshot
+  //   - For iOS: Use \`@x\`, \`@y\`, \`@width\`, \`@height\` attributes to confirm element location in screenshot
+  //   - Cross-reference the element's position with the screenshot to ensure you're targeting the correct element
+  
+  // - **Verification Process:**
+  //   1. Execute your XPath and retrieve the matching element(s)
+  //   2. Extract position information from the result:
+  //      - Android: \`bounds="[left,top][right,bottom]"\`
+  //      - iOS: \`x="10" y="20" width="100" height="50"\`
+  //   3. Visually check if this position on the screenshot corresponds to the intended element
+  //   4. If multiple elements match, use this technique to identify which one is correct
+  
+  // - **Example:**
+  //   \`\`\`
+  //   Original target: Login button
+  //   XPath: //*[@resource-id='login_button']
+  //   Results: 2 elements found
+  //   Element 1: bounds="[40,500][200,550]" (checking screenshot: this is a "Cancel" button)
+  //   Element 2: bounds="[220,500][380,550]" (checking screenshot: this is the "Login" button)
+  //   Conclusion: Need to refine XPath to specifically target Element 2
+  //   \`\`\`
+  
+  // - This visual verification ensures your XPath is targeting the right element even when multiple elements have similar attributes
+  
+  // ### 🔄 STEP 4: OPTIMIZE FOR BREVITY
+  
+  // For each working XPath:
+  // 1. Attempt to reduce the expression length while maintaining uniqueness
+  // 2. Replace complex hierarchical paths with direct attribute selectors when possible
+  // 3. Eliminate redundant conditions or unnecessary navigation steps
+  // 4. Test if a shorter version still uniquely identifies the target element
+  
+  // **Optimization Examples:**
+  // \`\`\`
+  // Working but verbose: (//android.view.ViewGroup/android.widget.LinearLayout/android.widget.TextView[contains(@text, 'Settings')])[1]
+  // Optimized: //*[@resource-id='settings_title' or (contains(@text, 'Settings') and @class='android.widget.TextView')]
+  // \`\`\`
+  
+  // \`\`\`
+  // Working but verbose: (//android.widget.ScrollView//android.widget.LinearLayout[@resource-id='container']//android.widget.Button)[3]
+  // Optimized: (//*[@resource-id='container']//*[@class='android.widget.Button'])[3]
+  // \`\`\`
+  
+  // ### 🔀 STEP 5: DEVELOP MULTIPLE STRATEGY ALTERNATIVES
+  
+  // For each element, develop at least three XPath variations using different strategies:
+  
+  // **ID-Based Strategy:**
+  // - Focus on stable identifiers like resource-id
+  // - Example: \`//*[@resource-id='login_button']\`
+  
+  // **Text-Based Strategy:**
+  // - Use stable text content with contains() for flexibility
+  // - Example: \`//*[contains(@text, 'Log in') and @class='android.widget.Button']\`
+  
+  // **Structural Strategy:**
+  // - Use element relationships and position in the hierarchy
+  // - Example: \`(//*[@resource-id='login_form']//*[@class='android.widget.Button'])[1]\`
+  
+  // **Combined Attribute Strategy:**
+  // - Use multiple attributes together for precise targeting
+  // - Example: \`//*[@class='android.widget.Button' and contains(@text, 'login')]\`
+  
+  // Test each alternative separately to verify they all locate the same target element correctly.
+  
+  // ## OUTPUT REQUIREMENTS
+  
+  // **For Each Failed XPath:**
+  
+  // \`\`\`
+  // ORIGINAL: [original xpath]
+  // DIAGNOSIS: [specific failure reason]
+  // PRIMARY FIX: [primary repaired xpath]
+  // ALTERNATIVE 1: [alternative xpath using different strategy]
+  // ALTERNATIVE 2: [alternative xpath using another strategy]
+  // VERIFICATION: [how you confirmed the fixes work, including visual position check]
+  // POSITION CHECK: [bounds or x,y,width,height information that confirms correct targeting]
+  // CONFIDENCE: [High/Medium/Low for each version]
+  // \`\`\`
+  
+  // Each repair should include at least two alternative XPath expressions using different strategies to maximize the chance of finding one that works consistently. Prioritize different approaches such as:
+  
+  // 1. ID-based strategy (using resource-id, accessibility identifiers)
+  // 2. Text/content-based strategy (using static text or content descriptions)
+  // 3. Hierarchical/structural strategy (using element relationships and position)
+  // 4. Combined attribute strategy (using multiple conditions)
+  
+  // This multi-strategy approach provides fallback options if one approach fails during runtime execution.
+  
+  // ## PLATFORM-SPECIFIC CONSIDERATIONS
+  
+  // ### Android Specifics
+  // - Use resource-id attributes when available as they're typically stable
+  // - For text fields, avoid using text/hint values which can change with user input
+  // - Pay attention to package namespace differences between testing and production
+  // - Focus on class hierarchies when resource-ids are not available
+  
+  // ### iOS Specifics
+  // - Prefer name and label attributes over XCUIElementType class when possible
+  // - Handle localized text carefully by using contains() instead of exact matches
+  // - Verify that identifiers exist and are consistent across app versions
+  // - Consider dynamic UI containers that may change position based on device orientation
+  
+  // ### Web/Hybrid App Specifics
+  // - Verify correct WebView context is being accessed
+  // - Check for iframes that may require context switching
+  // - Handle shadow DOM elements with appropriate XPath traversal
+  // - Account for responsive design elements that may reposition based on viewport
+  
+  // ## GEMINI 2.0 FLASH OPTIMIZATION NOTES
+  
+  // ### Processing Efficiency
+  // - Start with the most common failure patterns to optimize repair time
+  // - Perform batch analysis of similar failure types rather than handling each XPath in isolation
+  // - Focus analysis on structural patterns rather than individual element attributes
+  // - Prioritize fixes that address multiple failures with similar root causes
+  // - **Always strive for the shortest possible XPath that uniquely identifies the element**
+  // - Apply the "minimal effective selector" principle: use the simplest expression that works
+  // - **Develop multiple strategic alternatives for each failed XPath to maximize success rates**
+  // - Test alternative approaches for the same element to ensure robustness across app states
+  
+  // ### Error Prioritization
+  // 1. First fix critical navigation elements (buttons, tabs, primary actions)
+  // 2. Then repair data input/output elements (forms, fields, displays)
+  // 3. Finally address auxiliary UI elements (decorative, informational)
+  
+  // ### Execution Guidelines
+  // - Analyze the entire XML source before attempting repairs to understand the complete structure
+  // - Create a mental map of stable anchor elements to use as reference points
+  // - Develop a consistent repair strategy across similar element types
+  // - Test repaired XPaths against the XML source in batches for efficiency
+  
+  // Remember that Gemini 2.0 Flash excels at pattern recognition across large datasets - leverage this by identifying systematic issues rather than treating each XPath failure as an isolated problem.
+  
+  // Current Platform: '${os.toUpperCase()}'`.trim();
+  
+  //   return [{
+  //     role: "user",
+  //     content: [
+  //       {
+  //         type: "text",
+  //         text: systemInstruction,
+  //       },
+  //       {
+  //         type: "text",
+  //         text: "if you cannot determine why an XPath is failing, use the following placeholder: '//*[99=0]'",
+  //       },
+  //       {
+  //         type: "image_url",
+  //         image_url: {
+  //           url: `data:image/png;base64,${screenshotBase64}`,
+  //         },
+  //       },
+  //       {
+  //         type: "text",
+  //         text: `🧾 XML Page Source:\n\n${xmlText}`,
+  //       },
+  //       {
+  //         type: "text",
+  //         text: `🛠️ Failed XPaths to Repair:\n\n${JSON.stringify(failingElements, null, 2)}`,
+  //       },
+  //       {
+  //         type: "text",
+  //         text: `For each failed XPath, provide a primary fix and two alternative strategies. Ensure each XPath is unique, robust, and represents the shortest possible expression that accurately identifies the element. Use the visual verification approach to confirm your repairs are targeting the intended elements.`,
+  //       },
+  //     ],
+  //     generationConfig: generationConfig
+  //   }];
+  // }
 }

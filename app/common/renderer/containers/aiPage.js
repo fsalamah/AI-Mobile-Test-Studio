@@ -6,7 +6,7 @@ import {withTranslation} from '../i18next';
 import AIStudio from '../components/ai/AIStudio.jsx';
 
 function mapStateToProps(state) {
-  return state.session;
+  return state.ai;
 }
 
 export default withTranslation(AIStudio, connect(mapStateToProps, SessionActions));

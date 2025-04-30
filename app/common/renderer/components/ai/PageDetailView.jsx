@@ -52,7 +52,7 @@ const PageDetailView = ({
     inspectorState,
     updatePage,
     // Updated to use AI progress modal functions
-    showAiProgressModal,
+    showAiProgressModal,onSetCodeViewerVisiblity,
     updateAiProgressMessage,
     hideAiProgressModal
 }) => {
@@ -79,7 +79,9 @@ const PageDetailView = ({
     const isIOSDriver = isDriverConnected && inspectorState.driver.client.isIOS;
     const isAndroidDriver = isDriverConnected && inspectorState.driver.client.isAndroid;
     
-const [codeViewerVisible, setCodeViewerVisible] = useState(false);
+    const setCodeViewerVisible = (isVisible)=>{
+        onSetCodeViewerVisiblity(isVisible)
+    }
 const handleViewExistingCode = () => {
     if (!selectedPage || !selectedPage.aiAnalysis?.code) {
         message.warn("No generated code available for this page.");
@@ -425,7 +427,7 @@ const handleRegenerateCode = async () => {
             
 
             // Navigate to the XPath analysis view
-            navigateToPageXray('pipelinepipeline-stage');
+            navigateToPageXray('pipeline-stage');
             
             message.success("XPath analysis completed successfully");
         } catch(e) {
@@ -727,7 +729,7 @@ public class ${pageName.replace(/\s+/g, '')}Page {
                 />
             )}
 {/* CodeViewer Modal - This is the new modal for viewing code with the fixed CodeViewer component */}
-{codeViewerVisible && selectedPage && (
+{/* {codeViewerVisible && selectedPage && (
     <Modal
         title={`Generated Code: ${selectedPage.name}`}
         visible={codeViewerVisible}
@@ -745,7 +747,7 @@ public class ${pageName.replace(/\s+/g, '')}Page {
             onRegenerate={handleRegenerateCode}
         />
     </Modal>
-)}
+)} */}
             {/* State Details Modal */}
             <Modal 
                 title={editingState?.id ? `Edit State: ${stateTitle}` : "New State Details"} 

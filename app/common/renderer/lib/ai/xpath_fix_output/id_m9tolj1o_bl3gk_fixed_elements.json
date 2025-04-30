@@ -1,0 +1,100 @@
+[
+  {
+    "devName": "labelBalance",
+    "value": "0.00",
+    "name": "0.00",
+    "description": "Account balance",
+    "stateId": "id_m9tolotq_7doev",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "labelThisMonth",
+    "value": "0.000 JOD this month",
+    "name": "0.000 JOD this month",
+    "description": "Spending this month",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "labelBalanceIn",
+    "value": "0.00 in",
+    "name": "0.00 in",
+    "description": "Balance in",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "label23JOD",
+    "value": "23 JOD",
+    "name": "23 JOD",
+    "description": "Amount in JOD",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "labelTip",
+    "value": "Tip",
+    "name": "Tip",
+    "description": "Tip label",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "labelTextManageYourSpendings",
+    "value": "Manage your Spendings by setting a monthly budget",
+    "name": "Manage your Spendings by setting a monthly budget",
+    "description": "Tip description",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  },
+  {
+    "devName": "labelWidgets",
+    "value": "Widgets",
+    "name": "Widgets",
+    "description": "Widgets section title",
+    "stateId": "id_m9tomofg_dvlzn",
+    "platform": "android",
+    "xpath": {
+      "xpathExpression": "//*[99=0]",
+      "numberOfMatches": 0,
+      "matchingNodes": [],
+      "isValid": true
+    }
+  }
+]

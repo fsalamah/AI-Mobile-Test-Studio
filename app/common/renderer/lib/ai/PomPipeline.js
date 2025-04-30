@@ -45,7 +45,7 @@ async function executePOMClassPipeline(page, guideFilePath = CONFIG.POM_GUIDE, p
         hasPageBase = true;
         Logger.log(`Using PageBase class: ${pageBaseClass} from file`, "info");
       } catch (pageBaseError) {
-        Logger.warn(`Could not read PageBase file: ${pageBaseError.message}. Using default class name.`, "warn");
+        Logger.log(`Could not read PageBase file: ${pageBaseError.message}. Using default class name.`, "warn");
       }
     } else {
       Logger.log(`No PageBase file provided. Using default class name: ${pageBaseClass}`, "info");

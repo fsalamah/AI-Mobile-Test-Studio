@@ -1,0 +1,20 @@
+{
+  "processedPages": 1,
+  "totalStats": {
+    "totalElements": 7,
+    "originalSuccessRate": "0.00%",
+    "finalSuccessRate": "0.00%",
+    "fixedCount": 0,
+    "improvementRate": "0.00%"
+  },
+  "pageResults": [
+    {
+      "pageId": "id_m9tolj1o_bl3gk",
+      "totalElements": 7,
+      "originalSuccessRate": "0.00%",
+      "finalSuccessRate": "0.00%",
+      "fixedCount": 0,
+      "fixRate": "0.00%"
+    }
+  ]
+}
