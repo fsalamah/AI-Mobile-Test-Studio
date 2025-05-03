@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Button, Input, Space, Tooltip, Popconfirm, message } from 'antd';
 import {
   EditOutlined,
@@ -13,6 +13,9 @@ import {
 } from '@ant-design/icons';
 import { getMatchStatus, getPlatformIconStyle, validateElementUniqueness } from './elementUtils';
 import XPathAlternatives from './XPathAlternatives';
+
+// Import XPathManager singleton for direct access
+import xpathManager from '../../Xray/XPathManager.js';
 
 /**
  * Element Card Component
@@ -47,12 +50,90 @@ export const ElementCard = ({
   // Inline editing states
   const [editingField, setEditingField] = useState(null);
   const [editingValue, setEditingValue] = useState('');
+  
+  // Listen for XPath evaluation updates from XPathManager
+  useEffect(() => {
+    // Keep a reference to the current item data for closure
+    const currentItemId = item.id;
+    
+    // Add listener for XPath evaluation results
+    const unsubscribe = xpathManager.addListener((eventType, data) => {
+      // Only process events for this specific element ID
+      if ((eventType === 'evaluationComplete' || eventType === 'evaluationError') 
+           && data.elementId === currentItemId) {
+        
+        // Process the event even if the element is being evaluated - we want to update the match count
+        // This will ensure the count is updated in the UI
+        
+        if (eventType === 'evaluationComplete') {
+          // Get result data
+          const result = data.result;
+          if (result) {
+            console.log(`ElementCard: Received evaluation result for ${currentItemId}: ${result.numberOfMatches} matches, fromHighlighter: ${data.fromHighlighter || false}`);
+            
+            // Check if this is a highlight-triggered update - log extra info for debugging
+            if (data.fromHighlighter) {
+              console.log(`ElementCard: Received HIGHLIGHT-triggered update for ${currentItemId}`);
+            }
+            
+            const updatedItem = {
+              ...item,
+              xpath: {
+                ...item.xpath,
+                numberOfMatches: result.numberOfMatches,
+                isValid: result.isValid,
+                matchingNodes: result.matchingNodes || [],
+                _isEvaluating: false // Clear evaluation flag
+              }
+            };
+            
+            // Notify parent of updated element
+            console.log(`ElementCard: Updating element ${currentItemId} with new match count: ${result.numberOfMatches}`);
+            onElementUpdated(updatedItem, data.fromHighlighter ? 'highlight' : 'xpathExpression');
+          }
+        } else if (eventType === 'evaluationError') {
+          // Handle evaluation error
+          const updatedItem = {
+            ...item,
+            xpath: {
+              ...item.xpath,
+              numberOfMatches: 0,
+              isValid: false,
+              error: data.error,
+              _isEvaluating: false
+            }
+          };
+          
+          // Notify parent of updated element
+          onElementUpdated(updatedItem, 'xpathExpression');
+        }
+      }
+      
+      // Also listen for highlights that affect this element's XPath
+      if (eventType === 'highlightsChanged' && data.xpathExpression === item.xpath?.xpathExpression) {
+        // This is just to ensure the card gets refreshed when its XPath gets highlighted
+        if (!item.xpath?._isEvaluating) {
+          // Minimal update to trigger render without changing data
+          onElementUpdated({...item}, 'highlight');
+        }
+      }
+    });
+    
+    // Clean up on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [item, onElementUpdated]);
 
   const itemId = item.id;
-  const matchStatus = getMatchStatus(item.xpath?.numberOfMatches);
-  
   // Get alternative XPaths from the element if they exist
   const alternatives = getAlternativeXPaths(item);
+  
+  // Get match status for display, showing a special state when evaluating
+  const isEvaluating = item.xpath?._isEvaluating || false;
+  const matchStatus = isEvaluating ? 
+    { color: '#1890ff', text: '...' } : // Blue color with "..." when evaluating
+    getMatchStatus(item.xpath?.numberOfMatches);
 
   // Start inline editing
   const startEditing = (field) => {
@@ -165,7 +246,10 @@ export const ElementCard = ({
           </div>
           
           {/* Match count indicator */}
-          <Tooltip title={`${matchStatus.text} ${matchStatus.text === '1' ? 'match' : 'matches'} found`}>
+          <Tooltip title={isEvaluating ? 
+              "Evaluating XPath..." : 
+              `${matchStatus.text} ${matchStatus.text === '1' ? 'match' : 'matches'} found`
+            }>
             <div style={{ 
               backgroundColor: matchStatus.color,
               color: 'white',
@@ -302,7 +386,7 @@ export const ElementCard = ({
             icon={<ExperimentOutlined style={{ fontSize: '10px' }} />} 
             onClick={() => onEvaluate(item)}
             style={{ padding: '0 4px', height: '22px' }}
-            loading={xpathState?.status === 'PROCESSING' && xpathState?.currentXPath === item.xpath?.xpathExpression}
+            loading={false} // No loading state - synchronous operation
           />
           <Button 
             size="small"

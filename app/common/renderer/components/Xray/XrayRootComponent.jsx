@@ -22,6 +22,9 @@ import XMLViewer from '../ai/XpathHighlighter.jsx';
 import { connect } from 'react-redux';
 import { startXpathFixProcess } from '../../reducers/ai';
 
+// Import our direct XPath manager
+import xpathManager from './XPathManager.js';
+
 const { Option } = Select;
 
 // Define XPath processing states
@@ -38,28 +41,39 @@ const xpathReducer = (state, action) => {
       return {
         ...state,
         status: XPATH_STATE.PROCESSING,
-        currentXPath: action.xpath
+        currentXPath: action.xpath,
+        currentElementId: action.elementId || null // Store elementId if available
       };
     case 'COMPLETE_PROCESSING':
       return {
         ...state,
         status: XPATH_STATE.COMPLETE,
         lastMatches: action.matches || [],
-        lastResult: action.result || null
+        lastResult: action.result || null,
+        lastElementId: state.currentElementId // Preserve elementId
       };
     case 'RESET':
       return {
         ...state,
-        status: XPATH_STATE.IDLE
+        status: XPATH_STATE.IDLE,
+        currentElementId: null // Clear element ID
       };
     case 'ENQUEUE':
+      // Create a queue entry with xpath and elementId
+      const queueEntry = {
+        xpath: action.xpath,
+        elementId: action.elementId || null
+      };
+      
       // Prevent duplicate XPath expressions in the queue
-      if (state.queue.includes(action.xpath)) {
+      if (state.queue.some(entry => 
+        entry.xpath === action.xpath && entry.elementId === action.elementId)) {
         return state;
       }
+      
       return {
         ...state,
-        queue: [...state.queue, action.xpath]
+        queue: [...state.queue, queueEntry]
       };
     case 'DEQUEUE':
       return {
@@ -114,7 +128,8 @@ const appStateReducer = (state, action) => {
     case 'SET_MATCHED_NODES':
       return {
         ...state,
-        matchedNodes: action.nodes || []
+        matchedNodes: action.nodes || [],
+        nodePlatform: action.platform // Store platform information with nodes
       };
     case 'UPDATE_CURRENT_STATE':
       return {
@@ -265,9 +280,11 @@ const FinalResizableTabsContainer = ({
   const [xpathState, xpathDispatch] = useReducer(xpathReducer, {
     status: XPATH_STATE.IDLE,
     currentXPath: '',
+    currentElementId: null, // Track which element is being evaluated
     queue: [],
     lastMatches: [],
-    lastResult: null
+    lastResult: null,
+    lastElementId: null // Store element ID from previous evaluation
   });
   
   // Destructure appState for cleaner code
@@ -304,20 +321,46 @@ const FinalResizableTabsContainer = ({
     return currentPlatform === 'ios' ? 3 : 1;
   }, [currentPlatform]);
   
-  // Function to update the state view with better batching
+  // Function to update the state view with direct reference management
   const updateStateView = useCallback((stateId, platform) => {
     try {
+      console.log("🔄 UPDATE STATE VIEW: Starting state view update");
+      
       if (!stateId) {
-        console.warn("No stateId provided to updateStateView");
+        console.warn("❌ No stateId provided to updateStateView");
         return;
       }
       
-      console.log(`Updating state view: stateId=${stateId}, platform=${platform}`);
+      console.log(`🔍 Updating to: stateId=${stateId}, platform=${platform}`);
       
       // Get data first before updating state
+      console.log("📄 Getting XML source from page data");
       const xmlSource = getPageSource(selectedPage, platform, stateId);
-      const b64Image = getBase64Image(selectedPage, platform, stateId);
       
+      if (!xmlSource) {
+        console.error(`❌ No XML source available for platform=${platform}, stateId=${stateId}`);
+        message.error(`Failed to load XML source for ${platform} state ${stateId}`);
+        return false;
+      }
+      
+      console.log(`📄 XML source loaded: ${xmlSource.length} characters`);
+      
+      const b64Image = getBase64Image(selectedPage, platform, stateId);
+      if (!b64Image) {
+        console.warn(`⚠️ No screenshot available for platform=${platform}, stateId=${stateId}`);
+      }
+      
+      console.log("🔄 Setting XML source in XPathManager");
+      // IMPORTANT: Update the XPathManager with new XML and state info
+      // This is the key change - direct management instead of events
+      xpathManager.setXmlSource(xmlSource, stateId, platform);
+      
+      // Verify that XML was set properly
+      const xmlAfterSet = xpathManager.getXmlSource();
+      console.log(`📊 XPathManager now has XML: ${!!xmlAfterSet}`);
+      console.log(`📊 XPathManager XML length: ${xmlAfterSet?.length || 0}`);
+      
+      console.log("📤 Updating app state with new XML and image");
       // Batch update app state
       dispatchAppState({
         type: 'BATCH_UPDATE',
@@ -329,9 +372,11 @@ const FinalResizableTabsContainer = ({
       });
       
       // Reset XPath state machine
+      console.log("🔄 Resetting XPath state machine");
       xpathDispatch({ type: 'RESET' });
       
       // Update evaluation context
+      console.log("🔄 Updating evaluation context reference");
       evaluationContextRef.current = {
         stateId,
         platform,
@@ -340,17 +385,26 @@ const FinalResizableTabsContainer = ({
       
       // Update XML key separately after a short delay to avoid excessive renders
       setTimeout(() => {
+        console.log("🔄 Updating XML key to refresh viewers");
         dispatchAppState({ type: 'UPDATE_XML_KEY' });
-      }, 50);
+      }, 100);
+      
+      console.log("✅ State view update complete");
+      return true;
       
     } catch (error) {
-      console.error("Error in updating state view:", error);
+      console.error("❌ Error in updating state view:", error);
+      message.error(`Failed to update state view: ${error.message}`);
+      return false;
     }
-  }, [selectedPage]); // Only depend on selectedPage
+  }, [selectedPage, dispatchAppState, xpathDispatch]); // Added proper dependencies
   
-  // Create a stable version of the XPath evaluation function
-  const evaluateXPathStable = useCallback((xpathExpression, callback) => {
-    if (!xpathExpression || !xmlViewerReadyRef.current) {
+  // Forward declare evaluateXPathStable
+  let evaluateXPathStable;
+  
+  // Create a stable version of the XPath evaluation function using centralized evaluation
+  evaluateXPathStable = useCallback((xpathExpression, callback) => {
+    if (!xpathExpression) {
       const emptyResult = {
         xpathExpression: xpathExpression ? String(xpathExpression) : '',
         numberOfMatches: 0,
@@ -364,106 +418,53 @@ const FinalResizableTabsContainer = ({
       return emptyResult;
     }
     
-    // Convert to string if it's not already
-    const xpathString = String(xpathExpression);
+    // Extract element ID from evaluation context if available
+    const elementId = evaluationContextRef.current?.elementBeingEvaluated?.id;
     
-    try {
-      // Use the evaluateXPathExpression method from XMLViewer directly
-      const result = window.xmlViewer.evaluateXPathExpression(xpathString);
-      
-      // Ensure the result contains the xpathExpression as a string
-      const safeResult = {
-        ...result,
-        xpathExpression: xpathString
-      };
-      
-      // Update the matched nodes state
-      dispatchAppState({ 
-        type: 'SET_MATCHED_NODES', 
-        nodes: safeResult.matchingNodes || [] 
-      });
-      
-      // Call the callback with results if provided
-      if (callback) {
-        callback(safeResult);
-      }
-      
-      return safeResult;
-    } catch (error) {
-      console.error('Error evaluating XPath:', error);
-      const errorResult = {
-        xpathExpression: xpathString,
-        numberOfMatches: 0,
-        matchingNodes: [],
-        isValid: false
-      };
-      
-      if (callback) {
-        callback(errorResult);
-      }
-      
-      return errorResult;
-    }
-  }, []); // No dependencies to make it stable
+    // Use centralized evaluation
+    const result = centralizedEvaluateXPath(xpathExpression, {
+      elementId,
+      callback
+    });
+    
+    return result || {
+      xpathExpression: String(xpathExpression),
+      numberOfMatches: 0,
+      matchingNodes: [],
+      isValid: false
+    };
+  }, [/* No dependencies to avoid circular references */]); // Depend on pageXml for direct access
   
   // Create a debounced version of the XPath evaluation function with stable reference
   const debouncedEvaluateXPath = useMemo(() => 
     _.debounce((xpathExpression, updateElement = null) => {
       // Ensure xpathExpression is a string
-      if (!xpathExpression || !xmlViewerReadyRef.current) return;
+      if (!xpathExpression) return;
       
-      // Convert to string if it's not already
-      const xpathString = String(xpathExpression);
+      // Extract element ID from evaluation context if available
+      const elementId = evaluationContextRef.current?.elementBeingEvaluated?.id;
       
-      try {
-        // Use the stable evaluation function
-        const result = evaluateXPathStable(xpathString);
-        
-        // Create a complete result object
-        const completeResult = {
-          ...result,
-          xpathExpression: xpathString
-        };
-        
-        // Update state with the result
-        xpathDispatch({ 
-          type: 'COMPLETE_PROCESSING', 
-          matches: result.matchingNodes || [],
-          result: completeResult
-        });
-        
-        // Update the element if provided
-        if (updateElement && typeof updateElement === 'function') {
-          updateElement(completeResult);
+      // Use the centralized evaluation function
+      centralizedEvaluateXPath(xpathExpression, {
+        elementId,
+        highlight: true,
+        updateUI: true,
+        callback: (result) => {
+          // Update state with the result
+          xpathDispatch({ 
+            type: 'COMPLETE_PROCESSING', 
+            matches: result.matchingNodes || [],
+            result
+          });
+          
+          // Update the element if provided
+          if (updateElement && typeof updateElement === 'function') {
+            updateElement(result);
+          }
         }
-      } catch (error) {
-        console.error('Error in debounced XPath evaluation:', error);
-        
-        // Clear matched nodes on error
-        dispatchAppState({ type: 'SET_MATCHED_NODES', nodes: [] });
-        
-        // Create an error result
-        const errorResult = {
-          xpathExpression: xpathString,
-          numberOfMatches: 0,
-          matchingNodes: [],
-          isValid: false
-        };
-        
-        // Update state with the error result
-        xpathDispatch({ 
-          type: 'COMPLETE_PROCESSING', 
-          matches: [],
-          result: errorResult
-        });
-        
-        // Still call updateElement with error result
-        if (updateElement && typeof updateElement === 'function') {
-          updateElement(errorResult);
-        }
-      }
+      });
     }, 300),
-    [evaluateXPathStable]
+    [/* No dependencies to avoid circular references */]
   );
   
   // Extract the update logic to a separate function with a stable reference
@@ -523,31 +524,78 @@ const FinalResizableTabsContainer = ({
     }
   }, [selectedPage.aiAnalysis?.locators, updateLocators]);
   
-  // Enhanced processXPath function with stable dependencies
-  const processXPath = useCallback((xpathExpression, updateElement = null) => {
+  // Forward declare processXPath to avoid reference errors
+  let centralizedEvaluateXPath;
+  
+  // Legacy processXPath function that redirects to centralized evaluation
+  const processXPath = useCallback((xpathExpression, updateElement = null, options = {}) => {
+    // Extract elementId from options if provided
+    const { elementId } = options;
+    
+    // Use the centralized evaluation function
+    return centralizedEvaluateXPath(xpathExpression, {
+      elementId,
+      highlight: true,
+      updateUI: true,
+      callback: updateElement
+    });
+  }, [/* Don't include centralizedEvaluateXPath as a dependency to avoid circular reference */]);
+  
+  /**
+   * Centralized XPath evaluation function - all XPath evaluations should flow through here
+   * @param {string} xpathExpression - The XPath expression to evaluate
+   * @param {Object} options - Evaluation options
+   * @returns {Object} - Evaluation result
+   */
+  centralizedEvaluateXPath = useCallback((xpathExpression, options = {}) => {
+    // Default options
+    const {
+      elementId = null,
+      highlight = true,
+      updateUI = true,
+      callback = null
+    } = options;
+    
     // Ensure xpathExpression is a string
     if (!xpathExpression) {
       // Clear matches if expression is empty
-      dispatchAppState({ type: 'SET_MATCHED_NODES', nodes: [] });
-      return;
+      dispatchAppState({ 
+  type: 'SET_MATCHED_NODES', 
+  nodes: [],
+  platform: evaluationContextRef.current?.platform || currentPlatform
+});
+      return null;
     }
     
     // Make sure xpathExpression is a string
     const xpathString = String(xpathExpression);
     
-    // If already processing, enqueue this request
-    if (xpathState.status === XPATH_STATE.PROCESSING) {
-      xpathDispatch({ type: 'ENQUEUE', xpath: xpathString });
-      return;
+    console.log(`Centralized XPath evaluation: ${xpathString} for element ${elementId || 'none'}`);
+    
+    // Use XPathManager for centralized evaluation
+    const result = xpathManager.centralizedEvaluate({
+      xpathExpression: xpathString,
+      elementId,
+      highlight,
+      updateUI
+    });
+    
+    // Update app state with matched nodes
+    if (highlight && result.actualNodes) {
+      dispatchAppState({ 
+        type: 'SET_MATCHED_NODES', 
+        nodes: result.actualNodes || [],
+        platform: evaluationContextRef.current?.platform || currentPlatform
+      });
     }
     
-    // Set state to processing
-    xpathDispatch({ type: 'START_PROCESSING', xpath: xpathString });
+    // Call callback if provided
+    if (callback && typeof callback === 'function') {
+      callback(result);
+    }
     
-    // Use the debounced evaluation
-    debouncedEvaluateXPath(xpathString, updateElement);
-    
-  }, [xpathState.status, debouncedEvaluateXPath, dispatchAppState]);
+    return result;
+  }, [dispatchAppState]);
   
   // Handle XPath match from XMLViewer with minimal dependencies
   const handleXPathMatch = useCallback((xpathResult) => {
@@ -555,48 +603,82 @@ const FinalResizableTabsContainer = ({
     const nodes = xpathResult?.matches || [];
     
     // Update matched nodes
-    dispatchAppState({ type: 'SET_MATCHED_NODES', nodes });
+    dispatchAppState({ 
+      type: 'SET_MATCHED_NODES', 
+      nodes,
+      platform: evaluationContextRef.current?.platform || currentPlatform
+    });
     
-    // Only update processing state if we're in PROCESSING state
-    if (xpathState.status === XPATH_STATE.PROCESSING) {
-      // Complete the processing with the result
+    // Get the XPath expression from the result
+    const xpathExpression = xpathResult.xpathExpression;
+    
+    // Get the element ID from the evaluation context
+    const elementId = evaluationContextRef.current?.elementBeingEvaluated?.id;
+    
+    // Create a result object
+    const result = {
+      xpathExpression,
+      numberOfMatches: nodes.length,
+      matchingNodes: nodes,
+      isValid: true,
+      elementId
+    };
+    
+    // If we're in processing state and match current XPath, complete the processing
+    if (xpathState.status === XPATH_STATE.PROCESSING && 
+        xpathExpression === xpathState.currentXPath) {
       xpathDispatch({ 
         type: 'COMPLETE_PROCESSING', 
         matches: nodes,
-        result: {
-          xpathExpression: typeof xpathState.currentXPath === 'string' ? xpathState.currentXPath : String(xpathState.currentXPath),
-          numberOfMatches: nodes.length,
-          matchingNodes: nodes,
-          isValid: true
-        }
+        result
       });
     }
+    
+    // Notify all listeners about the XPath match
+    xpathManager.notifyListeners('highlightsChanged', {
+      nodes,
+      xpathExpression,
+      elementId
+    });
   }, [xpathState.status, xpathState.currentXPath, dispatchAppState]);
   
-  // Enhanced element evaluation with controlled state updates
-  const handleElementEvaluation = useCallback(async (element) => {
-    if (!element) return;
+  // Enhanced element evaluation with centralized evaluation - make sure this is defined AFTER centralizedEvaluateXPath
+  const handleElementEvaluation = useCallback(async (element, forceRefresh = false) => {
+    console.log("🔍 ELEMENT EVALUATION: Starting evaluation for element", element?.devName || 'unknown');
+    console.log(`Force refresh: ${forceRefresh}`);
+    
+    if (!element) {
+      console.log("❌ No element provided - aborting evaluation");
+      return;
+    }
     
     // Store the element being evaluated
     evaluationContextRef.current.elementBeingEvaluated = element;
     
-    let needsUpdate = false;
-    let newStateId = currentStateId;
-    let newPlatform = currentPlatform;
+    let needsUpdate = forceRefresh; // Always update if force refresh is true
+    let newStateId = element.stateId || currentStateId;
+    let newPlatform = element.platform || currentPlatform;
+    
+    console.log(`Element State Info: platform=${element.platform}, stateId=${element.stateId}`);
+    console.log(`Current State Info: platform=${currentPlatform}, stateId=${currentStateId}`);
     
     // Update platform if element has a platform specified
     if (element.platform && element.platform !== currentPlatform) {
+      console.log(`📱 Platform change needed: ${currentPlatform} -> ${element.platform}`);
       newPlatform = element.platform;
       needsUpdate = true;
     }
     
     if (element.stateId && element.stateId !== currentStateId) {
+      console.log(`🔄 State ID change needed: ${currentStateId} -> ${element.stateId}`);
       newStateId = element.stateId;
       needsUpdate = true;
     }
     
     // If either stateId or platform changed, update state
     if (needsUpdate) {
+      console.log(`🔄 Updating state view to platform=${newPlatform}, stateId=${newStateId}`);
+      
       // Update state ID and platform in one batch
       dispatchAppState({
         type: 'UPDATE_CURRENT_STATE',
@@ -604,28 +686,56 @@ const FinalResizableTabsContainer = ({
         platform: newPlatform
       });
       
-      // Then update the view
+      // Then update the view with fresh XML
+      console.log("📊 Getting fresh XML for new state/platform");
       await updateStateView(newStateId, newPlatform);
+      
+      // Now check the XPathManager XML state
+      const hasXml = !!xpathManager.getXmlSource();
+      console.log(`📄 XML loaded: ${hasXml}`);
+      console.log(`📄 XML length: ${xpathManager.getXmlSource()?.length || 0}`);
+      
+      if (!hasXml) {
+        console.error("❌ Failed to load XML source for evaluation");
+        return;
+      }
       
       // Give the view a moment to update before evaluating XPath
       if (element.xpath && element.xpath.xpathExpression) {
+        console.log(`⏳ Scheduling evaluation after view update: ${element.xpath.xpathExpression}`);
         setTimeout(() => {
-          processXPath(element.xpath.xpathExpression, result => updateElementXPath(element, result));
-        }, 300);
+          console.log("🔄 Now evaluating XPath after view update");
+          // Important: Pass platform information to evaluation
+          centralizedEvaluateXPath(element.xpath.xpathExpression, {
+            elementId: element.id,
+            elementPlatform: element.platform,
+            callback: result => updateElementXPath(element, result)
+          });
+        }, 500); // Increased timeout to ensure XML is fully loaded
       }
       
       return; // Return early to avoid double evaluation
     }
     
-    // If the element has an XPath, evaluate it
+    // If the element has an XPath, evaluate it directly (no state change needed)
     if (element.xpath && element.xpath.xpathExpression) {
       // Make sure the xpathExpression is a string
       const xpathExpression = String(element.xpath.xpathExpression);
       
-      // Process using our enhanced approach with element updating
-      processXPath(xpathExpression, result => updateElementXPath(element, result));
+      console.log(`🔍 Direct evaluation of: ${xpathExpression}`);
+      console.log(`📱 Using platform: ${element.platform}`);
+      
+      // Use centralized evaluation with element ID and platform
+      centralizedEvaluateXPath(xpathExpression, {
+        elementId: element.id,
+        elementPlatform: element.platform,
+        callback: result => updateElementXPath(element, result)
+      });
+    } else {
+      console.log("❌ No XPath expression available for evaluation");
     }
-  }, [currentStateId, currentPlatform, processXPath, updateStateView, updateElementXPath, dispatchAppState]);
+  }, [currentStateId, currentPlatform, updateStateView, updateElementXPath, dispatchAppState 
+      /* Don't include centralizedEvaluateXPath as a dependency to avoid circular reference */]);
   
   // Handler for state change from dropdown
   const handleStateChange = useCallback((value) => {
@@ -644,9 +754,13 @@ const FinalResizableTabsContainer = ({
   }, [updateStateView, dispatchAppState]);
   
   // External update to matched nodes with minimal dependencies
-  const updateMatchedNodes = useCallback((nodes) => {
-    dispatchAppState({ type: 'SET_MATCHED_NODES', nodes: nodes || [] });
-  }, [dispatchAppState]);
+  const updateMatchedNodes = useCallback((nodes, platform) => {
+    dispatchAppState({ 
+      type: 'SET_MATCHED_NODES', 
+      nodes: nodes || [],
+      platform: platform || evaluationContextRef.current?.platform || currentPlatform
+    });
+  }, [dispatchAppState, currentPlatform]);
   
   // Update the elements in selectedPage.aiAnalysis.locators
   const handleElementListChanged = useCallback((elements) => {
@@ -674,11 +788,17 @@ const FinalResizableTabsContainer = ({
         xpathDispatch({ type: 'RESET' });
         
         // Process next in queue
-        const nextXPath = xpathState.queue[0];
+        const nextItem = xpathState.queue[0];
         xpathDispatch({ type: 'DEQUEUE' });
         
-        // Start processing the next item
-        processXPath(nextXPath);
+        // Start processing the next item with its elementId if available
+        if (nextItem) {
+          processXPath(
+            nextItem.xpath, 
+            null, 
+            { elementId: nextItem.elementId }
+          );
+        }
       }, 50);
       
       return () => clearTimeout(timer);
@@ -949,6 +1069,8 @@ const FinalResizableTabsContainer = ({
         base64Png: imageBase64,
         matchingNodes: matchedNodes,
         pixelRatio: getPixelRatio,
+        platform: currentPlatform, // Pass platform information
+        debug: true, // Enable debug logging
         key: 'image-highlighter'
       }
     },

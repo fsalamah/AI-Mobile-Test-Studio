@@ -1,7 +1,9 @@
 import React from 'react';
 import { Input, Button, Typography } from 'antd';
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
-import XPathFixButton from './XPathFixButton';
+
+// Import XPathManager singleton for direct access
+import xpathManager from '../../Xray/XPathManager.js';
 
 const { Title } = Typography;
 
@@ -17,12 +19,7 @@ const { Title } = Typography;
 export const ElementListHeader = ({ 
   searchTerm, 
   onSearchChange, 
-  onAddClick,
-  failingXPathCount = 0,
-  onFixXPaths = () => {},
-  isFixingXPaths = false,
-  fixProgress = 0,
-  fixStage = ''
+  onAddClick
 }) => {
   /**
    * Handle search input change
@@ -52,14 +49,6 @@ export const ElementListHeader = ({
       />
       
       <div style={{ display: 'flex', gap: '8px' }}>
-        <XPathFixButton 
-          onClick={onFixXPaths}
-          failingCount={failingXPathCount}
-          loading={isFixingXPaths}
-          progress={fixProgress}
-          currentStage={fixStage}
-        />
-
         <Button 
           type="primary" 
           icon={<PlusOutlined />} 

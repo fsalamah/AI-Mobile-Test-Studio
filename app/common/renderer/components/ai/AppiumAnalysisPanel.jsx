@@ -15,7 +15,7 @@ import { PageOperations } from "./PageOperations.jsx";
 
 // Import utilities
 import { buildTreeData, generateId } from "./utils/TreeUtils.js";
-import { chooseFile, saveToFile, openSavedFile } from "./utils/FileOperationsUtils.js";
+import { chooseFile, saveToFile, openSavedFile, tryOpenLastFile } from "./utils/FileOperationsUtils.js";
 
 // Import AI pipeline functions
 import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
@@ -58,6 +58,14 @@ export default function AppiumAnalysisPanel() {
         () => buildTreeData(pages, searchTerm),
         [pages, searchTerm]
     );
+    
+    // Try to open the last used file on startup
+    useEffect(() => {
+        // Only try to open if there are no pages loaded
+        if (pages.length === 0) {
+            tryOpenLastFile(setPages, setFileHandle, resetUIState);
+        }
+    }, []);
 
     // Update expanded keys when search term changes
     useEffect(() => {

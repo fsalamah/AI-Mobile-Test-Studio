@@ -2,6 +2,9 @@ import React from 'react';
 import { Button, Tooltip, Badge, Typography, Popover } from 'antd';
 import { ToolOutlined, InfoCircleOutlined } from '@ant-design/icons';
 
+// Import XPathManager singleton for direct access
+import xpathManager from '../../Xray/XPathManager.js';
+
 const { Text } = Typography;
 
 /**

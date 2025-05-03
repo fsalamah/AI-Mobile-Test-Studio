@@ -2,7 +2,7 @@
  * Integration module for XPath fixing
  * Connects the XPath fixing UI to the pipeline
  */
-import { executeXpathFixPipeline } from '../../lib/ai/xpathFixPipeline';
+import { executeXpathFixPipeline } from '../../../lib/ai/xpathFixPipeline';
 import { getXPathFixProgressModalControls } from '../Modals/XPathFixProgressModal';
 
 /**
@@ -91,15 +91,24 @@ export const fixXPaths = async (elements, page, onComplete, options = {}) => {
  * @returns {Promise} - Promise that resolves when the process completes
  */
 export const fixSingleElementXPath = async (element, allElements, page, onComplete) => {
-  // Create a list with just this element at the front
+  // Create a list with just this element (marked as failing to ensure it gets processed)
+  const elementToFix = {
+    ...element,
+    xpath: {
+      ...element.xpath,
+      // Force this element to be considered as failing
+      success: false
+    }
+  };
+  
   const elementsWithTargetFirst = [
-    element,
+    elementToFix,
     ...allElements.filter(e => e.id !== element.id)
   ];
   
-  // Call the main fixXPaths function with singleElementMode=true
+  // Call the main fixXPaths function with singleElementMode=true and failingXPathsOnly=true
   return fixXPaths(elementsWithTargetFirst, page, onComplete, {
     singleElementMode: true,
-    failingXPathsOnly: false // We want to fix this element even if it's not failing
+    failingXPathsOnly: true // This will ensure only our marked element is processed
   });
 };
