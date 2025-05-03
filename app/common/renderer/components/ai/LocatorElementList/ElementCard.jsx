@@ -51,6 +51,68 @@ export const ElementCard = ({
   const [editingField, setEditingField] = useState(null);
   const [editingValue, setEditingValue] = useState('');
   
+  // CRITICAL FIX: Directly monitor and fix stuck evaluation state
+  useEffect(() => {
+    // If this element is currently marked as evaluating, set up a timer to check if it gets stuck
+    if (item.xpath?._isEvaluating) {
+      console.log(`ElementCard ${item.id}: Monitoring evaluation state`);
+      
+      // Create a timer to check if the state gets stuck
+      const monitorTimer = setTimeout(() => {
+        // If the element is still in evaluating state, force a direct evaluation
+        if (item.xpath?._isEvaluating) {
+          console.log(`⚠️ ElementCard ${item.id}: STUCK DETECTED - Forcing direct evaluation`);
+          
+          try {
+            // Do a direct evaluation ourselves
+            const xpathExpression = item.xpath?.xpathExpression;
+            if (xpathExpression) {
+              // Force evaluation and get result directly
+              const result = xpathManager.evaluateXPath(xpathExpression, {
+                elementId: item.id,
+                elementPlatform: item.platform
+              });
+              
+              console.log(`🔄 DIRECT FIX: Evaluation result for ${item.id}: ${result.numberOfMatches} matches`);
+              
+              // Update with result
+              const fixedItem = {
+                ...item,
+                xpath: {
+                  ...item.xpath,
+                  numberOfMatches: result.numberOfMatches,
+                  isValid: result.isValid,
+                  matchingNodes: result.matchingNodes || [],
+                  _isEvaluating: false,
+                  _lastUpdateTime: Date.now(),
+                  _silentUpdate: true // Flag to prevent notifications
+                }
+              };
+              
+              // Update directly through parent
+              onElementUpdated(fixedItem, 'self_fix');
+            }
+          } catch (error) {
+            console.error(`⚠️ ElementCard ${item.id}: Error during self-fix:`, error);
+            
+            // Still clear the evaluation state
+            const clearedItem = {
+              ...item,
+              xpath: {
+                ...item.xpath,
+                _isEvaluating: false,
+                error: error.message
+              }
+            };
+            onElementUpdated(clearedItem, 'self_fix_error');
+          }
+        }
+      }, 1000); // Check after 1 second - this is enough time for normal evaluation
+      
+      return () => clearTimeout(monitorTimer);
+    }
+  }, [item.id, item.xpath?._isEvaluating, item, onElementUpdated]);
+
   // Listen for XPath evaluation updates from XPathManager
   useEffect(() => {
     // Keep a reference to the current item data for closure
@@ -58,38 +120,66 @@ export const ElementCard = ({
     
     // Add listener for XPath evaluation results
     const unsubscribe = xpathManager.addListener((eventType, data) => {
-      // Only process events for this specific element ID
+      // SPECIAL CHECK: Always force clear _isEvaluating if it's been active for >2 seconds
+      // This is a last resort safety mechanism
+      const evaluationStartTime = item.xpath?._evaluationStartTime || 0;
+      const evaluationDuration = Date.now() - evaluationStartTime;
+      
+      if (item.xpath?._isEvaluating && evaluationDuration > 2000) {
+        console.log(`⚠️ ElementCard ${currentItemId}: Force clearing stuck evaluation state after ${evaluationDuration}ms`);
+        // Force update to clear stuck state
+        const forceClearedItem = {
+          ...item,
+          xpath: {
+            ...item.xpath,
+            _isEvaluating: false,
+            _lastUpdateTime: Date.now()
+          }
+        };
+        onElementUpdated(forceClearedItem, 'stuckStateCleanup');
+      }
+      
+      // Process specific evaluation events for this element ID
       if ((eventType === 'evaluationComplete' || eventType === 'evaluationError') 
            && data.elementId === currentItemId) {
         
-        // Process the event even if the element is being evaluated - we want to update the match count
-        // This will ensure the count is updated in the UI
+        console.log(`ElementCard ${currentItemId}: Received ${eventType} event` +
+          (data.isBackupNotification ? ' (backup notification)' : ''));
+        
+        // Track update frequency to avoid storm of updates
+        const lastUpdateTime = item.xpath?._lastUpdateTime || 0;
+        const now = Date.now();
+        const updateInterval = now - lastUpdateTime;
+        
+        // Allow backup notifications to bypass timing checks
+        const isDuplicate = !data.isBackupNotification && updateInterval < 50;
         
         if (eventType === 'evaluationComplete') {
           // Get result data
           const result = data.result;
           if (result) {
-            console.log(`ElementCard: Received evaluation result for ${currentItemId}: ${result.numberOfMatches} matches, fromHighlighter: ${data.fromHighlighter || false}`);
+            console.log(`ElementCard: Updating ${currentItemId} with ${result.numberOfMatches} matches` + 
+              (isDuplicate ? ' (skipping - too soon)' : ''));
             
-            // Check if this is a highlight-triggered update - log extra info for debugging
-            if (data.fromHighlighter) {
-              console.log(`ElementCard: Received HIGHLIGHT-triggered update for ${currentItemId}`);
+            if (!isDuplicate) {
+              // Always clear _isEvaluating regardless of other state
+              const updatedItem = {
+                ...item,
+                xpath: {
+                  ...item.xpath,
+                  numberOfMatches: result.numberOfMatches,
+                  isValid: result.isValid,
+                  matchingNodes: result.matchingNodes || [],
+                  _isEvaluating: false, // Critical: always clear evaluation flag
+                  _lastUpdateTime: now // Track when we last updated
+                }
+              };
+              
+              // Notify parent of updated element
+              console.log(`ElementCard: Updating element ${currentItemId} to show ${result.numberOfMatches} matches`);
+              onElementUpdated(updatedItem, data.consolidated ? 'consolidated' : 
+                                          (data.fromHighlighter ? 'highlight' : 'xpathExpression'));
             }
-            
-            const updatedItem = {
-              ...item,
-              xpath: {
-                ...item.xpath,
-                numberOfMatches: result.numberOfMatches,
-                isValid: result.isValid,
-                matchingNodes: result.matchingNodes || [],
-                _isEvaluating: false // Clear evaluation flag
-              }
-            };
-            
-            // Notify parent of updated element
-            console.log(`ElementCard: Updating element ${currentItemId} with new match count: ${result.numberOfMatches}`);
-            onElementUpdated(updatedItem, data.fromHighlighter ? 'highlight' : 'xpathExpression');
           }
         } else if (eventType === 'evaluationError') {
           // Handle evaluation error

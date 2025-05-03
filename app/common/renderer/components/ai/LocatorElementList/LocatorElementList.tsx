@@ -10,6 +10,8 @@ import * as integrationModule from './integration';
 
 // Import XPathManager singleton for direct reference management
 import xpathManager from '../../Xray/XPathManager.js';
+// Import notification manager to prevent duplicate notifications
+import notificationManager from './notificationManager';
 
 // Assuming this is declared elsewhere in your file
 const stateLookup = {
@@ -173,6 +175,12 @@ export const LocatorElementList = ({
     setSortedStateIds(sortedStateIds);
   }, [elements, searchTerm]);
 
+  // Reset notification tracking when platform or state changes
+  useEffect(() => {
+    // When platform or state changes, reset notification tracking
+    notificationManager.resetAll();
+  }, [currentStateId, currentPlatform]);
+
   // Effect to update elements when xpathState changes
   useEffect(() => {
     // Handle COMPLETE state
@@ -322,7 +330,7 @@ export const LocatorElementList = ({
       onXPathChange && onXPathChange(newElement.xpath.xpathExpression);
     }
 
-    message.success(`Element ${isEdit ? 'updated' : 'added'} successfully!`);
+    notificationManager.success(`Element ${isEdit ? 'updated' : 'added'} successfully!`, message);
     setIsModalVisible(false);
   };
 
@@ -333,10 +341,10 @@ export const LocatorElementList = ({
     // Update elements and notify
     updateElementsAndNotify(updatedElements);
     
-    message.success('Element removed successfully!');
+    notificationManager.success('Element removed successfully!', message);
   };
 
-  // XPath evaluation using centralized evaluation
+  // XPath evaluation using centralized evaluation with split loading/evaluation phases
   const handleEvaluate = (element) => {
     console.log("🚀 EVALUATE: Starting evaluation for element", element.devName);
     console.log(`Element platform: ${element.platform}, stateId: ${element.stateId}`);
@@ -348,13 +356,14 @@ export const LocatorElementList = ({
       
       // This will trigger a state change in the parent component
       onHandleEvaluate && onHandleEvaluate(element);
-      return; // Exit early - parent component will handle the evaluation
+      // We'll exit and wait for state change to complete before evaluating
+      return;
     }
     
     // Get the XPath expression we need to evaluate
     const xpathExpression = element.xpath?.xpathExpression;
     if (!xpathExpression) {
-      message.error("No XPath expression available");
+      notificationManager.error("No XPath expression available", message);
       return;
     }
     
@@ -364,9 +373,13 @@ export const LocatorElementList = ({
     // Set loading state and preserve existing match count 
     const updatedElementWithLoading = {
       ...element,
+      // Reset notification shown flag to ensure we can show a notification for this evaluation
+      _notificationShown: false,
       xpath: {
         ...element.xpath,
         _isEvaluating: true,
+        _evaluationStartTime: Date.now(), // Add timestamp to track when evaluation started
+        _silentUpdate: false, // Reset silent update flag
         // Keep the existing count in UI while evaluating to avoid flickering
         // Only use -1 if we don't already have a count
         _previousMatchCount: element.xpath?.numberOfMatches,
@@ -384,14 +397,14 @@ export const LocatorElementList = ({
     try {
       console.log("📊 Current XPathManager state:");
       console.log(`XML source exists: ${!!xpathManager.getXmlSource()}`);
-      if (xpathManager.getXmlSource()) {
-        console.log(`XML source length: ${xpathManager.getXmlSource().length} chars`);
-      } else {
+      
+      // PHASE 1: Ensure XML source is loaded and valid
+      if (!xpathManager.getXmlSource()) {
         console.log("⚠️ NO XML SOURCE AVAILABLE - forcing refresh");
         // Force a state refresh even if we're on the right state/platform
         onHandleEvaluate && onHandleEvaluate(element, true);
         
-        // Retry after a short delay to allow XML loading
+        // We'll retry after a short delay to allow XML loading
         setTimeout(() => {
           console.log("🔄 Retrying evaluation after refresh");
           handleEvaluate(element);
@@ -399,35 +412,140 @@ export const LocatorElementList = ({
         return;
       }
       
+      // Check if XML source is valid (not empty and matches expected format)
+      const xmlSource = xpathManager.getXmlSource();
+      if (!xmlSource || xmlSource.length < 100 || !xmlSource.includes("<")) {
+        console.log("⚠️ XML SOURCE INVALID OR INCOMPLETE - forcing refresh");
+        onHandleEvaluate && onHandleEvaluate(element, true);
+        
+        setTimeout(() => {
+          console.log("🔄 Retrying evaluation after refresh");
+          handleEvaluate(element);
+        }, 500);
+        return;
+      }
+      
+      console.log(`✅ XML source loaded and valid (${xmlSource.length} chars)`);
+      
+      // PHASE 2: Ensure proper platform context before evaluation
       console.log("🔧 Setting XML source with current context");
-      // Make sure XPathManager knows about the current platform
-      // This ensures proper platform context during evaluation
       xpathManager.setXmlSource(
-        xpathManager.getXmlSource(), 
+        xmlSource, 
         currentStateId, 
-        element.platform // Important: use the element's platform, not just currentPlatform
+        element.platform
       );
       
-      console.log("📤 Delegating to parent for centralized evaluation");
-      // This is the key change - we delegate to the parent component for centralized evaluation
-      // The parent component will handle all the XML parsing, highlighting, and result distribution
-      // We pass both element ID and platform to ensure proper context
-      onXPathChange && onXPathChange(xpathExpression, { 
+      // PHASE 3: Directly evaluate XPath - with special handling for same-state evaluations
+      // This critical step ensures the element gets updated regardless of parent component events
+      console.log("🔍 Performing direct evaluation to ensure result");
+      
+      // Check if we're evaluating in the current state/platform that's already displayed
+      const isSameStateAndPlatform = element.stateId === currentStateId && 
+                                    element.platform === currentPlatform;
+      
+      console.log(`📊 Evaluation context: Same state/platform? ${isSameStateAndPlatform}`);
+      
+      // When in same state/platform, do a COMPLETE evaluation ourselves first
+      // This ensures the element card gets updated even if other events get lost
+      const directResult = xpathManager.evaluateXPath(xpathExpression, {
         elementId: element.id,
-        elementPlatform: element.platform // Pass the platform with the request
+        elementPlatform: element.platform,
+        // Critical: For same-state evaluations, do full highlighting here directly
+        // This fixes the issue where the count gets stuck on loading
+        highlight: isSameStateAndPlatform 
       });
       
-      console.log("⏳ Waiting for evaluation results via listener");
-      // The evaluation completion will be handled by the listener in useEffect
-      // No further updates needed here - the evaluation result will come back through the listener
+      console.log(`⚡ Direct evaluation result: ${directResult.numberOfMatches} matches`);
       
-      // Log for debugging
+      // Immediately update element with the result to ensure UI is updated
+      if (isSameStateAndPlatform) {
+        console.log(`🚀 SAME-STATE EVALUATION: Immediately updating element with result`);
+        
+        const updatedElement = {
+          ...element,
+          xpath: {
+            ...element.xpath,
+            numberOfMatches: directResult.numberOfMatches,
+            isValid: directResult.isValid,
+            matchingNodes: directResult.matchingNodes || [],
+            _isEvaluating: false,
+            _lastUpdateTime: Date.now()
+          }
+        };
+        
+        // Update elements state directly
+        const updatedElements = elements.map(item => 
+          item.id === element.id ? updatedElement : item
+        );
+        
+        // Update UI immediately
+        updateElementsAndNotify(updatedElements);
+        
+        // Show result message - using notification manager
+        // to prevent duplicate notifications
+        if (directResult.numberOfMatches > 0) {
+          notificationManager.success(
+            `Found ${directResult.numberOfMatches} match${directResult.numberOfMatches !== 1 ? 'es' : ''}`,
+            message
+          );
+        } else {
+          notificationManager.error(
+            `No matches found for ${xpathExpression}`,
+            message
+          );
+        }
+        
+        // Set a flag to prevent duplicate notifications
+        element._notificationShown = true;
+      }
+      
+      // PHASE 4: Now delegate to parent for highlighting and full evaluation
+      // We still delegate to the parent component to ensure proper highlight rendering
+      // even for same-state evaluations
+      console.log("📤 Delegating to parent for centralized evaluation");
+      onXPathChange && onXPathChange(xpathExpression, { 
+        elementId: element.id,
+        elementPlatform: element.platform,
+        // Tell parent this is a same-state evaluation
+        isSameStateEvaluation: isSameStateAndPlatform
+      });
+      
+      // If after 1 second we still haven't received an update, force update the element
+      // This is a fallback to ensure we don't get stuck in "evaluating" state
+      setTimeout(() => {
+        // Check if element is still in evaluating state
+        const currentElements = elements.find(e => e.id === element.id);
+        if (currentElements?.xpath?._isEvaluating) {
+          console.log(`⚠️ TIMEOUT: Element still in evaluating state after 1s, forcing update`);
+          
+          // Force update with direct result
+          const updatedElement = {
+            ...element,
+            xpath: {
+              ...element.xpath,
+              numberOfMatches: directResult.numberOfMatches,
+              isValid: directResult.isValid,
+              matchingNodes: directResult.matchingNodes || [],
+              _isEvaluating: false,
+              _lastUpdateTime: Date.now()
+            }
+          };
+          
+          const updatedElements = elements.map(item => 
+            item.id === element.id ? updatedElement : item
+          );
+          updateElementsAndNotify(updatedElements);
+          
+          // Show message to user via notification manager
+          notificationManager.success(`Found ${directResult.numberOfMatches} match${directResult.numberOfMatches !== 1 ? 'es' : ''}`, message);
+        }
+      }, 1000);
+      
       console.log(`🔎 Evaluation initiated for element ID ${element.id} with platform ${element.platform}`);
-      console.log(`🔎 Current platform context in XPathManager: ${xpathManager.currentPlatform}`);
       
     } catch (error) {
       console.error("❌ Error initiating XPath evaluation:", error);
-      message.error(`Error initiating XPath evaluation: ${error.message}`);
+      notificationManager.error(`Error initiating XPath evaluation: ${error.message}`, message);
       
       // Clear loading state on error
       const elementWithError = {
@@ -500,7 +618,8 @@ export const LocatorElementList = ({
             numberOfMatches: result.numberOfMatches,
             isValid: result.isValid,
             matchingNodes: result.matchingNodes || [],
-            _isEvaluating: false // Clear evaluation flag
+            _isEvaluating: false, // Clear evaluation flag
+            _lastUpdateTime: Date.now() // Track when we last updated this element
           }
         };
         
@@ -516,11 +635,20 @@ export const LocatorElementList = ({
           elementPlatform: element.platform
         });
         
-        // Show success or error message based on match count
-        if (result.numberOfMatches > 0) {
-          message.success(`Found ${result.numberOfMatches} match${result.numberOfMatches !== 1 ? 'es' : ''} for ${element.devName}`);
-        } else {
-          message.warning(`No matches found for ${element.devName}`);
+        // Only show notifications if this is not a silent update
+        if (!element.xpath?._silentUpdate) {
+          // Use notification manager to prevent duplicates
+          if (result.numberOfMatches > 0) {
+            notificationManager.success(
+              `Found ${result.numberOfMatches} match${result.numberOfMatches !== 1 ? 'es' : ''}`, 
+              message
+            );
+          } else {
+            notificationManager.warning(
+              `No matches found for ${element.devName}`,
+              message
+            );
+          }
         }
       } catch (error) {
         console.error(`❌ Error evaluating XPath during view:`, error);
@@ -544,15 +672,21 @@ export const LocatorElementList = ({
         updateElementsAndNotify(updatedElements);
       }
     } else {
-      message.warning(`No XPath expression for ${element.devName}`);
+      notificationManager.warning(`No XPath expression for ${element.devName}`, message);
     }
   };
 
-  // Handle inline edit updates using XPathManager
+  // Handle element inline edit updates using XPathManager
   const handleElementUpdated = (updatedElement, field) => {
+    console.log(`Element updated: ${updatedElement.devName}, field: ${field}`);
+    
     if (field === 'xpathExpression') {
+      // For XPath changes, handle evaluation and UI updates together
       // Evaluate the new XPath immediately using XPathManager
-      const result = xpathManager.evaluateXPath(updatedElement.xpath.xpathExpression);
+      const result = xpathManager.evaluateXPath(updatedElement.xpath.xpathExpression, {
+        elementId: updatedElement.id,
+        elementPlatform: updatedElement.platform
+      });
       
       // Update the element with the evaluation results and the new XPath
       const updatedElements = elements.map(item => {
@@ -564,20 +698,56 @@ export const LocatorElementList = ({
               xpathExpression: updatedElement.xpath.xpathExpression,
               numberOfMatches: result.numberOfMatches,
               isValid: result.isValid,
-              matchingNodes: result.matchingNodes || []
+              matchingNodes: result.matchingNodes || [],
+              _lastUpdateTime: Date.now() // Track update time
             }
           };
         }
         return item;
       });
       
-      // Update elements and notify
+      // Update elements and notify - this updates the UI in a single batch
       updateElementsAndNotify(updatedElements);
       
-      // Notify parent that a XPath has changed (for highlighting)
-      onXPathChange && onXPathChange(updatedElement.xpath.xpathExpression);
-    } else {
-      // Update other fields
+      // Notify parent that XPath has changed (for highlighting)
+      onXPathChange && onXPathChange(updatedElement.xpath.xpathExpression, {
+        elementId: updatedElement.id,
+        elementPlatform: updatedElement.platform
+      });
+    } 
+    else if (field === 'consolidated' || field === 'highlight' || field === 'self_fix') {
+      // For updates from highlighting, consolidated events, or self-fixes,
+      // make sure we don't trigger additional evaluations
+      console.log(`🔄 Processing special update type: ${field} for element ${updatedElement.devName}`);
+      
+      // Important: always clear evaluation state to prevent stuck badges
+      const finalElement = {
+        ...updatedElement,
+        xpath: {
+          ...updatedElement.xpath,
+          _isEvaluating: false // Force clear evaluation state
+        }
+      };
+      
+      const updatedElements = elements.map(item => {
+        if (item.id === updatedElement.id) {
+          return finalElement;
+        }
+        return item;
+      });
+      
+      // For self-fixes, use the regular update method to ensure full UI updates
+      if (field === 'self_fix') {
+        console.log(`🔧 Self-fix update: updating UI for ${updatedElement.devName}`);
+        updateElementsAndNotify(updatedElements);
+      } else {
+        // For other special events, update silently
+        console.log(`🔄 Silent update for ${field} event: ${updatedElement.devName}`);
+        setElements(updatedElements);
+      }
+    }
+    else {
+      // For other field updates (like devName)
       const updatedElements = elements.map(item => {
         if (item.id === updatedElement.id) {
           return updatedElement;
@@ -616,7 +786,7 @@ export const LocatorElementList = ({
       });
     } catch (error) {
       console.error("Error fixing XPath:", error);
-      message.error("Failed to fix XPath: " + (error.message || "Unknown error"));
+      notificationManager.error("Failed to fix XPath: " + (error.message || "Unknown error"), message);
     }
   };
 

@@ -372,17 +372,12 @@ class XPathManager {
           console.log(`║ ⚠️ No nodes to highlight - result has no actualNodes data`);
         }
         
-        // Always ensure that the match count is updated in the UI
-        // This is critical for updating the element card badge
+        // Send a single consolidated update after highlighting
+        // instead of sending separate evaluationComplete and highlightsChanged events
         if (result.numberOfMatches !== undefined && elementId) {
-          console.log(`║ 🔢 Updating match count for element ${elementId}: ${result.numberOfMatches}`);
-          // This will trigger an evaluationComplete event which updates the element card
-          this.notifyListeners('evaluationComplete', {
-            result,
-            xpathExpression,
-            elementId,
-            highlight: false // Don't trigger another highlight
-          });
+          console.log(`║ 🔢 Match count for element ${elementId}: ${result.numberOfMatches} (will be included in highlight notification)`);
+          // We don't need a separate notification here as we'll send a consolidated one after highlighting
+          // This reduces redundant updates
         }
         
         // Log the node details we're sending - avoid circular references
@@ -415,22 +410,48 @@ class XPathManager {
           isIOS: platform === 'ios'
         });
         
-        // IMPORTANT: Always ensure the element card is updated after highlighting
-        // This will make sure the badge count is updated even if the evaluationComplete event
-        // was already processed or if there is a race condition
+        // CONSOLIDATED UPDATE: Send a single update after highlighting that includes both
+        // the highlight information and the evaluation result
+        // This ensures element cards are updated at the same time as highlights appear
         if (elementId && result.numberOfMatches !== undefined) {
-          console.log(`║ 🔄 POST-HIGHLIGHT UPDATE: Explicitly notifying element ${elementId} of match count ${result.numberOfMatches}`);
-          // Give a short delay to ensure highlighting completes first
+          console.log(`║ 🔄 CONSOLIDATED UPDATE: Notifying with combined highlight and evaluation data`);
+          console.log(`║ 🔢 Element ${elementId} has ${result.numberOfMatches} matches`);
+          
+          // Send a consolidated notification with both highlight and evaluation data
+          // CRITICAL: Use bypassDebounce to ensure this notification is ALWAYS sent
+          // This fixes stuck "evaluating" state issues when XML is already loaded
+          this.notifyListeners('evaluationComplete', {
+            result,
+            xpathExpression,
+            elementId,
+            highlight: false, // Don't trigger another highlight
+            fromHighlighter: true, // Flag to indicate this came from highlight process
+            consolidated: true, // Flag to indicate this is a consolidated update
+            timestamp: Date.now() // Add timestamp to help track event timing
+          }, {
+            // Force immediate delivery to break out of stuck states
+            immediate: true,
+            bypassDebounce: true // Crucial - ignore debouncing to ensure delivery
+          });
+          
+          // As a safety measure, send a second notification after a small delay
+          // This helps ensure ElementCard components receive the update
           setTimeout(() => {
-            console.log(`║ 🔢 Sending delayed evaluationComplete event for element ${elementId} with ${result.numberOfMatches} matches`);
+            console.log(`║ 🔄 SAFETY NOTIFICATION: Sending backup notification for ${elementId}`);
             this.notifyListeners('evaluationComplete', {
               result,
               xpathExpression,
               elementId,
-              highlight: false, // Don't trigger another highlight
-              fromHighlighter: true // Flag to indicate this is coming from a highlight operation
+              highlight: false,
+              fromHighlighter: true,
+              consolidated: true,
+              isBackupNotification: true,
+              timestamp: Date.now()
+            }, {
+              immediate: true,
+              bypassDebounce: true
             });
-          }, 50);
+          }, 200);
         }
       }
       
@@ -684,79 +705,72 @@ class XPathManager {
    * @param {Object} data - Event data
    * @param {Object} [options] - Additional options
    * @param {boolean} [options.debounce=false] - Whether to debounce the event
+   * @param {boolean} [options.immediate=false] - Whether to dispatch immediately without timeout
    */
   notifyListeners(eventType, data, options = {}) {
     console.log(`║ 📣 NOTIFY LISTENERS: Event type=${eventType}, listeners=${this.listeners.length}`);
     
-    // Implement debouncing for highlightsChanged events
-    if (eventType === 'highlightsChanged') {
-      const highlightKey = (data.xpathExpression || '') + ':' + (data.platform || this.currentPlatform);
-      const now = Date.now();
+    // Create unique event key for debouncing all event types
+    const eventKey = `${eventType}:${data.elementId || 'global'}:${data.xpathExpression || ''}:${data.platform || this.currentPlatform}`;
+    const now = Date.now();
+    
+    // Global debouncing for all events to prevent redundant notifications
+    if (!options.bypassDebounce && this._lastEventTimes && this._lastEventTimes[eventKey]) {
+      const lastTime = this._lastEventTimes[eventKey];
+      const elapsed = now - lastTime;
       
-      // Check if we've just sent an identical highlight event
-      if (this._lastHighlightKey === highlightKey && 
-          this._lastHighlightTime && 
-          now - this._lastHighlightTime < 100) { // 100ms debounce
-        console.log(`║ 🔄 DEBOUNCING: Skipping duplicate highlight event (${now - this._lastHighlightTime}ms)`);
-        return; // Skip this duplicate highlight
-      }
-      
-      // Update tracking state for highlights
-      this._lastHighlightKey = highlightKey;
-      this._lastHighlightTime = now;
-      
-      console.log(`║ 🔆 HIGHLIGHTS EVENT: XPath=${data.xpathExpression?.slice(0, 30)}...`);
-      console.log(`║   Nodes: ${data.nodes?.length || 0}`);
-      console.log(`║   Node Details: ${data.nodeDetails?.length || 0}`);
-      console.log(`║   Platform: ${data.platform || 'not specified'}`);
-      console.log(`║   Current Manager Platform: ${this.currentPlatform}`);
-      
-      // Check nodes for Android bounds
-      if (data.nodes && data.nodes.length > 0) {
-        console.log(`║ 📱 HIGHLIGHT NODES CHECK (first node of ${data.nodes.length}):`);
-        const firstNode = data.nodes[0];
-        if (firstNode) {
-          console.log(`║   Node Type: ${firstNode.nodeType || typeof firstNode}`);
-          console.log(`║   Has androidBounds: ${!!firstNode.androidBounds}`);
-          console.log(`║   Has bounds: ${!!firstNode.bounds}`);
-          console.log(`║   Has iOS bounds (x,y,w,h): ${!!(firstNode.x !== undefined && firstNode.width !== undefined)}`);
-          
-          if (firstNode.androidBounds) {
-            console.log(`║   Android Bounds: ${JSON.stringify(firstNode.androidBounds)}`);
-          }
-          
-          if (firstNode.bounds) {
-            console.log(`║   Bounds attribute: ${firstNode.bounds}`);
-          }
-        }
-      }
-      
-      // Log details about the first few nodes - avoid circular references
-      try {
-        if (data.nodeDetails && data.nodeDetails.length > 0) {
-          const sample = data.nodeDetails.slice(0, 2);
-          const safeDetails = sample.map(n => ({
-            index: n.index,
-            nodeName: n.nodeName,
-            bounds: n.bounds,
-            hasAndroidBounds: !!n.androidBounds,
-            x: n.x,
-            y: n.y
-          }));
-          console.log(`║   Sample node details:`, JSON.stringify(safeDetails, null, 2));
-        }
-      } catch (err) {
-        console.log(`║   ⚠️ Could not stringify node details: ${err.message}`);
+      // Different debounce windows for different event types
+      const debounceWindow = 
+        eventType === 'highlightsChanged' ? 100 : // 100ms for highlights
+        eventType === 'evaluationComplete' ? 50 : // 50ms for evaluation results
+        30; // 30ms for other events
+        
+      if (elapsed < debounceWindow) {
+        console.log(`║ 🔄 DEBOUNCING: Skipping duplicate ${eventType} event (${elapsed}ms < ${debounceWindow}ms)`);
+        return; // Skip this duplicate event
       }
     }
     
-    // Use an immediate timeout to break the circular reference chain
-    // This prevents infinite loops by making the event async
-    setTimeout(() => {
+    // Update event timing cache
+    this._lastEventTimes = this._lastEventTimes || {};
+    this._lastEventTimes[eventKey] = now;
+    
+    // Special handling for evaluationComplete events to avoid redundant UI updates
+    if (eventType === 'evaluationComplete' && data.elementId) {
+      // If this is a post-highlight update and we've already notified for this element,
+      // only send the update if we don't have a recent update for this element/xpath combo
+      if (data.fromHighlighter && this._recentEvaluationUpdates && this._recentEvaluationUpdates[data.elementId]) {
+        const lastUpdateTime = this._recentEvaluationUpdates[data.elementId].time;
+        const elapsed = now - lastUpdateTime;
+        
+        // If we've updated this element recently, check if the result is the same
+        if (elapsed < 300 && this._recentEvaluationUpdates[data.elementId].count === data.result.numberOfMatches) {
+          console.log(`║ 🔄 SKIPPING REDUNDANT UPDATE: Element ${data.elementId} already updated ${elapsed}ms ago with same count`);
+          return; // Skip redundant update
+        }
+      }
+      
+      // Track this evaluation update
+      this._recentEvaluationUpdates = this._recentEvaluationUpdates || {};
+      this._recentEvaluationUpdates[data.elementId] = {
+        time: now,
+        count: data.result.numberOfMatches
+      };
+    }
+    
+    // Specific logging for highlight events
+    if (eventType === 'highlightsChanged') {
+      console.log(`║ 🔆 HIGHLIGHTS EVENT: XPath=${data.xpathExpression?.slice(0, 30)}...`);
+      console.log(`║   Nodes: ${data.nodes?.length || 0}`);
+      console.log(`║   Platform: ${data.platform || 'not specified'}`);
+    }
+    
+    // Dispatch the event - either immediately or with a minimal timeout
+    // Using requestAnimationFrame for better integration with React's rendering cycle
+    const dispatchEvent = () => {
       console.log(`║ 🔄 Dispatching event to ${this.listeners.length} listeners`);
       this.listeners.forEach((listener, index) => {
         try {
-          console.log(`║   Calling listener #${index + 1}`);
           listener(eventType, data);
           console.log(`║   Listener #${index + 1} completed`);
         } catch (error) {
@@ -765,7 +779,18 @@ class XPathManager {
       });
       console.log(`║ ✅ Event dispatch complete`);
       console.log("╚══════════════════════════════════════════════════════");
-    }, 0);
+    };
+    
+    // Use requestAnimationFrame for better visual updates when available
+    if (typeof window !== 'undefined' && window.requestAnimationFrame && !options.immediate) {
+      window.requestAnimationFrame(dispatchEvent);
+    } else if (options.immediate) {
+      // Immediate dispatch without any timeout
+      dispatchEvent();
+    } else {
+      // Fallback to setTimeout with 0 delay
+      setTimeout(dispatchEvent, 0);
+    }
   }
 }
 
