@@ -84,12 +84,16 @@ function groupFailingXPathsByStateAndPlatform(failingXPaths: ElementWithLocator[
   const groups: Record<string, any> = {};
   
   for (const element of failingXPaths) {
-    const key = `${element.stateId}_${element.platform}`;
+    // Normalize stateId and platform for consistent grouping
+    const stateId = element.stateId || '';
+    const platform = (element.platform || '').toLowerCase();
+    const key = `${stateId}::${platform}`;
     
     if (!groups[key]) {
       groups[key] = {
         stateId: element.stateId,
-        platform: element.platform,
+        platform: element.platform, // Keep original platform for display
+        platformNormalized: platform, // Store normalized version
         elements: [],
       };
     }
@@ -123,24 +127,34 @@ async function addStateDataToGroups(groups: Record<string, any>, page: Page): Pr
       continue;
     }
     
-    // Check if the platform version exists
-    if (!state.versions || !state.versions[platform]) {
-      Logger.warn(`Warning: No version for platform ${platform} in state ${stateId}`);
+    // Check if the platform version exists - normalize for case-insensitive comparison
+    const platformNormalized = platform.toLowerCase();
+    
+    // First try direct match
+    if (state.versions && state.versions[platform]) {
+      // Direct match found - use it
+      group.screenshot = state.versions[platform].screenShot;
+      group.pageSource = state.versions[platform].pageSource;
+      group.processingStatus = 'ready';
+    } else {
+      Logger.info(`No direct match for platform ${platform} in state ${stateId}, trying case-insensitive match`);
       
       // Try case-insensitive match
       const foundVersion = Object.keys(state.versions || {}).find(
-        v => v.toLowerCase() === platform.toLowerCase()
+        v => v.toLowerCase() === platformNormalized
       );
       
       if (foundVersion) {
         Logger.info(`Found case-insensitive match: "${foundVersion}" for platform ${platform}`);
-        group.platform = foundVersion;
+        group.platform = foundVersion; // Store the canonical version from the state
         group.screenshot = state.versions[foundVersion].screenShot;
         group.pageSource = state.versions[foundVersion].pageSource;
         group.processingStatus = 'ready';
       } else {
+        Logger.warn(`Warning: No version for platform ${platform} in state ${stateId}`);
         group.processingStatus = 'missing_platform_version';
       }
+    }
       
       continue;
     }
@@ -197,8 +211,8 @@ async function processXPathFixGroups(groups: Record<string, any>, pipelineId: st
         }
       }
       
-      // Process in smaller batches if there are many elements
-      const batchSize = 5; // Smaller batch size for XPath repair
+      // Process in batches of 50 elements
+      const batchSize = 50; // Increased batch size for better performance
       const batches = [];
       
       for (let i = 0; i < elementsCount; i += batchSize) {
