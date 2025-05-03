@@ -19,3 +19,4 @@ junit-test-results.xml
 junit-testresults.xml
 output
 app/common/renderer/lib/ai/config.js
+**/.claude/settings.local.json

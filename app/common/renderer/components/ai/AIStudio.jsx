@@ -36,8 +36,8 @@ const AIStudio = (props) => {
     (async () => {
       try {
         // Safe call with checks
-        bindWindowClose && bindWindowClose();
-        switchTabs && switchTabs(SESSION_BUILDER_TABS.AI);  // Default to AI tab
+        // bindWindowClose && bindWindowClose();
+        // switchTabs && switchTabs(SESSION_BUILDER_TABS.AI);  // Default to AI tab
         
         // Set up event listeners with safety checks
         if (typeof ipcRenderer !== 'undefined' && ipcRenderer) {

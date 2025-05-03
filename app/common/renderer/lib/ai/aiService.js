@@ -97,6 +97,12 @@ export class AIService {
    */
   async repairFailedXpaths(model, prompt, stateId, temperature = 0) {
     try {
+      //console.log( JSON.stringify( zodResponseFormat(createXpathRepairSchema(stateId), "XpathRepairResponse").json_schema ,0,2))
+      // return
+      prompt['generationConfig']= {
+        responseSchema:  zodResponseFormat(createXpathRepairSchema(stateId), "XpathRepairResponse"), // Your JSON schema
+        responseFormat: 'application/json'
+      }
       Logger.log(`Repairing failed XPaths with model ${model}`, "info");
       console.log('##################################################################################################')
       console.log(temperature)
@@ -105,10 +111,11 @@ export class AIService {
       return await this.client.chat.completions.create({
         model,
         messages: prompt,
-         temperature,
+         
+         response_format: zodResponseFormat(createXpathRepairSchema(stateId), "XpathRepairResponse")  
         // max_tokens: CONFIG.GENERATION.maxOutputTokens || 4096,
         // top_p: CONFIG.GENERATION.topP || 0.1,
-        response_format: zodResponseFormat(createXpathRepairSchema(stateId), "XpathRepairResponse"),
+        
       });
     } catch (error) {
       Logger.error(`Error calling ${model} (repairFailedXpaths):`, error);

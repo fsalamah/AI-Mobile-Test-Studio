@@ -1,0 +1,88 @@
+.app-logo {
+  height: 32px;
+  margin: 16px;
+}
+
+.site-layout-content {
+  min-height: 280px;
+  padding: 24px;
+  background: #fff;
+}
+
+.ant-layout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-title {
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.ant-layout-sider {
+  background: #fff;
+  box-shadow: 2px 0 8px 0 rgba(29, 35, 41, 0.05);
+}
+
+.sidebar-logo {
+  height: 32px;
+  margin: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+}
+
+.card-container {
+  margin-top: 16px;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.drag-area {
+  border: 2px dashed #d9d9d9;
+  border-radius: 4px;
+  padding: 24px;
+  text-align: center;
+  background: #fafafa;
+  margin-bottom: 24px;
+  transition: all 0.3s;
+}
+
+.drag-area:hover {
+  border-color: #1890ff;
+}
+
+.drag-active {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+.element-list {
+  max-height: 600px;
+  overflow-y: auto;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.element-card {
+  margin-bottom: 8px;
+  border-left: 3px solid #1890ff;
+}
+
+.code-preview {
+  margin-top: 24px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.language-selector {
+  margin-bottom: 16px;
+}

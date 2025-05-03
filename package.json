@@ -92,6 +92,7 @@
     "i18next-localstorage-backend": "4.2.0",
     "lodash": "4.17.21",
     "moment": "2.30.1",
+    "openai": "^4.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-i18next": "15.4.1",
@@ -100,10 +101,8 @@
     "react-resizable": "^3.0.5",
     "react-router": "7.5.0",
     "web2driver": "3.0.4",
+    "xmldom": "^0.6.0",
     "xpath": "0.0.34",
-    
-    "openai": "^4.0.0",
-    "xmldom": "^0.6.0",    
     "zod": "^3.22.2"
   },
   "devDependencies": {
@@ -119,7 +118,7 @@
     "electron": "35.1.5",
     "electron-builder": "26.0.12",
     "electron-devtools-installer": "4.0.0",
-    "electron-vite": "3.1.0",
+    "electron-vite": "^3.1.0",
     "eslint": "9.24.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-simple-import-sort": "12.1.1",

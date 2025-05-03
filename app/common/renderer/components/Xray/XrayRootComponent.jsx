@@ -1,13 +1,26 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import ResizableTabs from './ResizableTabs.jsx';
-import { Button, Input, Select, message, Modal } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, RightOutlined, ReloadOutlined } from '@ant-design/icons';
-import { LocatorElementList } from '../ai/LocatorElementList.js';
+import { Button, Input, Select, message, Modal, Dropdown, Badge, Tooltip } from 'antd';
+import { 
+  ArrowLeftOutlined, 
+  SaveOutlined, 
+  CloseOutlined, 
+  RightOutlined, 
+  ReloadOutlined,
+  ToolOutlined,
+  BulbOutlined,
+  CheckCircleOutlined,
+  WarningOutlined,
+  StopOutlined
+} from '@ant-design/icons';
+import { LocatorElementList } from '../ai/LocatorElementList/LocatorElementList.tsx';
 import _ from 'lodash'; // Import lodash for debounce
 
 import ImageHighlighter from './ImageHighlighter.jsx';
 import { getBase64Image, getPageSource, getPageStateLookupPerOs } from '../../lib/ai/JsonHelper.js';
 import XMLViewer from '../ai/XpathHighlighter.jsx';
+import { connect } from 'react-redux';
+import { startXpathFixProcess } from '../../reducers/ai';
 
 const { Option } = Select;
 
@@ -125,13 +138,101 @@ const appStateReducer = (state, action) => {
   }
 };
 
+// XPath Fix Button Component
+const XPathFixButton = ({ onClick, failingCount = 0, loading = false }) => {
+  return (
+    <Tooltip title="Fix failing XPaths using AI">
+      <Badge count={failingCount > 0 ? failingCount : 0} size="small">
+        <Button
+          icon={<ToolOutlined />}
+          onClick={onClick}
+          loading={loading}
+          disabled={failingCount === 0}
+        >
+          Fix XPaths
+        </Button>
+      </Badge>
+    </Tooltip>
+  );
+};
+
+// XPath Alternatives Component
+const XPathAlternatives = ({ alternatives = [], onSelect, matchCount = 0 }) => {
+  const [visible, setVisible] = useState(false);
+  
+  // Don't render anything if no alternatives
+  if (!alternatives || alternatives.length === 0) {
+    return null;
+  }
+  
+  // Get icon and color based on match count
+  const getStatusIndicator = (count) => {
+    if (count === undefined || count === null) return { icon: <StopOutlined />, color: '#f5222d' };
+    if (count === 0) return { icon: <StopOutlined />, color: '#f5222d' };
+    if (count === 1) return { icon: <CheckCircleOutlined />, color: '#52c41a' }; // Exact match - green
+    return { icon: <WarningOutlined />, color: '#faad14' }; // Multiple matches - yellow
+  };
+  
+  // Create menu items for each alternative
+  const menuItems = alternatives.map((alt, index) => {
+    const status = getStatusIndicator(alt.matchCount);
+    
+    return {
+      key: index.toString(),
+      label: (
+        <div style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Badge 
+            count={alt.matchCount || 0} 
+            size="small" 
+            style={{ backgroundColor: status.color, marginRight: '8px' }}
+          />
+          <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+            {alt.xpath}
+          </span>
+        </div>
+      ),
+      icon: status.icon,
+      onClick: () => {
+        onSelect(alt);
+        setVisible(false);
+      }
+    };
+  });
+  
+  // Current XPath status
+  const currentStatus = getStatusIndicator(matchCount);
+  
+  return (
+    <Dropdown
+      menu={{ items: menuItems }}
+      open={visible}
+      onOpenChange={setVisible}
+      trigger={['click']}
+    >
+      <Tooltip title="Alternative XPath suggestions">
+        <BulbOutlined 
+          style={{ 
+            color: currentStatus.color,
+            cursor: 'pointer',
+            fontSize: '14px',
+            padding: '4px'
+          }} 
+        />
+      </Tooltip>
+    </Dropdown>
+  );
+};
+
 const FinalResizableTabsContainer = ({ 
   pageChanged = () => {}, 
   onExit, 
   page, 
   viewMode = 'pipeline-stage', 
   onProceedToPom = () => {}, 
-  onRegenerateLocators = () => {} 
+  onRegenerateLocators = () => {},
+  // Redux-connected props
+  isAnalyzing = false,
+  startXpathFixProcess
 }) => {
   // References that don't cause re-renders
   const xmlViewerReadyRef = useRef(false);
@@ -141,6 +242,9 @@ const FinalResizableTabsContainer = ({
     elementBeingEvaluated: null
   });
   const isUpdatingLocatorsRef = useRef(false);
+  
+  // State for XPath fix process
+  const [isFixingXPaths, setIsFixingXPaths] = useState(false);
   
   // Combine multiple state values into a single reducer for better batching
   const [appState, dispatchAppState] = useReducer(appStateReducer, {
@@ -411,7 +515,7 @@ const FinalResizableTabsContainer = ({
       return item;
     });
     
-    // Only update if there was an actual change
+    // Only update if there's an actual change
     const hasElementChanged = JSON.stringify(updatedLocators) !== JSON.stringify(currentLocators);
     
     if (hasElementChanged) {
@@ -443,7 +547,7 @@ const FinalResizableTabsContainer = ({
     // Use the debounced evaluation
     debouncedEvaluateXPath(xpathString, updateElement);
     
-  }, [xpathState.status, debouncedEvaluateXPath]);
+  }, [xpathState.status, debouncedEvaluateXPath, dispatchAppState]);
   
   // Handle XPath match from XMLViewer with minimal dependencies
   const handleXPathMatch = useCallback((xpathResult) => {
@@ -467,7 +571,7 @@ const FinalResizableTabsContainer = ({
         }
       });
     }
-  }, [xpathState.status, xpathState.currentXPath]);
+  }, [xpathState.status, xpathState.currentXPath, dispatchAppState]);
   
   // Enhanced element evaluation with controlled state updates
   const handleElementEvaluation = useCallback(async (element) => {
@@ -521,7 +625,7 @@ const FinalResizableTabsContainer = ({
       // Process using our enhanced approach with element updating
       processXPath(xpathExpression, result => updateElementXPath(element, result));
     }
-  }, [currentStateId, currentPlatform, processXPath, updateStateView, updateElementXPath]);
+  }, [currentStateId, currentPlatform, processXPath, updateStateView, updateElementXPath, dispatchAppState]);
   
   // Handler for state change from dropdown
   const handleStateChange = useCallback((value) => {
@@ -537,12 +641,12 @@ const FinalResizableTabsContainer = ({
     
     // Update the view
     updateStateView(stateId, platform);
-  }, [updateStateView]);
+  }, [updateStateView, dispatchAppState]);
   
   // External update to matched nodes with minimal dependencies
   const updateMatchedNodes = useCallback((nodes) => {
     dispatchAppState({ type: 'SET_MATCHED_NODES', nodes: nodes || [] });
-  }, []);
+  }, [dispatchAppState]);
   
   // Update the elements in selectedPage.aiAnalysis.locators
   const handleElementListChanged = useCallback((elements) => {
@@ -612,7 +716,152 @@ const FinalResizableTabsContainer = ({
     } catch (error) {
       console.error("Error loading page states:", error);
     }
-  }, [selectedPage, currentStateId, currentPlatform, updateStateView]);
+  }, [selectedPage, currentStateId, currentPlatform, updateStateView, dispatchAppState]);
+  
+  // Function to get failing XPath count
+  const getFailingXPathCount = useCallback(() => {
+    const locators = selectedPage.aiAnalysis?.locators || [];
+    
+    return locators.filter(loc => 
+      !loc.xpath?.isValid || 
+      loc.xpath?.numberOfMatches === 0 || 
+      loc.xpath?.xpathExpression === '//*[99=0]'
+    ).length;
+  }, [selectedPage.aiAnalysis?.locators]);
+  
+  // Function to handle XPath fixing
+  const handleFixXPaths = useCallback(async () => {
+    // Get current locators
+    const locators = selectedPage.aiAnalysis?.locators || [];
+    
+    // Get failing locators
+    const failingLocators = locators.filter(loc => 
+      !loc.xpath?.isValid || 
+      loc.xpath?.numberOfMatches === 0 || 
+      loc.xpath?.xpathExpression === '//*[99=0]'
+    );
+    
+    if (failingLocators.length === 0) {
+      message.info('No failing XPaths found to repair.');
+      return;
+    }
+    
+    // Set loading state
+    setIsFixingXPaths(true);
+    message.loading(`Fixing ${failingLocators.length} failing XPaths...`, 0);
+    
+    try {
+      // Call the Redux action to start the XPath fix process
+      const fixedElements = await startXpathFixProcess(locators, selectedPage);
+      
+      if (fixedElements) {
+        // Apply the fixed elements
+        updateLocators(fixedElements);
+        
+        // Evaluate all the fixed XPaths to update their match status
+        await evaluateFixedXPaths(fixedElements);
+        
+        message.destroy();
+        message.success(`Fixed ${failingLocators.length} XPaths successfully!`);
+      } else {
+        message.destroy();
+        message.error('Failed to fix XPaths. Please check the logs for details.');
+      }
+    } catch (error) {
+      console.error('Error fixing XPaths:', error);
+      message.destroy();
+      message.error(`Error fixing XPaths: ${error.message}`);
+    } finally {
+      setIsFixingXPaths(false);
+    }
+  }, [selectedPage, startXpathFixProcess, updateLocators]);
+  
+  // Function to evaluate fixed XPaths
+  const evaluateFixedXPaths = useCallback(async (elements) => {
+    // For each element
+    for (const element of elements) {
+      // Skip elements with already working XPaths
+      if (element.xpath?.numberOfMatches === 1) {
+        continue;
+      }
+      
+      // If the element has alternatives, prepare to evaluate them
+      if (element.xpath?.alternativeXpaths && element.xpath.alternativeXpaths.length > 0) {
+        // Create an array of all XPaths to evaluate (current + alternatives)
+        const xpathsToEvaluate = [
+          { 
+            xpath: element.xpath.xpathExpression,
+            isPrimary: true 
+          },
+          ...element.xpath.alternativeXpaths.map(alt => ({
+            xpath: alt.xpath,
+            confidence: alt.confidence,
+            description: alt.description,
+            isPrimary: false
+          }))
+        ];
+        
+        // Evaluate each XPath
+        const evaluatedXPaths = [];
+        
+        for (const xpathData of xpathsToEvaluate) {
+          if (!xpathData.xpath || xpathData.xpath === '//*[99=0]') {
+            evaluatedXPaths.push({
+              ...xpathData,
+              matchCount: 0,
+              isValid: false
+            });
+            continue;
+          }
+          
+          // Evaluate this XPath
+          const result = evaluateXPathStable(xpathData.xpath);
+          
+          evaluatedXPaths.push({
+            ...xpathData,
+            matchCount: result.numberOfMatches,
+            isValid: result.isValid
+          });
+        }
+        
+        // Store the evaluated XPaths in the element
+        element.xpath.evaluatedAlternatives = evaluatedXPaths;
+        
+        // Find the first XPath with exactly 1 match
+        const exactMatch = evaluatedXPaths.find(alt => alt.matchCount === 1);
+        
+        if (exactMatch) {
+          // Use this XPath
+          element.xpath = {
+            ...element.xpath,
+            xpathExpression: exactMatch.xpath,
+            numberOfMatches: 1,
+            isValid: true
+          };
+          continue;
+        }
+        
+        // If no exact match, find the first with multiple matches
+        const multiMatch = evaluatedXPaths.find(alt => alt.matchCount > 1);
+        
+        if (multiMatch) {
+          // Use this XPath
+          element.xpath = {
+            ...element.xpath,
+            xpathExpression: multiMatch.xpath,
+            numberOfMatches: multiMatch.matchCount,
+            isValid: true
+          };
+          continue;
+        }
+      }
+    }
+    
+    // Apply updates to all elements at once
+    updateLocators([...elements]);
+    
+    return elements;
+  }, [evaluateXPathStable, updateLocators]);
   
   // Event handlers with minimal dependencies
   const handleBack = useCallback(() => {
@@ -635,14 +884,14 @@ const FinalResizableTabsContainer = ({
     } else {
       onExit(selectedPage.id);
     }
-  }, [hasChanges, onExit, pageChanged, selectedPage]);
+  }, [hasChanges, onExit, pageChanged, selectedPage, dispatchAppState]);
 
   const handleApply = useCallback(() => {
     // Raise the updated page object when applying changes
     pageChanged(selectedPage);
     dispatchAppState({ type: 'RESET_CHANGES' });
     message.success('Changes applied successfully!');
-  }, [pageChanged, selectedPage]);
+  }, [pageChanged, selectedPage, dispatchAppState]);
 
   const handleAbort = useCallback(() => {
     Modal.confirm({
@@ -674,7 +923,7 @@ const FinalResizableTabsContainer = ({
     pageChanged(selectedPage);
     dispatchAppState({ type: 'RESET_CHANGES' });
     onProceedToPom(selectedPage);
-  }, [onProceedToPom, pageChanged, selectedPage]);
+  }, [onProceedToPom, pageChanged, selectedPage, dispatchAppState]);
 
   // Group states by their name for the dropdown - memoized
   const groupedStates = useMemo(() => {
@@ -700,7 +949,6 @@ const FinalResizableTabsContainer = ({
         base64Png: imageBase64,
         matchingNodes: matchedNodes,
         pixelRatio: getPixelRatio,
-        // Use a stable identifier instead of changing state values
         key: 'image-highlighter'
       }
     },
@@ -718,7 +966,10 @@ const FinalResizableTabsContainer = ({
         matchedNodes,
         updateMatchedNodes,
         xpathState,
-        // Use a stable identifier
+        // Pass the direct evaluate function for use with alternatives
+        evaluateXPathDirectly: evaluateXPathStable,
+        // For enhancing ElementCard
+        showAlternatives: true,
         key: 'locator-list'
       }
     },
@@ -732,7 +983,6 @@ const FinalResizableTabsContainer = ({
       }
     }
   ], [
-    // Reduced dependency array with only essential dependencies
     imageBase64,
     pageXml,
     xmlKey,
@@ -773,6 +1023,15 @@ const FinalResizableTabsContainer = ({
       </Select>
     );
 
+    // Add XPath fix button
+    const xpathFixButton = (
+      <XPathFixButton
+        onClick={handleFixXPaths}
+        failingCount={getFailingXPathCount()}
+        loading={isFixingXPaths || isAnalyzing}
+      />
+    );
+
     if (viewMode === 'pipeline-stage') {
       return (
         <div style={{ 
@@ -794,6 +1053,7 @@ const FinalResizableTabsContainer = ({
             {stateSelector}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            {xpathFixButton}
             <Button 
               icon={<ReloadOutlined />} 
               onClick={handleRegenerate}
@@ -841,6 +1101,7 @@ const FinalResizableTabsContainer = ({
           {stateSelector}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          {xpathFixButton}
           <Button 
             icon={<ReloadOutlined />} 
             onClick={handleRegenerate}
@@ -870,8 +1131,12 @@ const FinalResizableTabsContainer = ({
     handleProceed,
     handleBack,
     handleApply,
+    handleFixXPaths,
     hasChanges,
-    viewMode
+    viewMode,
+    getFailingXPathCount,
+    isFixingXPaths,
+    isAnalyzing
   ]);
 
   return (
@@ -900,4 +1165,14 @@ const FinalResizableTabsContainer = ({
   );
 };
 
-export default FinalResizableTabsContainer;
+// Map Redux state to props
+const mapStateToProps = (state) => ({
+  isAnalyzing: state.ai?.isAnalyzing || false
+});
+
+// Map Redux actions to props
+const mapDispatchToProps = {
+  startXpathFixProcess
+};
+
+export default connect(mapStateToProps, mapDispatchToProps)(FinalResizableTabsContainer);

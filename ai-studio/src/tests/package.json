@@ -1,0 +1,22 @@
+{
+  "name": "ai-studio-integration-tests",
+  "version": "1.0.0",
+  "description": "Integration tests for AI Studio",
+  "main": "integration.test.js",
+  "scripts": {
+    "test": "jest integration.test.js",
+    "test:watch": "jest --watch integration.test.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    }
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.0",
+    "@babel/preset-env": "^7.20.2",
+    "babel-jest": "^29.5.0",
+    "jest": "^29.5.0"
+  }
+}
