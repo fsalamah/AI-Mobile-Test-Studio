@@ -60,6 +60,20 @@ const SidePanel = ({
             >
                 {saving ? "Saving..." : "Save Project"}
             </Menu.Item>
+            
+            {/* Show a return to inspector option if available */}
+            {fileOperations.returnToInspector && (
+                <Menu.Divider />
+            )}
+            {fileOperations.returnToInspector && (
+                <Menu.Item 
+                    key="return_to_inspector" 
+                    icon={<LeftOutlined />} 
+                    onClick={fileOperations.returnToInspector}
+                >
+                    Return to Inspector
+                </Menu.Item>
+            )}
         </Menu>
     );
 

@@ -10,7 +10,7 @@ import PageDetailView from "./PageDetailView.jsx";
 import PageXrayView from "./PageXrayView.jsx";
 import CodeViewer from "./CodeViewer.jsx";
 import AIProgressModal from "./AIProgressModal.jsx";
-import  EmptyStateMessage  from "./EmptyStateMessage.jsx";
+import EmptyStateMessage from "./EmptyStateMessage.jsx";
 import { PageOperations } from "./PageOperations.jsx";
 
 // Import utilities
@@ -21,9 +21,17 @@ import { chooseFile, saveToFile, openSavedFile, tryOpenLastFile } from "./utils/
 import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
 import { executeXpathPipeline } from "../../lib/ai/pipeline.js";
 
+// Import project state manager
+import { saveProjectState, loadProjectState, hasSavedProjectState } from "../../lib/ai/projectStateManager.js";
+
 const { Content } = Layout;
 
-export default function AppiumAnalysisPanel() {
+export default function AppiumAnalysisPanel({
+    isEmbedded = false,
+    inspectorXml = '',
+    inspectorScreenshot = '',
+    onClose = () => {}
+}) {
     // Core state
     const [pages, setPages] = useState([]);
     const [selectedPageId, setSelectedPageId] = useState(null);
@@ -59,11 +67,50 @@ export default function AppiumAnalysisPanel() {
         [pages, searchTerm]
     );
     
-    // Try to open the last used file on startup
+    // Load project state from localStorage on startup
     useEffect(() => {
-        // Only try to open if there are no pages loaded
+        // Only try to load if there are no pages already in state
         if (pages.length === 0) {
-            tryOpenLastFile(setPages, setFileHandle, resetUIState);
+            console.log("No pages loaded, checking for saved project state...");
+            
+            // Check if we have saved state in localStorage
+            if (hasSavedProjectState()) {
+                console.log("Found saved project state, loading...");
+                const savedState = loadProjectState();
+                
+                // Restore pages
+                if (savedState.pages && savedState.pages.length > 0) {
+                    console.log(`Restoring ${savedState.pages.length} pages from saved state`);
+                    setPages(savedState.pages);
+                    
+                    // Restore selected page and view if available
+                    if (savedState.selectedPageId) {
+                        console.log(`Restoring selected page: ${savedState.selectedPageId}`);
+                        setSelectedPageId(savedState.selectedPageId);
+                        
+                        // Set the view if we have one saved
+                        if (savedState.currentView) {
+                            console.log(`Restoring view: ${savedState.currentView}`);
+                            setCurrentView(savedState.currentView);
+                            
+                            // If we were in xray view, restore the mode
+                            if (savedState.currentView === 'pageXray') {
+                                setXrayViewMode('default');
+                            }
+                        }
+                    }
+                    
+                    // Restore file handle if available
+                    if (savedState.fileHandle) {
+                        console.log("Restoring file handle");
+                        setFileHandle(savedState.fileHandle);
+                    }
+                }
+            } else {
+                // Fall back to trying to open the last used file
+                console.log("No saved state, trying to open last file...");
+                tryOpenLastFile(setPages, setFileHandle, resetUIState);
+            }
         }
     }, []);
 
@@ -76,6 +123,28 @@ export default function AppiumAnalysisPanel() {
             setAutoExpandParent(false);
         }
     }, [searchTerm, initialExpandedKeys]);
+    
+    // Save project state on significant state changes only
+    useEffect(() => {
+        // Only save if we have pages and the change is significant
+        if (pages.length > 0) {
+            console.log("Saving page data to localStorage...");
+            // Using the optimized saveProjectState which handles debouncing internally
+            saveProjectState(pages, selectedPageId, currentView, fileHandle);
+        }
+    // Only trigger on page count changes or file handle changes to avoid excessive saves
+    // The saveProjectState function will handle checking for other changes internally
+    }, [pages.length, fileHandle]);
+    
+    // Save navigation state on view/selection changes (lightweight operation)
+    useEffect(() => {
+        // Only save navigation state when we have pages
+        if (pages.length > 0 && (selectedPageId || currentView)) {
+            // We're passing the full pages array, but the optimized saveProjectState 
+            // will only save the non-page data in this case, which is very fast
+            saveProjectState(pages, selectedPageId, currentView, fileHandle);
+        }
+    }, [selectedPageId, currentView]);
 
     // Handle selected page changes
     useEffect(() => {
@@ -369,6 +438,15 @@ export default function AppiumAnalysisPanel() {
         
         openSavedFile: async () => {
             await openSavedFile(setPages, setFileHandle, resetUIState);
+        },
+        
+        // Handler for returning to inspector when embedded
+        returnToInspector: () => {
+            // Save state before closing
+            saveProjectState(pages, selectedPageId, currentView, fileHandle);
+            
+            // Call the provided onClose callback
+            onClose();
         }
     };
     

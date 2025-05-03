@@ -1,48 +1,72 @@
-// import React, { useState } from 'react';
-// import AppiumInspector from './AppiumInspector';
+import React, { useState, useEffect } from 'react';
+import { Modal, Button } from 'antd';
+import { FullscreenOutlined, CloseOutlined } from '@ant-design/icons';
+import AppiumAnalysisPanel from './AppiumAnalysisPanel';
 
-// const XrayLauncher = () => {
-//   const [isOpen, setIsOpen] = useState(false);
+/**
+ * Launcher component for Xray/AI Studio functionality
+ * Used to embed AI Studio within the inspector or launch it as full-screen modal
+ */
+const XrayLauncher = ({ 
+  isInspectorActive = false, 
+  sessionXml = '',
+  sessionScreenshot = '',
+  onClose = () => {}
+}) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
-//   return (
-//     <>
-//       <button onClick={() => setIsOpen(true)}>
-//         Open Inspector (Full‑Screen)
-//       </button>
+  // Track when launched from inspector to potentially import current session
+  useEffect(() => {
+    if (isModalOpen && isInspectorActive && !hasInitialized) {
+      console.log("XrayLauncher: Initialized from inspector, could import current session");
+      setHasInitialized(true);
+      
+      // In the future, we could add logic here to import the current session as a page
+    }
+  }, [isModalOpen, isInspectorActive, hasInitialized]);
 
-//       {isOpen && (
-//         <div
-//           style={{
-//             position: 'fixed',
-//             top: 0, left: 0, right: 0, bottom: 0,
-//             backgroundColor: 'rgba(0, 0, 0, 0.8)',
-//             zIndex: 9999,
-//             display: 'flex',
-//             flexDirection: 'column'
-//           }}
-//         >
-//           <div style={{ padding: 10, textAlign: 'right' }}>
-//             <button
-//               style={{
-//                 background: '#333',
-//                 color: '#fff',
-//                 border: 'none',
-//                 padding: '8px 12px',
-//                 borderRadius: 4,
-//                 cursor: 'pointer'
-//               }}
-//               onClick={() => setIsOpen(false)}
-//             >
-//               Close
-//             </button>
-//           </div>
-//           <div style={{ flex: 1, overflow: 'hidden' }}>
-//             <AppiumInspector />
-//           </div>
-//         </div>
-//       )}
-//     </>
-//   );
-// };
+  const showModal = () => {
+    setIsModalOpen(true);
+  };
 
-// export default XrayLauncher;
+  const handleClose = () => {
+    setIsModalOpen(false);
+    onClose();
+  };
+
+  return (
+    <>
+      <Button 
+        type="primary" 
+        icon={<FullscreenOutlined />} 
+        onClick={showModal}
+      >
+        AI Studio
+      </Button>
+
+      <Modal
+        title="AI Automation Studio"
+        open={isModalOpen}
+        onCancel={handleClose}
+        footer={null}
+        width="100%"
+        style={{ top: 0, paddingBottom: 0 }}
+        bodyStyle={{ height: 'calc(100vh - 55px)', padding: '0', overflow: 'hidden' }}
+        closeIcon={<CloseOutlined />}
+        maskClosable={false}
+      >
+        <div style={{ height: '100%', overflow: 'hidden' }}>
+          <AppiumAnalysisPanel
+            isEmbedded={true}
+            inspectorXml={sessionXml}
+            inspectorScreenshot={sessionScreenshot}
+            onClose={handleClose}
+          />
+        </div>
+      </Modal>
+    </>
+  );
+};
+
+export default XrayLauncher;
