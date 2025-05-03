@@ -13,9 +13,12 @@ const aiService = new AIService();
  * @param {Array} elementsWithXPaths - Elements with XPaths from executeXpathPipeline
  * @param {Object} page - The page object with states and screenshots
  * @param {Function} progressCallback - Optional callback for progress updates
+ * @param {Object} options - Additional options
+ * @param {boolean} options.singleElementMode - If true, fix only the first element
+ * @param {boolean} options.failingXPathsOnly - If true, only include failing XPaths
  * @returns {Array} - Elements with repaired XPaths
  */
-async function executeXpathFixPipeline(elementsWithXPaths, page, progressCallback) {
+async function executeXpathFixPipeline(elementsWithXPaths, page, progressCallback, options = {}) {
   Logger.log("Starting XPath fix pipeline...", "info");
   
   // Initialize progress callback if provided
@@ -28,17 +31,32 @@ async function executeXpathFixPipeline(elementsWithXPaths, page, progressCallbac
     element.xpath.xpathExpression === '//*[99=0]'
   );
   
+  // If in single element mode, only process the first element
+  const xpathsToProcess = options.singleElementMode && elementsWithXPaths.length > 0 
+    ? [elementsWithXPaths[0]] 
+    : options.failingXPathsOnly 
+      ? failingXPaths 
+      : elementsWithXPaths;
+  
   Logger.log(`Found ${failingXPaths.length} failing XPaths out of ${elementsWithXPaths.length} total`, "info");
-  await FileUtils.writeOutputToFile(failingXPaths, "failing_xpaths");
+  if (options.singleElementMode) {
+    Logger.log(`Single element mode: Processing only one element`, "info");
+  }
+  if (options.failingXPathsOnly) {
+    Logger.log(`Failing XPaths only: Processing only failing XPaths`, "info");
+  }
+  
+  await FileUtils.writeOutputToFile(xpathsToProcess, "xpaths_to_process");
   
   // Update progress with initial data
   updateProgress('start', {
-    totalFailingXPaths: failingXPaths.length,
-    totalElements: elementsWithXPaths.length
+    totalFailingXPaths: xpathsToProcess.length,
+    totalElements: elementsWithXPaths.length,
+    singleElementMode: options.singleElementMode
   });
   
-  if (failingXPaths.length === 0) {
-    Logger.log("No failing XPaths found, skipping repair process", "info");
+  if (xpathsToProcess.length === 0) {
+    Logger.log("No XPaths to process, skipping repair process", "info");
     updateProgress('complete', { fixedCount: 0, errorCount: 0 });
     return elementsWithXPaths;
   }
@@ -46,18 +64,18 @@ async function executeXpathFixPipeline(elementsWithXPaths, page, progressCallbac
   try {
     // Group failing XPaths by stateId and platform
     updateProgress('grouping', 'processing', 'Grouping elements by state and platform');
-    const groupsToFix = groupFailingXPathsByStateAndPlatform(failingXPaths);
+    const groupsToFix = groupFailingXPathsByStateAndPlatform(xpathsToProcess);
     const groupCount = Object.keys(groupsToFix).length;
     
-    Logger.log(`Grouped failing XPaths into ${groupCount} groups by state and platform`, "info");
-    await FileUtils.writeOutputToFile(groupsToFix, "failing_xpath_groups");
+    Logger.log(`Grouped XPaths into ${groupCount} groups by state and platform`, "info");
+    await FileUtils.writeOutputToFile(groupsToFix, "xpath_groups");
     updateProgress('grouping', 'complete', `Created ${groupCount} groups`, { totalGroups: groupCount });
     
     // Find state data for each group
     updateProgress('stateData', 'processing', 'Loading screenshots and XML for each group');
     const groupsWithStateData = await addStateDataToGroups(groupsToFix, page);
-    Logger.log("Added state data to failing XPath groups", "info");
-    await FileUtils.writeOutputToFile(groupsWithStateData, "failing_xpath_groups_with_state_data");
+    Logger.log("Added state data to XPath groups", "info");
+    await FileUtils.writeOutputToFile(groupsWithStateData, "xpath_groups_with_state_data");
     updateProgress('stateData', 'complete', 'Associated screenshots and XML with groups');
     
     // Process each group to fix XPaths
@@ -104,7 +122,7 @@ async function executeXpathFixPipeline(elementsWithXPaths, page, progressCallbac
     updateProgress('complete', true, {
       fixedCount,
       errorCount,
-      totalFixed: failingXPaths.length
+      totalFixed: xpathsToProcess.length
     });
     
     return updatedElements;

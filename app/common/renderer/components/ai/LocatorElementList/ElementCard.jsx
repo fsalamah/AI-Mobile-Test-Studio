@@ -8,7 +8,8 @@ import {
   AppleOutlined,
   AndroidOutlined,
   CheckOutlined,
-  CloseOutlined
+  CloseOutlined,
+  ToolOutlined
 } from '@ant-design/icons';
 import { getMatchStatus, getPlatformIconStyle, validateElementUniqueness } from './elementUtils';
 import XPathAlternatives from './XPathAlternatives';
@@ -28,6 +29,7 @@ import XPathAlternatives from './XPathAlternatives';
  * @param {function} props.onElementUpdated - Element update handler
  * @param {Array} props.elements - All elements (for uniqueness validation)
  * @param {function} props.evaluateXPath - Function to evaluate XPath
+ * @param {function} props.onFixXPath - Handler for fixing single element XPath
  */
 export const ElementCard = ({
   item,
@@ -39,7 +41,8 @@ export const ElementCard = ({
   onView,
   onElementUpdated,
   elements,
-  evaluateXPath
+  evaluateXPath,
+  onFixXPath
 }) => {
   // Inline editing states
   const [editingField, setEditingField] = useState(null);
@@ -307,6 +310,16 @@ export const ElementCard = ({
             onClick={() => onView(item)}
             style={{ padding: '0 4px', height: '22px' }}
           />
+          {onFixXPath && (
+            <Tooltip title="Fix XPath using AI">
+              <Button 
+                size="small"
+                icon={<ToolOutlined style={{ fontSize: '10px' }} />} 
+                onClick={() => onFixXPath(item)}
+                style={{ padding: '0 4px', height: '22px' }}
+              />
+            </Tooltip>
+          )}
           <Popconfirm
             title="Delete this element?"
             onConfirm={() => onDelete(item)}

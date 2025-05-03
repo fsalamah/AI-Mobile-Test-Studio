@@ -19,6 +19,7 @@ import ElementCard from './ElementCard';
  * @param {function} props.onView - View element handler
  * @param {function} props.onElementUpdated - Element update handler
  * @param {Array} props.allElements - All elements (for uniqueness validation)
+ * @param {function} props.onFixXPath - Handler for fixing single element XPath
  */
 export const ElementsGroup = ({
   stateId,
@@ -32,7 +33,8 @@ export const ElementsGroup = ({
   onEvaluate,
   onView,
   onElementUpdated,
-  allElements
+  allElements,
+  onFixXPath
 }) => {
   if (!elements || elements.length === 0) {
     return null;
@@ -80,6 +82,7 @@ export const ElementsGroup = ({
                 onView={onView}
                 onElementUpdated={onElementUpdated}
                 elements={allElements}
+                onFixXPath={onFixXPath}
               />
             </List.Item>
           );

@@ -299,6 +299,28 @@ export const LocatorElementList = ({
     }
   };
 
+  // Fix XPath for a single element
+  const handleFixXPath = (element) => {
+    // Import and use the fixSingleElementXPath function
+    const { fixSingleElementXPath } = require('./integration');
+    
+    // Call the fix function for this element
+    fixSingleElementXPath(element, elements, {
+      states: [{
+        id: currentStateId,
+        versions: {
+          [currentPlatform]: {
+            // We don't have direct access to the page data here,
+            // but the integration function will handle the state retrieval
+          }
+        }
+      }]
+    }, (updatedElements) => {
+      // Update elements with the fixed XPath
+      updateElementsAndNotify(updatedElements);
+    });
+  };
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -338,6 +360,7 @@ export const LocatorElementList = ({
           onView={handleView}
           onElementUpdated={handleElementUpdated}
           allElements={elements}
+          onFixXPath={handleFixXPath}
         />
       ))}
 
