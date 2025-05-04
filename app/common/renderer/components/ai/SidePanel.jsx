@@ -253,15 +253,15 @@ const SidePanel = ({
                     position: 'absolute',
                     top: 0,
                     bottom: 0,
-                    left: siderWidth,
+                    left: isCollapsed ? 12 : siderWidth, // Fixed position when collapsed
                     width: '8px',
-                    cursor: 'ew-resize',
+                    cursor: isCollapsed ? 'default' : 'ew-resize',
                     zIndex: 100,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}
-                onMouseDown={handleMouseDown}
+                onMouseDown={isCollapsed ? null : handleMouseDown}
             >
                 {/* Collapse/Expand button */}
                 <Button 
@@ -279,7 +279,11 @@ const SidePanel = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         padding: 0,
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        // Center the button in the divider
+                        transform: 'translateX(-50%)',
+                        left: '50%',
+                        zIndex: 200
                     }}
                 />
                 <div
