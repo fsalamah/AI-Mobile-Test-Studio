@@ -1,61 +1,41 @@
-import xpath from 'xpath';
-import { DOMParser, XMLSerializer } from 'xmldom';
+import xpathManager from '../../components/Xray/XPathManager';
 
-// Cache for parsed XML documents to avoid repeated parsing
-const xmlDocCache = new Map();
-
-// Optimized evaluateXPath with caching and performance improvements
+/**
+ * Legacy API for XPath evaluation - redirects to the centralized XPathManager
+ * This provides backwards compatibility with existing code
+ * @deprecated Use xpathManager.centralizedEvaluate() directly instead
+ */
 export const evaluateXPath = (xmlString, xpathExpr) => {
-  let result = {
+  // If no XML source has been set in the manager, set it temporarily
+  const currentXml = xpathManager.getXmlSource();
+  const hasExistingXml = !!currentXml;
+  const needsToSetXml = !hasExistingXml && !!xmlString;
+  
+  // Only set XML if needed (temp XML for this evaluation only)
+  if (needsToSetXml) {
+    // Detect platform based on XML content
+    const platform = 
+      xmlString.includes('XCUIElementType') ? 'ios' : 
+      xmlString.includes('android.widget') ? 'android' : 
+      'unknown';
+    
+    xpathManager.setXmlSource(xmlString, 'legacy-evaluation', platform);
+  }
+  
+  // Use the centralized evaluation system with minimal UI updates
+  const result = xpathManager.centralizedEvaluate({
     xpathExpression: xpathExpr,
-    numberOfMatches: 0,
-    matchingNodes: [],
-    isValid: true,
+    highlight: false, // Don't highlight for legacy calls
+    updateUI: false,  // Don't trigger UI updates for legacy calls
+    debug: false      // Keep logging minimal
+  });
+  
+  // Format result to match legacy API
+  return {
+    xpathExpression: xpathExpr,
+    numberOfMatches: result.numberOfMatches || 0,
+    matchingNodes: result.matchingNodes || [],
+    isValid: result.isValid !== false,
+    error: result.error || null
   };
-
-  if (!xmlString || !xpathExpr) {
-    result.isValid = false;
-    return result;
-  }
-
-  try {
-    // Use cached parsed XML doc if available (significant performance improvement)
-    let doc;
-    if (xmlDocCache.has(xmlString)) {
-      doc = xmlDocCache.get(xmlString);
-    } else {
-      // Parse new document and cache it
-      doc = new DOMParser().parseFromString(xmlString, 'text/xml');
-      xmlDocCache.set(xmlString, doc);
-      
-      // Limit cache size to prevent memory issues
-      if (xmlDocCache.size > 5) {
-        const oldestKey = xmlDocCache.keys().next().value;
-        xmlDocCache.delete(oldestKey);
-      }
-    }
-
-    // Use try/catch for XPath evaluation separately to provide better error handling
-    try {
-      const nodes = xpath.select(xpathExpr, doc);
-      result.numberOfMatches = nodes.length;
-
-      // For performance, limit the number of nodes we serialize
-      const serializer = new XMLSerializer();
-      const MAX_NODES = 100; // Limit number of nodes to serialize for better performance
-      result.matchingNodes = nodes.slice(0, MAX_NODES).map(node => serializer.serializeToString(node));
-    } catch (xpathError) {
-      // XPath is invalid, but XML was valid
-      result.isValid = false;
-      result.error = xpathError.message;
-    }
-  } catch (error) {
-    // XML parsing error
-    result.isValid = false;
-    result.error = error.message;
-  }
-
-  return result;
 }
-
-

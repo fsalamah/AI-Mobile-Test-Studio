@@ -321,7 +321,7 @@ async function processXPathFixGroups(groups, progressCallback) {
             // Call the AI service with exponential backoff
             batchResult = await retryAICall(
               () => aiService.repairFailedXpaths(
-                CONFIG.MODEL,
+                null, // Use null to let aiService use configured model
                 batchPrompt,
                 group.stateId,
                 0.2

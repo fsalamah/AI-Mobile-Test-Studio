@@ -8,14 +8,14 @@ import { Logger } from './logger.js';
 import { evaluateXPath } from './xpathEvaluator.js';
 
 const aiService = new AIService();
-const model = CONFIG.MODEL;
+// Don't use hardcoded model - let aiService use configured model
 const MAX_RETRIES = 1;
 const RETRY_DELAY = 2000;
 
 async function extractPageVisualElements(page, osVersions) {
   try {
-    //const visual_model = 'gemini-2.5-flash-preview-04-17'
-    const visual_model = CONFIG.MODEL
+    // Use null instead of CONFIG.MODEL to let aiService use the project's model configuration
+    const visual_model = null; // This will make aiService use the configured model
     const os = CONFIG.DEFAULT_OS || 'ios';
     const analysisRuns = CONFIG.ANALYSIS_RUNS || 1;
     await FileUtils.writeOutputToFile(page, "original_page_data");
@@ -24,7 +24,7 @@ async function extractPageVisualElements(page, osVersions) {
     const initialPrompt = await PromptBuilder.generateStatesPrompt(page, CONFIG.GENERATION, os);
     await FileUtils.writeOutputToFile(initialPrompt, "initial_prompt");
 
-    Logger.log(`Running initial analysis ${analysisRuns} time(s) with ${visual_model}`, "info");
+    Logger.log(`Running initial analysis ${analysisRuns} time(s)`, "info");
 
     const runs = [];
 
@@ -67,7 +67,7 @@ async function extractPageVisualElements(page, osVersions) {
 
     Logger.log("Running visual analysis validation", "info");
     const secondResponse = await retryAICall(() =>
-      aiService.analyzeVisualElements(visual_model, validatedPrompt, possibleStateIds, 1, 0)
+      aiService.analyzeVisualElements(null, validatedPrompt, possibleStateIds, 1, 0)
     );
     await FileUtils.writeOutputToFile(secondResponse, "second_response_complete");
 
@@ -96,7 +96,7 @@ async function extractPageVisualElements(page, osVersions) {
           await FileUtils.writeOutputToFile(stateIdPrompt, `stateId_prompt_${osVersion}`);
 
           const stateIdResponse = await retryAICall(() =>
-            aiService.analyzeVisualElements(visual_model, stateIdPrompt, possibleStateIds)
+            aiService.analyzeVisualElements(null, stateIdPrompt, possibleStateIds)
           );
           await FileUtils.writeOutputToFile(stateIdResponse, `stateId_response_${osVersion}`);
 
@@ -223,8 +223,9 @@ async function generateXpathForStateElements(aiService, screenshotBase64, xmlTex
     genConfig
   });
 
+  // Use null instead of CONFIG.MODEL to let aiService use the project's model configuration
   return await retryAICall(() =>
-    aiService.generateXpathForElements(CONFIG.MODEL, prompt, os)
+    aiService.generateXpathForElements(null, prompt, os)
   );
 }
 
@@ -447,7 +448,7 @@ async function executeVisualPipeline(page, osVersions) {
   }
   return elementsByStateByOS
 }
-async function executeXpathPipeline  (elementsByStateByOS,osVersions) {
+async function executeXpathPipeline(elementsByStateByOS, osVersions) {
   
   const processingStatus = {
     startTime: new Date().toISOString(),

@@ -149,8 +149,8 @@ async function executePOMClassPipeline(page, guideFilePath = CONFIG.POM_GUIDE, p
     // Create an instance of AIService
     const aiService = new AIService();
     
-    // Call the AI service to generate the POM class
-    const response = await aiService.generatePOMClass(CONFIG.POM_MODEL.MODEL, prompt);
+    // Call the AI service to generate the POM class with null to use the configured model
+    const response = await aiService.generatePOMClass(null, prompt);
     
     // Extract the POM class code from the response
     const pomClassCode = response.choices[0].message.content;
