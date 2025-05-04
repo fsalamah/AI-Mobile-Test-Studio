@@ -547,43 +547,37 @@ export const ElementCard = ({
           
           {/* XPath - editable */}
           {editingField === 'xpathExpression' ? (
-            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Input.TextArea
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                autoFocus
-                size="small"
-                autoSize={{ minRows: 1, maxRows: 2 }}
-                style={{ flex: 1, fontSize: '10px', padding: '2px' }}
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) {
-                    e.preventDefault();
-                    saveInlineEdit('xpathExpression');
-                  }
-                }}
-                onKeyDown={(e) => {
-                  // Handle Escape key to cancel editing
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelEditing();
-                  }
-                }}
-              />
-              <Space size={1} style={{ marginLeft: '3px' }}>
-                <Button 
-                  type="text" 
-                  size="small" 
-                  icon={<CheckOutlined style={{ fontSize: '10px', color: '#52c41a' }} />} 
-                  onClick={() => saveInlineEdit('xpathExpression')} 
-                />
-                <Button 
-                  type="text" 
-                  size="small" 
-                  icon={<CloseOutlined style={{ fontSize: '10px', color: '#ff4d4f' }} />} 
-                  onClick={cancelEditing} 
-                />
-              </Space>
-            </div>
+            <Input
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              onPressEnter={() => saveInlineEdit('xpathExpression')}
+              autoFocus
+              size="small"
+              style={{ width: '100%', height: '22px', fontSize: '10px' }}
+              onKeyDown={(e) => {
+                // Handle Escape key to cancel editing
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelEditing();
+                }
+              }}
+              suffix={
+                <Space size={1}>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CheckOutlined style={{ fontSize: '10px' }} />} 
+                    onClick={() => saveInlineEdit('xpathExpression')} 
+                  />
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CloseOutlined style={{ fontSize: '10px' }} />} 
+                    onClick={cancelEditing} 
+                  />
+                </Space>
+              }
+            />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <Tooltip title={item.xpath?.xpathExpression}>
