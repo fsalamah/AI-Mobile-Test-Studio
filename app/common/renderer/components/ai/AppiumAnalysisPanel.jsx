@@ -226,6 +226,17 @@ export default function AppiumAnalysisPanel({
             setSelectedPageId(pageId);
             setCurrentView('pageDetail');
             setSelectedKeys([`page_${pageId}`]);
+            
+            // If we're coming from Xray view, restore previous sidebar state
+            if (currentView === 'pageXray') {
+                // Restore the sidebar to its previous state (expanded or collapsed)
+                setIsSidePanelCollapsed(previousSidePanelState);
+                
+                // Also dispatch a custom event for other components
+                document.dispatchEvent(new CustomEvent('collapseSidePanel', {
+                    detail: { collapse: previousSidePanelState }
+                }));
+            }
         }
     };
 
@@ -235,6 +246,11 @@ export default function AppiumAnalysisPanel({
         setSelectedKeys([]);
     };
     
+    // Reference to SidePanel's collapse state
+    const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState(false);
+    // Store the previous state of the sidebar before entering Xray
+    const [previousSidePanelState, setPreviousSidePanelState] = useState(false);
+    
     const navigateToPageXray = (viewMode='default') => {
         if (selectedPage) {
             // Set view mode
@@ -243,6 +259,17 @@ export default function AppiumAnalysisPanel({
             
             // Collapse the page tree by clearing expanded keys
             setExpandedKeys([]);
+            
+            // Store current sidebar state before collapsing it
+            setPreviousSidePanelState(isSidePanelCollapsed);
+            
+            // Collapse the sidebar panel
+            setIsSidePanelCollapsed(true);
+            
+            // Also trigger a custom event that the sidebar can listen for
+            document.dispatchEvent(new CustomEvent('collapseSidePanel', {
+                detail: { collapse: true }
+            }));
         } else {
             message.error("No page selected");
         }
@@ -538,6 +565,8 @@ export default function AppiumAnalysisPanel({
                 fileOperations={handleFileOperations}
                 saving={saving}
                 projectId={projectId}
+                isCollapsed={isSidePanelCollapsed}
+                onCollapseChange={setIsSidePanelCollapsed}
             />
             
             <Content style={{ padding: '10px', height: 'calc(100vh - 64px)', overflow: 'hidden', background: '#f0f2f5' }}>
@@ -577,7 +606,10 @@ export default function AppiumAnalysisPanel({
                         page={selectedPage}
                         onApplyChanges={updatePage}
                         onProceedToPom={handleOnProceedToPom}
-                        onExit={() => navigateToPageDetail(selectedPageId)}
+                        onExit={(pageId) => {
+                            // We're exiting Xray view - navigate to page detail which will restore sidebar state
+                            navigateToPageDetail(pageId || selectedPageId);
+                        }}
                     />
                 )}
                 

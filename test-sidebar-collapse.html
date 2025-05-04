@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Sidebar Collapse</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background-color: #f0f0f0;
+            transition: width 0.3s;
+            overflow: hidden;
+            border-right: 1px solid #ddd;
+        }
+        
+        .sidebar.collapsed {
+            width: 0;
+        }
+        
+        .content {
+            flex: 1;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        
+        button {
+            padding: 10px;
+            margin: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="sidebar" class="sidebar">
+            <h3 style="padding: 10px;">Sidebar Content</h3>
+            <ul>
+                <li>Item 1</li>
+                <li>Item 2</li>
+                <li>Item 3</li>
+            </ul>
+        </div>
+        <div class="content">
+            <h2>Main Content</h2>
+            <button id="toggleButton">Toggle Sidebar</button>
+            <button id="collapseButton">Collapse Sidebar</button>
+            <button id="expandButton">Expand Sidebar</button>
+            <button id="customEventButton">Dispatch Custom Event</button>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        // Direct DOM manipulation
+        const sidebar = document.getElementById('sidebar');
+        const toggleButton = document.getElementById('toggleButton');
+        const collapseButton = document.getElementById('collapseButton');
+        const expandButton = document.getElementById('expandButton');
+        const customEventButton = document.getElementById('customEventButton');
+        const status = document.getElementById('status');
+        
+        // Toggle sidebar
+        toggleButton.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            updateStatus();
+        });
+        
+        // Collapse sidebar
+        collapseButton.addEventListener('click', () => {
+            sidebar.classList.add('collapsed');
+            updateStatus();
+        });
+        
+        // Expand sidebar
+        expandButton.addEventListener('click', () => {
+            sidebar.classList.remove('collapsed');
+            updateStatus();
+        });
+        
+        // Custom event test (simulating our React implementation)
+        customEventButton.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('collapseSidePanel', {
+                detail: { collapse: true }
+            }));
+            status.textContent = 'Custom event dispatched!';
+            setTimeout(() => {
+                sidebar.classList.add('collapsed');
+                updateStatus();
+            }, 100);
+        });
+        
+        // Listen for our custom event
+        document.addEventListener('collapseSidePanel', (event) => {
+            console.log('Custom event received:', event.detail);
+            status.textContent = `Event received with collapse=${event.detail.collapse}`;
+        });
+        
+        function updateStatus() {
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            status.textContent = `Sidebar is ${isCollapsed ? 'collapsed' : 'expanded'}`;
+        }
+        
+        // Initial status
+        updateStatus();
+    </script>
+</body>
+</html>

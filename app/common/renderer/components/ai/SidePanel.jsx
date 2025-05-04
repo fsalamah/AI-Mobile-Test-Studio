@@ -32,7 +32,9 @@ const SidePanel = ({
     onCreatePage,
     fileOperations,
     saving,
-    projectId
+    projectId,
+    isCollapsed: externalIsCollapsed,
+    onCollapseChange
 }) => {
     const showNewPageModal = () => {
         // This will be handled by PageOperations component
@@ -91,7 +93,10 @@ const SidePanel = ({
     );
 
     const [siderWidth, setSiderWidth] = useState(300);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    // Use external prop if provided, otherwise use local state
+    const [isCollapsedInternal, setIsCollapsedInternal] = useState(false);
+    // Give preference to external prop if it exists
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : isCollapsedInternal;
     const resizerRef = useRef(null);
     const siderRef = useRef(null);
     const isDraggingRef = useRef(false);
@@ -130,14 +135,48 @@ const SidePanel = ({
 
     // Handle collapse button click
     const toggleCollapse = () => {
-        if (isCollapsed) {
-            setIsCollapsed(false);
-            setSiderWidth(300); // Reset to default width when expanding
+        const newCollapsedState = !isCollapsed;
+        
+        if (onCollapseChange) {
+            // Use the parent's state management if available
+            onCollapseChange(newCollapsedState);
         } else {
-            setIsCollapsed(true);
-            setSiderWidth(0);
+            // Otherwise use local state
+            setIsCollapsedInternal(newCollapsedState);
         }
+        
+        // Always update width
+        setSiderWidth(newCollapsedState ? 0 : 300);
     };
+    
+    // Listen for collapse events from other components
+    React.useEffect(() => {
+        const handleCollapseSidePanel = (event) => {
+            const newCollapsedState = event.detail?.collapse;
+            
+            if (newCollapsedState === true && !isCollapsed) {
+                if (onCollapseChange) {
+                    onCollapseChange(true);
+                } else {
+                    setIsCollapsedInternal(true);
+                }
+                setSiderWidth(0);
+            } else if (newCollapsedState === false && isCollapsed) {
+                if (onCollapseChange) {
+                    onCollapseChange(false);
+                } else {
+                    setIsCollapsedInternal(false);
+                }
+                setSiderWidth(300);
+            }
+        };
+        
+        document.addEventListener('collapseSidePanel', handleCollapseSidePanel);
+        
+        return () => {
+            document.removeEventListener('collapseSidePanel', handleCollapseSidePanel);
+        };
+    }, [isCollapsed, onCollapseChange]);
 
     return (
         <div style={{ position: 'relative', height: '100%', display: 'flex' }}>

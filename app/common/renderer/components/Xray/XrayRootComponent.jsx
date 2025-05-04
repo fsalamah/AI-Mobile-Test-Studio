@@ -1073,14 +1073,24 @@ const FinalResizableTabsContainer = ({
           // Raise the updated page object when applying changes
           pageChanged(selectedPage);
           dispatchAppState({ type: 'RESET_CHANGES' });
-          onExit(selectedPage.id);
+          
+          // Exit Xray view
+          if (typeof onExit === 'function') {
+            onExit(selectedPage.id);
+          }
         },
         onCancel() {
-          onExit(selectedPage.id);
+          // Exit without saving
+          if (typeof onExit === 'function') {
+            onExit(selectedPage.id);
+          }
         },
       });
     } else {
-      onExit(selectedPage.id);
+      // No changes, just exit
+      if (typeof onExit === 'function') {
+        onExit(selectedPage.id);
+      }
     }
   }, [hasChanges, onExit, pageChanged, selectedPage, dispatchAppState]);
 
@@ -1099,7 +1109,10 @@ const FinalResizableTabsContainer = ({
       okType: 'danger',
       cancelText: 'Cancel',
       onOk() {
-        onExit(selectedPage.id);
+        // Exit Xray view, discarding all changes
+        if (typeof onExit === 'function') {
+          onExit(selectedPage.id);
+        }
       }
     });
   }, [onExit, selectedPage.id]);
@@ -1149,7 +1162,8 @@ const FinalResizableTabsContainer = ({
         pixelRatio: getPixelRatio,
         platform: currentPlatform, // Pass platform information
         debug: true, // Enable debug logging
-        key: 'image-highlighter'
+        key: 'image-highlighter',
+        className: 'tab-screenshot' // Add special class for screenshot tab
       }
     },
     {
@@ -1168,6 +1182,7 @@ const FinalResizableTabsContainer = ({
         xpathState,
         // Pass the direct evaluate function for use with alternatives
         evaluateXPathDirectly: evaluateXPathStable,
+        className: 'tab-locators', // Add special class for locators tab
         // For enhancing ElementCard
         showAlternatives: true,
         key: 'locator-list'
@@ -1179,7 +1194,8 @@ const FinalResizableTabsContainer = ({
       props: { 
         initialXml: pageXml,
         key: xmlKey, // This key is necessary for XML component reloading
-        onXPathMatch: handleXPathMatch
+        onXPathMatch: handleXPathMatch,
+        className: 'tab-xml' // Add special class for XML tab
       }
     }
   ], [
