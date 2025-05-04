@@ -343,7 +343,7 @@ const handleRegenerateCode = async () => {
             // Clear any existing visual result when regenerating
             setAiVisualResult(null);
             
-            // Execute the visual pipeline
+            // Execute the visual pipeline (model config handled by modelConfigProvider)
             const result = await executeVisualPipeline(selectedPage, ['ios', 'android']);
             setAiVisualResult(result);
             

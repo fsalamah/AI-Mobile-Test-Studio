@@ -8,7 +8,9 @@ import {
     FolderOpenOutlined,
     SearchOutlined,
     LeftOutlined,
-    RightOutlined
+    RightOutlined,
+    RobotOutlined,
+    SettingOutlined
 } from "@ant-design/icons";
 import PageTree from "./PageTree.jsx";
 
@@ -29,7 +31,8 @@ const SidePanel = ({
     onDeletePage,
     onCreatePage,
     fileOperations,
-    saving
+    saving,
+    projectId
 }) => {
     const showNewPageModal = () => {
         // This will be handled by PageOperations component
@@ -59,6 +62,16 @@ const SidePanel = ({
                 disabled={saving || pages.length === 0}
             >
                 {saving ? "Saving..." : "Save Project"}
+            </Menu.Item>
+            
+            <Menu.Divider />
+            
+            <Menu.Item 
+                key="ai_models" 
+                icon={<RobotOutlined />} 
+                onClick={() => document.dispatchEvent(new CustomEvent('navigateToAiModelConfig'))}
+            >
+                AI Model Configuration
             </Menu.Item>
             
             {/* Show a return to inspector option if available */}
@@ -128,6 +141,7 @@ const SidePanel = ({
 
     return (
         <div style={{ position: 'relative', height: '100%', display: 'flex' }}>
+            
             <Sider 
                 width={siderWidth} 
                 theme="light" 
@@ -152,6 +166,11 @@ const SidePanel = ({
                         >
                             {!isCollapsed && 'New Page'}
                         </Button>
+                        <Button 
+                            icon={<RobotOutlined />} 
+                            onClick={() => document.dispatchEvent(new CustomEvent('navigateToAiModelConfig'))} 
+                            title="AI Model Configuration"
+                        />
                         <Dropdown overlay={menu} trigger={['click']}>
                             <Button icon={<EllipsisOutlined />} aria-label="File Actions" />
                         </Dropdown>
@@ -183,6 +202,7 @@ const SidePanel = ({
                         onDelete={onDeletePage}
                         searchTerm={searchTerm}
                         pages={pages}
+                        projectId={projectId}
                     />
                 </div>
             </Sider>

@@ -51,46 +51,77 @@ export const ElementCard = ({
   const [editingField, setEditingField] = useState(null);
   const [editingValue, setEditingValue] = useState('');
   
-  // CRITICAL FIX: Directly monitor and fix stuck evaluation state
+  // Enhanced stuck evaluation detection and recovery
   useEffect(() => {
     // If this element is currently marked as evaluating, set up a timer to check if it gets stuck
     if (item.xpath?._isEvaluating) {
       console.log(`ElementCard ${item.id}: Monitoring evaluation state`);
       
+      // Store start time to calculate total evaluation duration
+      const evaluationStartTime = Date.now();
+      
       // Create a timer to check if the state gets stuck
       const monitorTimer = setTimeout(() => {
         // If the element is still in evaluating state, force a direct evaluation
         if (item.xpath?._isEvaluating) {
-          console.log(`⚠️ ElementCard ${item.id}: STUCK DETECTED - Forcing direct evaluation`);
+          const duration = Date.now() - evaluationStartTime;
+          console.log(`⚠️ ElementCard ${item.id}: STUCK DETECTED - Stuck for ${duration}ms - Forcing direct evaluation`);
           
           try {
             // Do a direct evaluation ourselves
             const xpathExpression = item.xpath?.xpathExpression;
             if (xpathExpression) {
-              // Force evaluation and get result directly
-              const result = xpathManager.evaluateXPath(xpathExpression, {
+              // Force evaluation with element ID and platform for context
+              console.log(`🔍 Running direct XPath evaluation: ${xpathExpression}`);
+              console.log(`🔍 Element platform: ${item.platform}`);
+              
+              // Force evaluation and get result directly - use centralized manager
+              const result = xpathManager.centralizedEvaluate({
+                xpathExpression: xpathExpression,
                 elementId: item.id,
-                elementPlatform: item.platform
+                elementPlatform: item.platform,
+                highlight: true,
+                updateUI: true,
+                debug: true // Enable debug mode for stuck recovery
               });
               
               console.log(`🔄 DIRECT FIX: Evaluation result for ${item.id}: ${result.numberOfMatches} matches`);
               
-              // Update with result
+              // Update with result and include diagnostic information
               const fixedItem = {
                 ...item,
                 xpath: {
                   ...item.xpath,
                   numberOfMatches: result.numberOfMatches,
-                  isValid: result.isValid,
+                  isValid: result.isValid !== false, // Ensure boolean true/false
                   matchingNodes: result.matchingNodes || [],
                   _isEvaluating: false,
                   _lastUpdateTime: Date.now(),
-                  _silentUpdate: true // Flag to prevent notifications
+                  _stuckDuration: duration,
+                  _recoveryMethod: 'self_fix',
+                  _evaluationResult: {
+                    success: result.success,
+                    matchCount: result.numberOfMatches,
+                    timestamp: Date.now()
+                  }
                 }
               };
               
               // Update directly through parent
               onElementUpdated(fixedItem, 'self_fix');
+              
+              // Also notify XPathManager explicitly about the resolved state
+              xpathManager.notifyListeners('evaluationComplete', {
+                result,
+                xpathExpression,
+                elementId: item.id,
+                highlight: true,
+                isRecovery: true
+              }, {
+                immediate: true,
+                bypassDebounce: true,
+                force: true
+              });
             }
           } catch (error) {
             console.error(`⚠️ ElementCard ${item.id}: Error during self-fix:`, error);
@@ -101,7 +132,10 @@ export const ElementCard = ({
               xpath: {
                 ...item.xpath,
                 _isEvaluating: false,
-                error: error.message
+                error: error.message,
+                _stuckDuration: duration,
+                _recoveryMethod: 'self_fix_error',
+                _lastUpdateTime: Date.now()
               }
             };
             onElementUpdated(clearedItem, 'self_fix_error');
@@ -109,17 +143,49 @@ export const ElementCard = ({
         }
       }, 1000); // Check after 1 second - this is enough time for normal evaluation
       
-      return () => clearTimeout(monitorTimer);
+      // Also set up a second more aggressive fallback timer for persistent stuck states
+      const fallbackTimer = setTimeout(() => {
+        if (item.xpath?._isEvaluating) {
+          const duration = Date.now() - evaluationStartTime;
+          console.log(`⚠️ ElementCard ${item.id}: CRITICAL STUCK STATE - Stuck for ${duration}ms - Force clearing`);
+          
+          // Emergency state reset without evaluation
+          const emergencyFixedItem = {
+            ...item,
+            xpath: {
+              ...item.xpath,
+              _isEvaluating: false,
+              _lastUpdateTime: Date.now(),
+              _stuckDuration: duration,
+              _recoveryMethod: 'emergency_reset'
+            }
+          };
+          
+          // Update directly through parent
+          onElementUpdated(emergencyFixedItem, 'emergency_reset');
+        }
+      }, 3000); // Last resort after 3 seconds total
+      
+      return () => {
+        clearTimeout(monitorTimer);
+        clearTimeout(fallbackTimer);
+      };
     }
   }, [item.id, item.xpath?._isEvaluating, item, onElementUpdated]);
 
-  // Listen for XPath evaluation updates from XPathManager
+  // Enhanced listener for XPath evaluation updates from XPathManager
   useEffect(() => {
     // Keep a reference to the current item data for closure
     const currentItemId = item.id;
+    const currentPlatform = item.platform || 'unknown';
+    
+    console.log(`🔔 Setting up XPath listener for element ${currentItemId} (${currentPlatform})`);
     
     // Add listener for XPath evaluation results
     const unsubscribe = xpathManager.addListener((eventType, data) => {
+      // Extract platform from event data for better matching
+      const eventPlatform = data._platform || data.platform || 'unknown';
+      
       // SPECIAL CHECK: Always force clear _isEvaluating if it's been active for >2 seconds
       // This is a last resort safety mechanism
       const evaluationStartTime = item.xpath?._evaluationStartTime || 0;
@@ -133,7 +199,8 @@ export const ElementCard = ({
           xpath: {
             ...item.xpath,
             _isEvaluating: false,
-            _lastUpdateTime: Date.now()
+            _lastUpdateTime: Date.now(),
+            _recoveryMethod: 'listener_timeout'
           }
         };
         onElementUpdated(forceClearedItem, 'stuckStateCleanup');
@@ -144,41 +211,51 @@ export const ElementCard = ({
            && data.elementId === currentItemId) {
         
         console.log(`ElementCard ${currentItemId}: Received ${eventType} event` +
-          (data.isBackupNotification ? ' (backup notification)' : ''));
+          (data.isBackupNotification ? ' (backup notification)' : '') +
+          ` Platform: ${eventPlatform}`);
         
         // Track update frequency to avoid storm of updates
         const lastUpdateTime = item.xpath?._lastUpdateTime || 0;
         const now = Date.now();
         const updateInterval = now - lastUpdateTime;
         
-        // Allow backup notifications to bypass timing checks
-        const isDuplicate = !data.isBackupNotification && updateInterval < 50;
+        // Allow certain types of notifications to bypass timing checks
+        const bypassTiming = data.isBackupNotification || 
+                            data.isRecovery || 
+                            data.force || 
+                            updateInterval > 50;
         
         if (eventType === 'evaluationComplete') {
           // Get result data
           const result = data.result;
           if (result) {
             console.log(`ElementCard: Updating ${currentItemId} with ${result.numberOfMatches} matches` + 
-              (isDuplicate ? ' (skipping - too soon)' : ''));
+              (!bypassTiming ? ' (skipping - too soon)' : ''));
             
-            if (!isDuplicate) {
+            if (bypassTiming) {
               // Always clear _isEvaluating regardless of other state
               const updatedItem = {
                 ...item,
                 xpath: {
                   ...item.xpath,
                   numberOfMatches: result.numberOfMatches,
-                  isValid: result.isValid,
+                  isValid: result.isValid !== false, // Ensure boolean true/false
                   matchingNodes: result.matchingNodes || [],
                   _isEvaluating: false, // Critical: always clear evaluation flag
-                  _lastUpdateTime: now // Track when we last updated
+                  _lastUpdateTime: now, // Track when we last updated
+                  _updateSource: data.isBackupNotification ? 'backup' : 
+                               (data.isRecovery ? 'recovery' : 
+                               (data.consolidated ? 'consolidated' : 'normal')),
+                  // Include platform information                 
+                  _platform: result.platform || eventPlatform || currentPlatform
                 }
               };
               
               // Notify parent of updated element
-              console.log(`ElementCard: Updating element ${currentItemId} to show ${result.numberOfMatches} matches`);
+              console.log(`ElementCard: Updating element ${currentItemId} to show ${result.numberOfMatches} matches via ${updatedItem.xpath._updateSource}`);
               onElementUpdated(updatedItem, data.consolidated ? 'consolidated' : 
-                                          (data.fromHighlighter ? 'highlight' : 'xpathExpression'));
+                              (data.fromHighlighter ? 'highlight' : 
+                              (data.isRecovery ? 'recovery' : 'xpathExpression')));
             }
           }
         } else if (eventType === 'evaluationError') {
@@ -190,7 +267,10 @@ export const ElementCard = ({
               numberOfMatches: 0,
               isValid: false,
               error: data.error,
-              _isEvaluating: false
+              _isEvaluating: false,
+              _lastUpdateTime: now,
+              _updateSource: 'error',
+              _platform: eventPlatform || currentPlatform
             }
           };
           
@@ -200,17 +280,34 @@ export const ElementCard = ({
       }
       
       // Also listen for highlights that affect this element's XPath
-      if (eventType === 'highlightsChanged' && data.xpathExpression === item.xpath?.xpathExpression) {
+      if (eventType === 'highlightsChanged' && 
+          data.xpathExpression === item.xpath?.xpathExpression) {
+        
+        console.log(`🔆 Highlight changed for ${currentItemId}: ${data.nodes?.length || 0} nodes`);
+        
         // This is just to ensure the card gets refreshed when its XPath gets highlighted
         if (!item.xpath?._isEvaluating) {
-          // Minimal update to trigger render without changing data
-          onElementUpdated({...item}, 'highlight');
+          // For highlight events, add platform context
+          const updatedItem = {
+            ...item,
+            xpath: {
+              ...item.xpath,
+              _lastHighlightTime: Date.now(),
+              _highlightNodeCount: data.nodes?.length || 0,
+              // Set platform info from highlight event
+              _highlightPlatform: data.platform || eventPlatform || currentPlatform
+            }
+          };
+          
+          // Minimal update to trigger render with highlight information
+          onElementUpdated(updatedItem, 'highlight');
         }
       }
     });
     
     // Clean up on unmount
     return () => {
+      console.log(`🧹 Removing XPath listener for element ${currentItemId}`);
       unsubscribe();
     };
   }, [item, onElementUpdated]);
@@ -242,7 +339,7 @@ export const ElementCard = ({
     setEditingValue('');
   };
 
-  // Save inline edit
+  // Save inline edit with enhanced XPath handling
   const saveInlineEdit = (field) => {
     try {
       // Validate uniqueness if needed
@@ -254,16 +351,52 @@ export const ElementCard = ({
       const updatedItem = { ...item };
       
       if (field === 'xpathExpression') {
+        // Set evaluation state while updating XPath
         updatedItem.xpath = {
           ...updatedItem.xpath,
-          xpathExpression: editingValue
+          xpathExpression: editingValue,
+          _isEvaluating: true, // Mark as evaluating
+          _evaluationStartTime: Date.now(), // Record when we started evaluation
+          _lastUpdateTime: Date.now()
         };
+        
+        // Notify parent component first to show evaluating state
+        onElementUpdated(updatedItem, field);
+        
+        // Then immediately trigger evaluation with platform context
+        try {
+          console.log(`🔄 Evaluating new XPath for ${itemId}: ${editingValue}`);
+          console.log(`📱 Platform: ${item.platform}`);
+          
+          // Use centralized evaluation with extra parameters
+          xpathManager.centralizedEvaluate({
+            xpathExpression: editingValue,
+            elementId: itemId,
+            elementPlatform: item.platform,
+            highlight: true,
+            updateUI: true,
+            debug: true // Enable debugging for inline edits
+          });
+        } catch (error) {
+          console.error(`Error during XPath evaluation: ${error.message}`);
+          // Update immediately with error state
+          const errorItem = {
+            ...updatedItem,
+            xpath: {
+              ...updatedItem.xpath,
+              _isEvaluating: false,
+              isValid: false,
+              numberOfMatches: 0,
+              error: error.message
+            }
+          };
+          onElementUpdated(errorItem, 'evaluationError');
+        }
       } else {
+        // For other fields, just update normally
         updatedItem[field] = editingValue;
+        onElementUpdated(updatedItem, field);
       }
-      
-      // Notify parent component
-      onElementUpdated(updatedItem, field);
       
       // Reset editing state
       cancelEditing();

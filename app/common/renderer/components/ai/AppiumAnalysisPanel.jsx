@@ -12,6 +12,7 @@ import CodeViewer from "./CodeViewer.jsx";
 import AIProgressModal from "./AIProgressModal.jsx";
 import EmptyStateMessage from "./EmptyStateMessage.jsx";
 import { PageOperations } from "./PageOperations.jsx";
+import ModelConfigPage from "./ModelConfigPage.jsx";
 
 // Import utilities
 import { buildTreeData, generateId } from "./utils/TreeUtils.js";
@@ -20,6 +21,8 @@ import { chooseFile, saveToFile, openSavedFile, tryOpenLastFile } from "./utils/
 // Import AI pipeline functions
 import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
 import { executeXpathPipeline } from "../../lib/ai/pipeline.js";
+// Model configuration provider for setting project context
+import modelConfigProvider from "../../lib/ai/modelConfigProvider.js";
 
 // Import project state manager
 import { saveProjectState, loadProjectState, hasSavedProjectState } from "../../lib/ai/projectStateManager.js";
@@ -32,12 +35,15 @@ export default function AppiumAnalysisPanel({
     inspectorScreenshot = '',
     onClose = () => {}
 }) {
+    // Generate a unique project ID for this session
+    const [projectId] = useState(() => `project_${generateId()}`);
     // Core state
     const [pages, setPages] = useState([]);
     const [selectedPageId, setSelectedPageId] = useState(null);
     const selectedPage = useMemo(() => pages.find(p => p.id === selectedPageId), [pages, selectedPageId]);
     const [currentView, setCurrentView] = useState('pageList');
     const [xrayViewMode, setXrayViewMode] = useState('default');
+    const [showModelConfig, setShowModelConfig] = useState(false);
     
     // Search and tree state
     const [searchTerm, setSearchTerm] = useState('');
@@ -112,6 +118,31 @@ export default function AppiumAnalysisPanel({
                 tryOpenLastFile(setPages, setFileHandle, resetUIState);
             }
         }
+    }, []);
+    
+    // Set project context in modelConfigProvider whenever it changes
+    useEffect(() => {
+        console.log("Setting model config project context to:", projectId);
+        modelConfigProvider.setProjectContext(projectId);
+        
+        // Clean up when component unmounts
+        return () => {
+            modelConfigProvider.clearProjectContext();
+        };
+    }, [projectId]);
+    
+    // Setup event listener for AI model config navigation
+    useEffect(() => {
+        const handleNavigateToAiModelConfig = () => {
+            console.log("Navigating to AI Model Config");
+            setShowModelConfig(true);
+        };
+        
+        document.addEventListener('navigateToAiModelConfig', handleNavigateToAiModelConfig);
+        
+        return () => {
+            document.removeEventListener('navigateToAiModelConfig', handleNavigateToAiModelConfig);
+        };
     }, []);
 
     // Update expanded keys when search term changes
@@ -474,6 +505,17 @@ export default function AppiumAnalysisPanel({
         setAutoExpandParent(false);
     };
     
+    // If the model config page is shown, render only that
+    if (showModelConfig) {
+        return (
+            <ModelConfigPage 
+                projectId={projectId}
+                onBack={() => setShowModelConfig(false)}
+            />
+        );
+    }
+    
+    // Otherwise render the normal layout
     return (
         <Layout style={{ height: '100vh', background: '#fff' }}>
             <SidePanel 
@@ -491,6 +533,7 @@ export default function AppiumAnalysisPanel({
                 onCreatePage={handleCreatePage}
                 fileOperations={handleFileOperations}
                 saving={saving}
+                projectId={projectId}
             />
             
             <Content style={{ padding: '10px', overflowY: 'auto', background: '#f0f2f5' }}>

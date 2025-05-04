@@ -1,7 +1,15 @@
 // PageTree.jsx
-import React from "react";
-import { Tree, Typography, Button, Popconfirm, Tooltip, Space } from "antd";
-import { EditOutlined, DeleteOutlined, FolderOutlined } from "@ant-design/icons";
+import React, { useState } from "react";
+import { Tree, Typography, Button, Popconfirm, Tooltip, Space, Dropdown, Menu } from "antd";
+import { 
+  EditOutlined, 
+  DeleteOutlined, 
+  SettingOutlined, 
+  RobotOutlined, 
+  MoreOutlined,
+  FolderOutlined,
+  EllipsisOutlined
+} from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -15,8 +23,11 @@ const PageTree = ({
     onEdit,
     onDelete,
     searchTerm,
-    pages
+    pages,
+    projectId
 }) => {
+    
+
     const renderTreeNodeTitle = (nodeData) => {
         const { title, isModule, pageData } = nodeData;
 
@@ -35,6 +46,8 @@ const PageTree = ({
                         <Tooltip title="Edit Page Details">
                             <Button size="small" type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(pageData); }} />
                         </Tooltip>
+                        
+                        
                         <Tooltip title="Delete Page">
                             <Popconfirm
                                 title={`Delete "${pageData.name}"?`}
@@ -77,6 +90,8 @@ const PageTree = ({
                     style={{ background: 'transparent' }}
                 />
             )}
+            
+            {/* Model Configuration Modal */}
         </>
     );
 };
