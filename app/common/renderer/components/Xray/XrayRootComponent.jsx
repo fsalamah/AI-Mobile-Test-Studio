@@ -805,6 +805,7 @@ const FinalResizableTabsContainer = ({
     }
   }, [xpathState, processXPath]);
   
+  
   // Load available states when component mounts or page changes
   useEffect(() => {
     try {
