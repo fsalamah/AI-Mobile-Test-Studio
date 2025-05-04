@@ -41,10 +41,10 @@
 
   /* Specific styling for each tab type */
   .tab-screenshot {
-    overflow: auto;
+    overflow: hidden;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     background-color: #f0f2f5;
   }
   

@@ -49,19 +49,22 @@ const ImageHighlighter = ({
     log(`Container size: ${containerWidth}x${containerHeight}`);
     
     const aspectRatio = imageWidth / imageHeight;
-    const containerAspectRatio = containerWidth / containerHeight;
     
-    let newWidth, newHeight;
+    // Always fit within the container height and width
+    // First check if fitting to width would exceed height
+    let newWidth = containerWidth;
+    let newHeight = containerWidth / aspectRatio;
     
-    if (aspectRatio > containerAspectRatio) {
-      // Image is wider than container
-      newWidth = containerWidth;
-      newHeight = containerWidth / aspectRatio;
-    } else {
-      // Image is taller than container
+    // If the height exceeds container height, scale down to fit height
+    if (newHeight > containerHeight) {
       newHeight = containerHeight;
       newWidth = containerHeight * aspectRatio;
     }
+    
+    // Ensure the image takes up 90% of available container size at most
+    // This leaves some margin to prevent touching the edges
+    newWidth = Math.min(newWidth, containerWidth * 0.9);
+    newHeight = Math.min(newHeight, containerHeight * 0.9);
     
     log(`Calculated dimensions: ${newWidth}x${newHeight}`);
     setDimensions({ width: newWidth, height: newHeight });
@@ -625,13 +628,12 @@ const ImageHighlighter = ({
       style={{ 
         width: '100%', 
         height: '100%', 
-        overflow: 'auto', 
+        overflow: 'hidden', 
         position: 'relative',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'flex-start',
-        backgroundColor: '#f0f2f5', // Match the app background color
-        padding: '10px'
+        alignItems: 'center',
+        backgroundColor: '#f0f2f5' // Match the app background color
       }}
     >
       {/* Inject CSS styles for animations */}
@@ -643,7 +645,13 @@ const ImageHighlighter = ({
         </div>
       )}
       {base64Png && (
-        <div style={{ position: 'relative', width: dimensions.width, height: dimensions.height }}>
+        <div style={{ 
+          position: 'relative', 
+          width: dimensions.width, 
+          height: dimensions.height,
+          boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+          border: '1px solid #eee'
+        }}>
           <img 
             ref={imgElementRef}
             src={`data:image/png;base64,${base64Png}`}
@@ -652,7 +660,7 @@ const ImageHighlighter = ({
               display: 'block',
               width: '100%',
               height: '100%',
-              boxShadow: '0 0 10px rgba(0,0,0,0.1)'
+              objectFit: 'contain'
             }}
             onLoad={handleImageLoad}
           />
