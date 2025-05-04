@@ -536,7 +536,7 @@ export default function AppiumAnalysisPanel({
                 projectId={projectId}
             />
             
-            <Content style={{ padding: '10px', overflowY: 'auto', background: '#f0f2f5' }}>
+            <Content style={{ padding: '10px', height: 'calc(100vh - 64px)', overflow: 'hidden', background: '#f0f2f5' }}>
                 {currentView === 'pageList' && !selectedPageId && (
                     <EmptyStateMessage 
                         onOpenFile={handleFileOperations.openSavedFile} 

@@ -22,23 +22,21 @@
   }
   
   .tabs-wrapper {
-    max-height: 100%;
-    padding-bottom: 50px;
+    height: 100%;
     display: flex;
     flex-grow: 1;
-        flex: 1 1 0%;
+    flex: 1 1 auto;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
   }
   
   .tab {
     flex-grow: 1;
-    max-height: 100%;
-    /* overflow-y: scroll; */
+    height: 100%;
     border-right: 1px solid #eee;
     padding: 0px;
     box-sizing: border-box;
-    /* overflow:hidden; */
+    overflow: auto;
   }
   
   .tab.tab-background {

@@ -60,7 +60,7 @@ const ResizableTabs = ({ tabs }) => {
   return (
     <div className="resizable-tabs-container" ref={containerRef}>
       <div className="control-bar">
-        {/* You might want to display tab titles here */}
+        {/* Tab titles */}
         {tabs.map((tab, index) => (
           <span key={`control-${index}`} style={{ flexGrow: 1, textAlign: 'center' }}>
             {tab.label || `Tab ${index + 1}`}
@@ -72,7 +72,7 @@ const ResizableTabs = ({ tabs }) => {
           <React.Fragment key={`tab-${index}`}>
             <div
               className="tab tab-background"
-              style={{ width: `${tabWidths[index] * 100}%` }}
+              style={{ width: `${tabWidths[index] * 100}%`, height: '100%' }}
             >
               {/* Render the passed component with its arguments */}
               {React.createElement(tab.component, tab.props)}
