@@ -237,8 +237,12 @@ export default function AppiumAnalysisPanel({
     
     const navigateToPageXray = (viewMode='default') => {
         if (selectedPage) {
+            // Set view mode
             setXrayViewMode(viewMode);
             setCurrentView('pageXray');
+            
+            // Collapse the page tree by clearing expanded keys
+            setExpandedKeys([]);
         } else {
             message.error("No page selected");
         }

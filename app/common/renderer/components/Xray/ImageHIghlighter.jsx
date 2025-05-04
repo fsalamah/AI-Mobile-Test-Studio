@@ -625,12 +625,13 @@ const ImageHighlighter = ({
       style={{ 
         width: '100%', 
         height: '100%', 
-        overflow: 'hidden', 
+        overflow: 'auto', 
         position: 'relative',
         display: 'flex',
-        justifyContent: 'start',
-        alignItems: 'start',
-        backgroundColor: '#f5f5f5' // Light background to show image boundaries
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        backgroundColor: '#f0f2f5', // Match the app background color
+        padding: '10px'
       }}
     >
       {/* Inject CSS styles for animations */}

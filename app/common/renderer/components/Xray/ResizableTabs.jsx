@@ -2,7 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import './ResizableTabs.css'; // Import the CSS file
 
 const ResizableTabs = ({ tabs }) => {
-  const [tabWidths, setTabWidths] = useState(tabs.map(() => 1 / tabs.length));
+  // Set optimized default tab widths: 
+  // - Screenshot tab: 0.25 (25% for the image)
+  // - Element list: 0.4167 (approximately 42% to fill available space)
+  // - XML viewer: 0.3333 (33% as requested)
+  const getOptimizedWidths = () => {
+    if (tabs.length === 3) {
+      // Check if first tab is Screenshot (typical Xray layout)
+      if (tabs[0].label === 'Screenshot') {
+        return [0.25, 0.4167, 0.3333];
+      }
+    }
+    // Fall back to equal widths for any other configuration
+    return tabs.map(() => 1 / tabs.length);
+  };
+  
+  const [tabWidths, setTabWidths] = useState(getOptimizedWidths());
   const containerRef = useRef(null);
   const dividerRefs = useRef(tabs.slice(0, -1).map(() => useRef(null)));
   const [isResizing, setIsResizing] = useState(false);
@@ -71,7 +86,7 @@ const ResizableTabs = ({ tabs }) => {
         {tabs.map((tab, index) => (
           <React.Fragment key={`tab-${index}`}>
             <div
-              className="tab tab-background"
+              className={`tab tab-background ${tab.props.className || ''}`}
               style={{ width: `${tabWidths[index] * 100}%`, height: '100%' }}
             >
               {/* Render the passed component with its arguments */}
