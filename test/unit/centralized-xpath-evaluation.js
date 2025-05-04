@@ -1,12 +1,10 @@
 // centralized-xpath-evaluation.js
-// Unit tests for the centralized XPath evaluation system
+// Mock implementation for the centralized XPath evaluation system
 
-import { expect } from 'chai';
-import sinon from 'sinon';
 import xpath from 'xpath';
 import { DOMParser, XMLSerializer } from 'xmldom';
 
-// Create a mock XPathManager for testing
+// Create a XPathManager class for testing
 class XPathManager {
   constructor() {
     this.xmlSource = '';
@@ -18,6 +16,13 @@ class XPathManager {
     this.activeEvaluations = new Set();
     this.xmlDoc = null;
     this.highlightedNodes = [];
+    this.debug = false;
+  }
+  
+  _log(message, force = false) {
+    if (this.debug || force) {
+      console.log(message);
+    }
   }
 
   setXmlSource(xmlSource, stateId, platform) {
@@ -41,6 +46,10 @@ class XPathManager {
     this.clearHighlights();
   }
   
+  getXmlSource() {
+    return this.xmlSource;
+  }
+  
   clearHighlights() {
     this.highlightedNodes = [];
     this.notifyListeners('highlightsChanged', { 
@@ -49,16 +58,13 @@ class XPathManager {
     });
   }
   
-  getXmlSource() {
-    return this.xmlSource;
-  }
-  
   centralizedEvaluate(options) {
     const { 
       xpathExpression, 
       elementId = null, 
       highlight = true, 
-      updateUI = true 
+      updateUI = true,
+      debug = false
     } = options;
     
     if (!xpathExpression || !this.xmlDoc) {
@@ -101,7 +107,8 @@ class XPathManager {
       this.activeEvaluations.add(elementId);
     }
     
-    const cacheKey = `${this.currentStateId}:${this.currentPlatform}:${xpathExpression}`;
+    const platform = options.elementPlatform || this.currentPlatform;
+    const cacheKey = `${this.currentStateId}:${platform}:${xpathExpression}`;
     let result;
     
     try {
@@ -111,15 +118,102 @@ class XPathManager {
         const nodes = xpath.select(xpathExpression, this.xmlDoc);
         const serializer = new XMLSerializer();
         
+        const nodeDetails = [];
+        const matchingSerializedNodes = [];
+        
+        for (let i = 0; i < nodes.length; i++) {
+          try {
+            const node = nodes[i];
+            const serializedNode = serializer.serializeToString(node);
+            matchingSerializedNodes.push(serializedNode);
+            
+            // Extract position data for highlighting
+            const boundsData = {};
+            
+            if (node.getAttribute && node.getAttribute('bounds')) {
+              const boundsAttr = node.getAttribute('bounds');
+              const match = boundsAttr.match(/\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]/);
+              if (match) {
+                const [_, x1, y1, x2, y2] = match.map(Number);
+                boundsData.bounds = boundsAttr;
+                boundsData.androidBounds = { x1, y1, x2, y2 };
+              }
+            }
+            else if (node.getAttribute && 
+                     node.getAttribute('x') !== null && 
+                     node.getAttribute('y') !== null &&
+                     node.getAttribute('width') !== null &&
+                     node.getAttribute('height') !== null) {
+              const x = parseInt(node.getAttribute('x'), 10);
+              const y = parseInt(node.getAttribute('y'), 10);
+              const width = parseInt(node.getAttribute('width'), 10);
+              const height = parseInt(node.getAttribute('height'), 10);
+              
+              boundsData.x = x;
+              boundsData.y = y;
+              boundsData.width = width;
+              boundsData.height = height;
+            }
+            
+            nodeDetails.push({
+              index: i,
+              nodeType: node.nodeType,
+              nodeName: node.nodeName,
+              serialized: serializedNode.substring(0, 100) + (serializedNode.length > 100 ? '...' : ''),
+              ...boundsData
+            });
+          } catch (err) {
+            console.error(`Error processing node at index ${i}:`, err);
+          }
+        }
+        
+        // Create safe versions of nodes for UI
+        const safeNodes = nodes.map((node, index) => {
+          const safeNode = { 
+            nodeType: node.nodeType,
+            nodeName: node.nodeName
+          };
+          
+          if (node.nodeType === 1 && node.getAttribute) {
+            const bounds = node.getAttribute('bounds');
+            if (bounds) {
+              safeNode.bounds = bounds;
+              
+              const match = bounds.match(/\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]/);
+              if (match) {
+                const [_, x1, y1, x2, y2] = match.map(Number);
+                safeNode.androidBounds = { x1, y1, x2, y2 };
+              }
+            }
+            
+            const x = node.getAttribute('x');
+            const y = node.getAttribute('y');
+            const width = node.getAttribute('width');
+            const height = node.getAttribute('height');
+            
+            if (x !== null && y !== null && width !== null && height !== null) {
+              safeNode.x = parseInt(x, 10);
+              safeNode.y = parseInt(y, 10);
+              safeNode.width = parseInt(width, 10);
+              safeNode.height = parseInt(height, 10);
+              safeNode.isIOS = true;
+            }
+          }
+          
+          return safeNode;
+        });
+        
         result = {
           xpathExpression,
           numberOfMatches: nodes.length,
-          matchingNodes: nodes.slice(0, 100).map(node => 
-            serializer.serializeToString(node)
-          ),
-          actualNodes: nodes,
+          matchingNodes: matchingSerializedNodes,
+          actualNodes: safeNodes,
+          nodeDetails: nodeDetails,
           isValid: true,
-          success: true
+          success: true,
+          platform: platform,
+          isAndroid: platform === 'android',
+          isIOS: platform === 'ios'
         };
         
         this.lastEvaluationResults.set(cacheKey, result);
@@ -129,7 +223,9 @@ class XPathManager {
         this.highlightedNodes = result.actualNodes || [];
         this.notifyListeners('highlightsChanged', {
           nodes: this.highlightedNodes,
-          xpathExpression
+          nodeDetails: result.nodeDetails || [],
+          xpathExpression,
+          platform
         });
       }
       
@@ -183,6 +279,16 @@ class XPathManager {
     }
   }
   
+  evaluateXPath(xpathExpression, options = {}) {
+    return this.centralizedEvaluate({
+      xpathExpression,
+      elementId: typeof options === 'string' ? options : options.elementId,
+      elementPlatform: typeof options === 'object' ? options.elementPlatform : null,
+      highlight: true,
+      updateUI: true
+    });
+  }
+  
   addListener(listener) {
     this.listeners.push(listener);
     return () => {
@@ -191,220 +297,42 @@ class XPathManager {
   }
   
   notifyListeners(eventType, data, options = {}) {
-    setTimeout(() => {
-      this.listeners.forEach(listener => {
-        try {
-          listener(eventType, data);
-        } catch (error) {
-          console.error('Error in XPath listener:', error);
-        }
-      });
-    }, 0);
+    this.listeners.forEach(listener => {
+      try {
+        listener(eventType, data);
+      } catch (error) {
+        console.error('Error in XPath listener:', error);
+      }
+    });
+  }
+  
+  setDebugMode(enabled) {
+    this.debug = enabled;
   }
 }
 
-// Mock XML for testing
-const MOCK_XML = `
+// Create a singleton instance for testing and expose it globally for tests
+const xpathManager = new XPathManager();
+
+// Expose the XPathManager instance globally for the test files
+globalThis.xpathManager = xpathManager;
+
+// These are example XML strings for testing purposes
+export const MOCK_ANDROID_XML = `
 <hierarchy>
-  <node id="1" text="Hello" class="android.widget.TextView">
-    <node id="2" text="World" class="android.widget.TextView" />
+  <node id="1" text="Hello" class="android.widget.TextView" bounds="[0,0][100,50]">
+    <node id="2" text="World" class="android.widget.TextView" bounds="[10,10][90,40]" />
   </node>
-  <node id="3" text="Button" class="android.widget.Button" />
+  <node id="3" text="Button" class="android.widget.Button" bounds="[0,100][100,150]" />
 </hierarchy>
 `;
 
-describe('Centralized XPath Evaluation', function () {
-  let xpathManager;
-  let listenerStub;
-  
-  beforeEach(function () {
-    // Create a new XPathManager for each test
-    xpathManager = new XPathManager();
-    
-    // Set up XML source
-    xpathManager.setXmlSource(MOCK_XML, 'test-state', 'android');
-    
-    // Set up a listener stub
-    listenerStub = sinon.stub();
-    xpathManager.listeners = [listenerStub];
-  });
-  
-  afterEach(function () {
-    // Clean up
-    xpathManager.listeners = [];
-  });
-  
-  it('should properly evaluate a valid XPath', function () {
-    const result = xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="Hello"]',
-      highlight: false,
-      updateUI: false
-    });
-    
-    expect(result.numberOfMatches).to.equal(1);
-    expect(result.isValid).to.be.true;
-  });
-  
-  it('should return 0 matches for a non-matching XPath', function () {
-    const result = xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="NotFound"]',
-      highlight: false,
-      updateUI: false
-    });
-    
-    expect(result.numberOfMatches).to.equal(0);
-    expect(result.isValid).to.be.true;
-  });
-  
-  it('should track element-specific evaluations', function () {
-    // Store the current implementation of notifyListeners to modify it
-    const originalNotify = xpathManager.notifyListeners;
-    
-    // Override notifyListeners to make it synchronous for testing
-    xpathManager.notifyListeners = function(eventType, data) {
-      this.listeners.forEach(listener => {
-        try {
-          listener(eventType, data);
-        } catch (error) {
-          console.error('Error in XPath listener:', error);
-        }
-      });
-    };
-    
-    // First evaluation for element1
-    xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@class="android.widget.TextView"]',
-      elementId: 'element1',
-      updateUI: true
-    });
-    
-    // Check that the listener was called with the correct event
-    const element1Calls = listenerStub.getCalls().filter(
-      call => call.args[0] === 'evaluationComplete' && 
-             call.args[1].elementId === 'element1'
-    );
-    expect(element1Calls.length).to.be.above(0);
-    
-    // Reset the stub for the next test
-    listenerStub.reset();
-    
-    // Second evaluation for element2
-    xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@class="android.widget.Button"]',
-      elementId: 'element2',
-      updateUI: true
-    });
-    
-    // Check that the listener was called with the correct event
-    const element2Calls = listenerStub.getCalls().filter(
-      call => call.args[0] === 'evaluationComplete' && 
-             call.args[1].elementId === 'element2'
-    );
-    expect(element2Calls.length).to.be.above(0);
-    
-    // Restore original implementation
-    xpathManager.notifyListeners = originalNotify;
-  });
-  
-  it('should respect the highlight flag', function (done) {
-    // Store the current implementation of notifyListeners to modify it
-    const originalNotify = xpathManager.notifyListeners;
-    
-    // Override notifyListeners to make it synchronous for testing
-    xpathManager.notifyListeners = function(eventType, data) {
-      this.listeners.forEach(listener => {
-        try {
-          listener(eventType, data);
-        } catch (error) {
-          console.error('Error in XPath listener:', error);
-        }
-      });
-    };
-    
-    // First evaluation without highlighting
-    xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="Hello"]',
-      highlight: false,
-      updateUI: true
-    });
-    
-    // Check that highlightsChanged was not called
-    const highlightChangedCalls = listenerStub.getCalls().filter(
-      call => call.args[0] === 'highlightsChanged'
-    );
-    expect(highlightChangedCalls.length).to.equal(0);
-    
-    // Reset the stub for the next test
-    listenerStub.reset();
-    
-    // Second evaluation with highlighting
-    xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="Hello"]',
-      highlight: true,
-      updateUI: true
-    });
-    
-    // Check that highlightsChanged was called
-    const afterHighlightChangedCalls = listenerStub.getCalls().filter(
-      call => call.args[0] === 'highlightsChanged'
-    );
-    expect(afterHighlightChangedCalls.length).to.be.above(0);
-    
-    // Restore original implementation
-    xpathManager.notifyListeners = originalNotify;
-    done();
-  });
-  
-  it('should prevent duplicate evaluations for the same element', function () {
-    // Add elementId to activeEvaluations
-    xpathManager.activeEvaluations.add('element4');
-    
-    // Try to evaluate for the same element
-    const result = xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="Hello"]',
-      elementId: 'element4'
-    });
-    
-    // Should indicate that evaluation is in progress
-    expect(result.inProgress).to.be.true;
-  });
-  
-  it('should clear highlights when requested', function () {
-    // Store the current implementation of notifyListeners to modify it
-    const originalNotify = xpathManager.notifyListeners;
-    
-    // Override notifyListeners to make it synchronous for testing
-    xpathManager.notifyListeners = function(eventType, data) {
-      this.listeners.forEach(listener => {
-        try {
-          listener(eventType, data);
-        } catch (error) {
-          console.error('Error in XPath listener:', error);
-        }
-      });
-    };
-    
-    // First highlight some nodes
-    xpathManager.centralizedEvaluate({
-      xpathExpression: '//node[@text="Hello"]',
-      highlight: true
-    });
-    
-    // Reset stub
-    listenerStub.reset();
-    
-    // Clear highlights
-    xpathManager.clearHighlights();
-    
-    // Check that highlightsChanged was called with empty nodes
-    const clearCalls = listenerStub.getCalls().filter(
-      call => call.args[0] === 'highlightsChanged' && 
-             Array.isArray(call.args[1].nodes) &&
-             call.args[1].nodes.length === 0
-    );
-    expect(clearCalls.length).to.be.above(0);
-    
-    // Restore original implementation
-    xpathManager.notifyListeners = originalNotify;
-  });
-});
+export const MOCK_IOS_XML = `
+<XCUIElementTypeApplication x="0" y="0" width="375" height="812">
+  <XCUIElementTypeWindow x="0" y="0" width="375" height="812">
+    <XCUIElementTypeStaticText x="20" y="40" width="335" height="30" value="Hello" />
+    <XCUIElementTypeStaticText x="30" y="80" width="315" height="30" value="World" />
+    <XCUIElementTypeButton x="20" y="130" width="335" height="44" name="Button" />
+  </XCUIElementTypeWindow>
+</XCUIElementTypeApplication>
+`;

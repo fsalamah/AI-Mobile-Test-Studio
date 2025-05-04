@@ -16,7 +16,8 @@ const mocha = new Mocha({
 
 // Tests to run
 const tests = [
-  'centralized-xpath-evaluation.js'
+  'centralized-xpath-evaluation.js',
+  'centralized-xpath-evaluation.spec.js' // Re-enabled for testing
 ];
 
 // Add each test file to Mocha
