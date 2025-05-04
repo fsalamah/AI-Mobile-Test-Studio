@@ -468,25 +468,42 @@ const FinalResizableTabsContainer = ({
   );
   
   // Extract the update logic to a separate function with a stable reference
-  const updateLocators = useCallback((updatedLocators) => {
-    console.log(`Updating locators with ${updatedLocators.length} elements`);
+  const updateLocators = useCallback((updatedLocators, shouldMarkAsChanged = false) => {
+    console.log(`Updating locators with ${updatedLocators.length} elements, markAsChanged=${shouldMarkAsChanged}`);
     
     // Use a ref to avoid excessive updates
     if (isUpdatingLocatorsRef.current) return;
     
     isUpdatingLocatorsRef.current = true;
     
-    // Update the page with the new locators
-    dispatchAppState({ 
-      type: 'UPDATE_LOCATORS', 
-      locators: updatedLocators 
-    });
+    // Update the page with the new locators WITHOUT marking as changed by default
+    if (shouldMarkAsChanged) {
+      // Only mark as changed if explicitly requested (for user edits)
+      dispatchAppState({ 
+        type: 'UPDATE_LOCATORS', 
+        locators: updatedLocators 
+      });
+    } else {
+      // For evaluation updates, don't mark as changed
+      dispatchAppState({ 
+        type: 'BATCH_UPDATE',
+        updates: { 
+          page: {
+            ...selectedPage,
+            aiAnalysis: {
+              ...selectedPage.aiAnalysis,
+              locators: updatedLocators
+            }
+          }
+        }
+      });
+    }
     
     // Reset the updating flag after a short delay
     setTimeout(() => {
       isUpdatingLocatorsRef.current = false;
     }, 10);
-  }, []);
+  }, [selectedPage, dispatchAppState]);
   
   // Function to update an element's XPath data with evaluation results
   const updateElementXPath = useCallback((element, result) => {
@@ -516,12 +533,36 @@ const FinalResizableTabsContainer = ({
       return item;
     });
     
-    // Only update if there's an actual change
-    const hasElementChanged = JSON.stringify(updatedLocators) !== JSON.stringify(currentLocators);
+    // Check for meaningful changes that should trigger the changes flag
+    let hasElementChanged = false;
     
-    if (hasElementChanged) {
-      updateLocators(updatedLocators);
+    // Compare each element to check for meaningful changes
+    for (let i = 0; i < updatedLocators.length; i++) {
+      const updatedEl = updatedLocators[i];
+      const originalEl = currentLocators[i];
+      
+      // Only consider these specific changes as meaningful
+      if (updatedEl && originalEl && 
+          (updatedEl.id === element.id || // Only check the element we're updating
+           (updatedEl.devName === element.devName && updatedEl.platform === element.platform))) {
+        
+        // Check if the XPath expression or devName actually changed
+        if (updatedEl.xpath?.xpathExpression !== originalEl.xpath?.xpathExpression ||
+            updatedEl.devName !== originalEl.devName) {
+          hasElementChanged = true;
+          break;
+        }
+        
+        // Match count alone changing is not a meaningful change that requires saving
+        // (it's just a reflection of the current state, not user edits)
+      }
     }
+    
+    // Update elements with the appropriate change flag
+    updateLocators(updatedLocators, hasElementChanged);
+    
+    // No need for additional dispatch as updateLocators now handles the hasChanges flag
+    // based on the hasElementChanged parameter
   }, [selectedPage.aiAnalysis?.locators, updateLocators]);
   
   // Forward declare processXPath to avoid reference errors
@@ -775,9 +816,31 @@ const FinalResizableTabsContainer = ({
       return element;
     });
     
-    // Update locators with the new elements
-    updateLocators(elementsWithIds);
-  }, [updateLocators]);
+    // Check for meaningful changes by comparing with current locators
+    const currentLocators = selectedPage.aiAnalysis?.locators || [];
+    let hasElementChanged = false;
+    
+    // Skip change detection if element counts differ - this is always a meaningful change
+    if (elementsWithIds.length !== currentLocators.length) {
+      hasElementChanged = true;
+    } else {
+      // Compare each element to check for meaningful changes
+      for (let i = 0; i < elementsWithIds.length; i++) {
+        const updatedEl = elementsWithIds[i];
+        const originalEl = currentLocators[i];
+        
+        // Check if the XPath expression or devName actually changed
+        if (updatedEl.xpath?.xpathExpression !== originalEl.xpath?.xpathExpression ||
+            updatedEl.devName !== originalEl.devName) {
+          hasElementChanged = true;
+          break;
+        }
+      }
+    }
+    
+    // Update locators with the new elements, marking as changed if necessary
+    updateLocators(elementsWithIds, hasElementChanged);
+  }, [updateLocators, selectedPage.aiAnalysis?.locators, selectedPage]);
   
   // Process XPath queue when state changes to COMPLETE
   useEffect(() => {
