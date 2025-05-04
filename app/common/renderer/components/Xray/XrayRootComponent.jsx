@@ -546,15 +546,23 @@ const FinalResizableTabsContainer = ({
           (updatedEl.id === element.id || // Only check the element we're updating
            (updatedEl.devName === element.devName && updatedEl.platform === element.platform))) {
         
-        // Check if the XPath expression or devName actually changed
+        // Consider ANY attribute change as a meaningful change that requires saving
+        // Compare all properties of the element (except evaluation stats that are auto-generated)
         if (updatedEl.xpath?.xpathExpression !== originalEl.xpath?.xpathExpression ||
-            updatedEl.devName !== originalEl.devName) {
+            updatedEl.devName !== originalEl.devName ||
+            updatedEl.name !== originalEl.name ||
+            updatedEl.value !== originalEl.value ||
+            updatedEl.platform !== originalEl.platform ||
+            updatedEl.stateId !== originalEl.stateId ||
+            updatedEl.description !== originalEl.description) {
           hasElementChanged = true;
           break;
         }
         
-        // Match count alone changing is not a meaningful change that requires saving
-        // (it's just a reflection of the current state, not user edits)
+        // Only the following are NOT considered meaningful changes:
+        // - XPath evaluation results (numberOfMatches, isValid, matchingNodes)
+        // - Internal state flags (_isEvaluating, _lastUpdateTime, etc.)
+        // - Auto-generated metadata
       }
     }
     
@@ -829,9 +837,15 @@ const FinalResizableTabsContainer = ({
         const updatedEl = elementsWithIds[i];
         const originalEl = currentLocators[i];
         
-        // Check if the XPath expression or devName actually changed
+        // Consider ANY attribute change as a meaningful change that requires saving
+        // Compare all properties of the element (except evaluation stats that are auto-generated)
         if (updatedEl.xpath?.xpathExpression !== originalEl.xpath?.xpathExpression ||
-            updatedEl.devName !== originalEl.devName) {
+            updatedEl.devName !== originalEl.devName ||
+            updatedEl.name !== originalEl.name ||
+            updatedEl.value !== originalEl.value ||
+            updatedEl.platform !== originalEl.platform ||
+            updatedEl.stateId !== originalEl.stateId ||
+            updatedEl.description !== originalEl.description) {
           hasElementChanged = true;
           break;
         }
