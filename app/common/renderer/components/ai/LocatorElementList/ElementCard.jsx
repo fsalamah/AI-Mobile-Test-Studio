@@ -547,20 +547,43 @@ export const ElementCard = ({
           
           {/* XPath - editable */}
           {editingField === 'xpathExpression' ? (
-            <Input.TextArea
-              value={editingValue}
-              onChange={(e) => setEditingValue(e.target.value)}
-              autoFocus
-              size="small"
-              autoSize={{ minRows: 1, maxRows: 2 }}
-              style={{ width: '100%', fontSize: '10px', padding: '2px' }}
-              onPressEnter={(e) => {
-                if (!e.shiftKey) {
-                  e.preventDefault();
-                  saveInlineEdit('xpathExpression');
-                }
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Input.TextArea
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                autoFocus
+                size="small"
+                autoSize={{ minRows: 1, maxRows: 2 }}
+                style={{ flex: 1, fontSize: '10px', padding: '2px' }}
+                onPressEnter={(e) => {
+                  if (!e.shiftKey) {
+                    e.preventDefault();
+                    saveInlineEdit('xpathExpression');
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // Handle Escape key to cancel editing
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEditing();
+                  }
+                }}
+              />
+              <Space size={1} style={{ marginLeft: '3px' }}>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<CheckOutlined style={{ fontSize: '10px', color: '#52c41a' }} />} 
+                  onClick={() => saveInlineEdit('xpathExpression')} 
+                />
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<CloseOutlined style={{ fontSize: '10px', color: '#ff4d4f' }} />} 
+                  onClick={cancelEditing} 
+                />
+              </Space>
+            </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <Tooltip title={item.xpath?.xpathExpression}>
