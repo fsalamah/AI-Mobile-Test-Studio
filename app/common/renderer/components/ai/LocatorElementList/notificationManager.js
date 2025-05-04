@@ -93,8 +93,8 @@ const notificationManager = {
     const now = Date.now();
     const lastShown = recentNotifications.get(key);
     
-    // Suppress if shown in the last 3 seconds
-    return lastShown && (now - lastShown) < 3000;
+    // Suppress if shown in the last 5 seconds (increased from 3 to handle multiple evaluation events)
+    return lastShown && (now - lastShown) < 5000;
   },
   
   /**

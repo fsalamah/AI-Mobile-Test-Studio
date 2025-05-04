@@ -543,10 +543,10 @@ class XPathManager {
             bypassDebounce: true // Crucial - ignore debouncing to ensure delivery
           });
           
-          // As a safety measure, send a second notification after a small delay
-          // This helps ensure ElementCard components receive the update
+          // As a safety measure, send a silent update (not a visible notification) after a delay
+          // This ensures ElementCard components receive the update even if main notification fails
           setTimeout(() => {
-            console.log(`║ 🔄 SAFETY NOTIFICATION: Sending backup notification for ${elementId}`);
+            console.log(`║ 🔄 SILENT UPDATE: Sending silent update for ${elementId}`);
             this.notifyListeners('evaluationComplete', {
               result,
               xpathExpression,
@@ -554,11 +554,12 @@ class XPathManager {
               highlight: false,
               fromHighlighter: true,
               consolidated: true,
-              isBackupNotification: true,
+              isSilentUpdate: true, // Mark as silent to avoid triggering visible notifications
               timestamp: Date.now()
             }, {
               immediate: true,
-              bypassDebounce: true
+              bypassDebounce: true,
+              silent: true // New flag to indicate this shouldn't trigger UI notifications
             });
           }, 200);
         }

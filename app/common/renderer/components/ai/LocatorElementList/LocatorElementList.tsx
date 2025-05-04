@@ -82,7 +82,7 @@ export const LocatorElementList = ({
     const unsubscribe = xpathManager.addListener((eventType, data) => {
       if (eventType === 'evaluationComplete') {
         // Handle XPath evaluation results coming from the manager
-        const { result, xpathExpression, elementId } = data;
+        const { result, xpathExpression, elementId, isSilentUpdate, isBackupNotification } = data;
         
         // Only update the specific element that requested the evaluation
         if (elementId) {
@@ -93,11 +93,20 @@ export const LocatorElementList = ({
             // Update only this element with the evaluation results
             const updatedElements = elements.map(item => {
               if (item.id === elementId) {
-                // Display result
-                if (result.numberOfMatches > 0) {
-                  message.success(`Found ${result.numberOfMatches} match${result.numberOfMatches !== 1 ? 'es' : ''}`);
-                } else {
-                  message.error(`No matches found for ${xpathExpression}`);
+                // Only display notification if this is not a silent update or backup notification
+                if (!isSilentUpdate && !isBackupNotification) {
+                  // Use notification manager to prevent duplicates
+                  if (result.numberOfMatches > 0) {
+                    notificationManager.success(
+                      `Found ${result.numberOfMatches} match${result.numberOfMatches !== 1 ? 'es' : ''}`,
+                      message
+                    );
+                  } else {
+                    notificationManager.error(
+                      `No matches found for ${xpathExpression}`,
+                      message
+                    );
+                  }
                 }
                 
                 return {
@@ -536,8 +545,22 @@ export const LocatorElementList = ({
           );
           updateElementsAndNotify(updatedElements);
           
-          // Show message to user via notification manager
-          notificationManager.success(`Found ${directResult.numberOfMatches} match${directResult.numberOfMatches !== 1 ? 'es' : ''}`, message);
+          // Only show message if notification hasn't been shown
+          if (!element._notificationShown) {
+            // Show message to user via notification manager
+            if (directResult.numberOfMatches > 0) {
+              notificationManager.success(
+                `Found ${directResult.numberOfMatches} match${directResult.numberOfMatches !== 1 ? 'es' : ''}`, 
+                message
+              );
+            } else {
+              notificationManager.error(
+                `No matches found for ${element.xpath.xpathExpression}`,
+                message
+              );
+            }
+            element._notificationShown = true;
+          }
         }
       }, 1000);
       
