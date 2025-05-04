@@ -650,7 +650,9 @@ const ImageHighlighter = ({
           width: dimensions.width, 
           height: dimensions.height,
           boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-          border: '1px solid #eee'
+          border: '1px solid #eee',
+          margin: 0,
+          padding: 0
         }}>
           <img 
             ref={imgElementRef}
@@ -660,7 +662,9 @@ const ImageHighlighter = ({
               display: 'block',
               width: '100%',
               height: '100%',
-              objectFit: 'contain'
+              objectFit: 'contain',
+              margin: 0,
+              padding: 0
             }}
             onLoad={handleImageLoad}
           />
