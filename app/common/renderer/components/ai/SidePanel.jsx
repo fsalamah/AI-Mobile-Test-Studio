@@ -145,8 +145,8 @@ const SidePanel = ({
             setIsCollapsedInternal(newCollapsedState);
         }
         
-        // Always update width
-        setSiderWidth(newCollapsedState ? 0 : 300);
+        // Set width based on state - 60px when collapsed, 300px when expanded
+        setSiderWidth(newCollapsedState ? 60 : 300);
     };
     
     // Listen for collapse events from other components
@@ -160,7 +160,8 @@ const SidePanel = ({
                 } else {
                     setIsCollapsedInternal(true);
                 }
-                setSiderWidth(0);
+                // Set to 60px when collapsed (matches width in the screenshot)
+                setSiderWidth(60);
             } else if (newCollapsedState === false && isCollapsed) {
                 if (onCollapseChange) {
                     onCollapseChange(false);
@@ -189,7 +190,8 @@ const SidePanel = ({
                     overflowY: 'auto', 
                     display: 'flex', 
                     flexDirection: 'column',
-                    transition: isCollapsed ? 'width 0.2s' : 'none'
+                    transition: 'width 0.2s ease',
+                    minWidth: isCollapsed ? '60px' : '200px'
                 }}
                 ref={siderRef}
                 collapsed={isCollapsed}
@@ -253,7 +255,8 @@ const SidePanel = ({
                     position: 'absolute',
                     top: 0,
                     bottom: 0,
-                    left: isCollapsed ? 12 : siderWidth, // Fixed position when collapsed
+                    // When collapsed, position at the edge of the collapsed sidebar (60px)
+                    left: siderWidth,
                     width: '8px',
                     cursor: isCollapsed ? 'default' : 'ew-resize',
                     zIndex: 100,
