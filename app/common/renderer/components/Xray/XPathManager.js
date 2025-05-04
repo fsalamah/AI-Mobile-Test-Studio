@@ -1,8 +1,18 @@
 /**
  * XPathManager.js
  * 
- * A singleton manager for XPath evaluations that provides direct access
- * and synchronization between components.
+ * A singleton manager for XPath evaluations that provides centralized access
+ * and synchronization between components. This manager ensures consistent
+ * evaluation results, handles platform-specific behavior, and provides
+ * caching for improved performance.
+ * 
+ * Key features:
+ * - XML document caching for performance
+ * - Evaluation results caching
+ * - Platform-aware evaluation (iOS vs Android)
+ * - Event-based notification system
+ * - Debounced updates to prevent UI flickering
+ * - Consolidated highlighting
  */
 import xpath from 'xpath';
 import { DOMParser, XMLSerializer } from 'xmldom';
@@ -11,7 +21,9 @@ import { DOMParser, XMLSerializer } from 'xmldom';
 /**
  * XPathManager
  * 
- * Centralized manager for XPath evaluations with unified event handling
+ * Centralized manager for XPath evaluations with unified event handling.
+ * All XPath evaluations in the application should go through this manager
+ * to ensure consistent behavior and performance.
  */
 class XPathManager {
   constructor() {
@@ -24,6 +36,17 @@ class XPathManager {
     this.activeEvaluations = new Set(); // Track elements currently being evaluated
     this.xmlDoc = null; // Parsed XML document
     this.highlightedNodes = []; // Currently highlighted nodes
+    this.debug = false; // Global debug flag (can be enabled for troubleshooting)
+  }
+  
+  /**
+   * Helper method for debug logging
+   * @private
+   */
+  _log(message, force = false) {
+    if (this.debug || force) {
+      console.log(message);
+    }
   }
 
   /**
@@ -91,31 +114,47 @@ class XPathManager {
    * @param {boolean} [options.updateUI=true] - Whether to update UI components
    * @returns {Object} - Evaluation result
    */
+  /**
+   * Centralized evaluation method - all XPath evaluations should go through this
+   * @param {Object} options - Evaluation options
+   * @param {string} options.xpathExpression - XPath expression to evaluate
+   * @param {string} [options.elementId] - ID of element requesting evaluation (for tracking)
+   * @param {string} [options.elementPlatform] - Platform of element (ios/android)
+   * @param {boolean} [options.highlight=true] - Whether to highlight matching nodes
+   * @param {boolean} [options.updateUI=true] - Whether to update UI components
+   * @param {boolean} [options.debug=false] - Enable verbose debug logging
+   * @returns {Object} - Evaluation result
+   */
   centralizedEvaluate(options) {
-    console.log("╔══════════════════════════════════════════════════════");
-    console.log("║ XPATH EVALUATION: Starting centralized evaluation");
-    console.log("╠══════════════════════════════════════════════════════");
-    
+    // Extract options with defaults
     const { 
       xpathExpression, 
       elementId = null, 
       elementPlatform = null,
       highlight = true, 
-      updateUI = true 
+      updateUI = true,
+      debug = false
     } = options;
     
-    console.log(`║ 📝 Expression: ${xpathExpression}`);
-    console.log(`║ 🆔 Element ID: ${elementId || 'none'}`);
-    console.log(`║ 🔍 Highlight: ${highlight}`);
-    console.log(`║ 🖥️ Update UI: ${updateUI}`);
-    console.log(`║ 📱 Element Platform: ${elementPlatform || 'not specified'}`);
-    console.log(`║ 📱 Manager Platform: ${this.currentPlatform}`);
-    console.log(`║ 🏠 Current State ID: ${this.currentStateId}`);
-    console.log(`║ 🏠 XML Doc exists: ${!!this.xmlDoc}`);
-    console.log(`║ 🏠 XML source length: ${this.xmlSource?.length || 0}`);
+    // Only log in debug mode
+    if (debug) {
+      console.log("╔══════════════════════════════════════════════════════");
+      console.log("║ XPATH EVALUATION: Starting centralized evaluation");
+      console.log("╠══════════════════════════════════════════════════════");
+      console.log(`║ 📝 Expression: ${xpathExpression}`);
+      console.log(`║ 🆔 Element ID: ${elementId || 'none'}`);
+      console.log(`║ 🔍 Highlight: ${highlight}`);
+      console.log(`║ 🖥️ Update UI: ${updateUI}`);
+      console.log(`║ 📱 Element Platform: ${elementPlatform || 'not specified'}`);
+      console.log(`║ 📱 Manager Platform: ${this.currentPlatform}`);
+      console.log(`║ 🏠 Current State ID: ${this.currentStateId}`);
+      console.log(`║ 🏠 XML Doc exists: ${!!this.xmlDoc}`);
+      console.log(`║ 🏠 XML source length: ${this.xmlSource?.length || 0}`);
+    }
     
     if (!xpathExpression || !this.xmlDoc) {
-      console.log(`║ ⚠️ Empty expression or no XML doc - returning empty result`);
+      if (debug) console.log(`║ ⚠️ Empty expression or no XML doc - returning empty result`);
+      
       // Clear highlights if requested
       if (highlight) {
         this.clearHighlights();
@@ -132,7 +171,7 @@ class XPathManager {
       
       // Notify listeners about the evaluation
       if (updateUI) {
-        console.log(`║ 📢 Notifying listeners about empty result`);
+        if (debug) console.log(`║ 📢 Notifying listeners about empty result`);
         this.notifyListeners('evaluationComplete', {
           result: emptyResult,
           xpathExpression,
@@ -141,13 +180,13 @@ class XPathManager {
         });
       }
       
-      console.log("╚══════════════════════════════════════════════════════");
+      if (debug) console.log("╚══════════════════════════════════════════════════════");
       return emptyResult;
     }
     
     // Prevent duplicate evaluations
     if (elementId && this.activeEvaluations.has(elementId)) {
-      console.log(`║ ⚠️ Element ${elementId} is already being evaluated, skipping`);
+      if (debug) console.log(`║ ⚠️ Element ${elementId} is already being evaluated, skipping`);
       const inProgressResult = {
         xpathExpression,
         numberOfMatches: -1,
@@ -156,37 +195,37 @@ class XPathManager {
         inProgress: true,
         success: false
       };
-      console.log("╚══════════════════════════════════════════════════════");
+      if (debug) console.log("╚══════════════════════════════════════════════════════");
       return inProgressResult;
     }
     
     // Track active evaluations
     if (elementId) {
-      console.log(`║ 🔄 Adding element ${elementId} to active evaluations`);
+      if (debug) console.log(`║ 🔄 Adding element ${elementId} to active evaluations`);
       this.activeEvaluations.add(elementId);
     }
     
     // Get platform for context-aware evaluation
     const platform = elementPlatform || this.currentPlatform;
-    console.log(`║ 📱 Using platform for evaluation: ${platform}`);
+    if (debug) console.log(`║ 📱 Using platform for evaluation: ${platform}`);
     
     // Create a platform-aware cache key
     const cacheKey = `${this.currentStateId}:${platform}:${xpathExpression}`;
-    console.log(`║ 🔑 Cache key: ${cacheKey}`);
+    if (debug) console.log(`║ 🔑 Cache key: ${cacheKey}`);
     let result;
     
     try {
       // Try to use cache first
       if (this.lastEvaluationResults.has(cacheKey)) {
         result = this.lastEvaluationResults.get(cacheKey);
-        console.log(`║ 🗄️ CACHE HIT: Using cached result with ${result.numberOfMatches} matches`);
+        if (debug) console.log(`║ 🗄️ CACHE HIT: Using cached result with ${result.numberOfMatches} matches`);
       } else {
-        console.log(`║ 🔎 EVALUATING: Running XPath expression against XML`);
+        if (debug) console.log(`║ 🔎 EVALUATING: Running XPath expression against XML`);
         // Evaluate the XPath
         const nodes = xpath.select(xpathExpression, this.xmlDoc);
         const serializer = new XMLSerializer();
         
-        console.log(`║ 🎯 FOUND: ${nodes.length} matching nodes`);
+        if (debug) console.log(`║ 🎯 FOUND: ${nodes.length} matching nodes`);
         
         // Collect the nodes and serialize - ensuring each node is properly serialized
         const nodeDetails = [];
@@ -196,17 +235,19 @@ class XPathManager {
         for (let i = 0; i < nodes.length; i++) {
           try {
             const node = nodes[i];
-            console.log(`║ 📄 NODE ${i}:`);
-            console.log(`║   Type: ${node.nodeType}`);
-            if (node.nodeName) console.log(`║   Name: ${node.nodeName}`);
-            
-            // For element nodes, log attributes
-            if (node.nodeType === 1) {
-              console.log(`║   Attributes:`, 
-                Array.from(node.attributes || [])
-                .map(attr => `${attr.name}="${attr.value}"`)
-                .join(', ')
-              );
+            if (debug) {
+              console.log(`║ 📄 NODE ${i}:`);
+              console.log(`║   Type: ${node.nodeType}`);
+              if (node.nodeName) console.log(`║   Name: ${node.nodeName}`);
+              
+              // For element nodes, log attributes
+              if (node.nodeType === 1) {
+                console.log(`║   Attributes:`, 
+                  Array.from(node.attributes || [])
+                  .map(attr => `${attr.name}="${attr.value}"`)
+                  .join(', ')
+                );
+              }
             }
             
             const serializedNode = serializer.serializeToString(node);
@@ -215,45 +256,83 @@ class XPathManager {
             // Store additional node data for highlighting - we need to properly extract bounds
             const boundsData = {};
             
-            // Extract Android bounds from bounds attribute
-            if (node.getAttribute && node.getAttribute('bounds')) {
-              const boundsAttr = node.getAttribute('bounds');
-              console.log(`║   📱 ANDROID: Found bounds attribute: ${boundsAttr}`);
-              const match = boundsAttr.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
-              if (match) {
-                const [_, x1, y1, x2, y2] = match.map(Number);
-                console.log(`║   📏 Parsed bounds: [${x1},${y1}][${x2},${y2}]`);
-                console.log(`║   📏 Number values: x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2}`);
-                boundsData.bounds = boundsAttr;
-                boundsData.androidBounds = { x1, y1, x2, y2 };
-                // Add explicit logging to verify the object was created correctly
-                console.log(`║   ✅ Created androidBounds object:`, JSON.stringify(boundsData.androidBounds));
-              } else {
-                console.log(`║   ❌ Could not parse bounds: ${boundsAttr}`);
-                console.log(`║   ❌ Regex match failed. Expected format: [x1,y1][x2,y2]`);
+            // Extract node position data with robust error handling and platform detection
+            try {
+              // Check for Android bounds format first
+              if (node.getAttribute && node.getAttribute('bounds')) {
+                const boundsAttr = node.getAttribute('bounds');
+                console.log(`║   📱 ANDROID: Found bounds attribute: ${boundsAttr}`);
+                const match = boundsAttr.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+                if (match) {
+                  const [_, x1, y1, x2, y2] = match.map(Number);
+                  console.log(`║   📏 Parsed bounds: [${x1},${y1}][${x2},${y2}]`);
+                  console.log(`║   📏 Number values: x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2}`);
+                  boundsData.bounds = boundsAttr;
+                  boundsData.androidBounds = { x1, y1, x2, y2 };
+                  // Add width and height for consistency
+                  boundsData.width = x2 - x1;
+                  boundsData.height = y2 - y1;
+                  boundsData.x = x1;
+                  boundsData.y = y1;
+                  // Mark platform explicitly
+                  boundsData.platform = 'android';
+                  boundsData.isAndroid = true;
+                  // Add explicit logging to verify the object was created correctly
+                  console.log(`║   ✅ Created androidBounds object:`, JSON.stringify(boundsData.androidBounds));
+                } else {
+                  console.log(`║   ❌ Could not parse bounds: ${boundsAttr}`);
+                  console.log(`║   ❌ Regex match failed. Expected format: [x1,y1][x2,y2]`);
+                }
               }
-            }
-            // Extract iOS bounds from x,y,width,height attributes
-            else if (node.getAttribute && 
-                     node.getAttribute('x') !== null && 
-                     node.getAttribute('y') !== null &&
-                     node.getAttribute('width') !== null &&
-                     node.getAttribute('height') !== null) {
-              const x = parseInt(node.getAttribute('x'), 10);
-              const y = parseInt(node.getAttribute('y'), 10);
-              const width = parseInt(node.getAttribute('width'), 10);
-              const height = parseInt(node.getAttribute('height'), 10);
-              console.log(`║   📱 iOS: Found position attributes: x=${x}, y=${y}, width=${width}, height=${height}`);
               
-              boundsData.x = x;
-              boundsData.y = y;
-              boundsData.width = width;
-              boundsData.height = height;
+              // Check for iOS position attributes (x,y,width,height)
+              // Note: Both checks can run as some elements might have both types of attributes
+              if (node.getAttribute && 
+                  node.getAttribute('x') !== null && 
+                  node.getAttribute('y') !== null &&
+                  node.getAttribute('width') !== null &&
+                  node.getAttribute('height') !== null) {
+                const x = parseInt(node.getAttribute('x'), 10);
+                const y = parseInt(node.getAttribute('y'), 10);
+                const width = parseInt(node.getAttribute('width'), 10);
+                const height = parseInt(node.getAttribute('height'), 10);
+                console.log(`║   📱 iOS: Found position attributes: x=${x}, y=${y}, width=${width}, height=${height}`);
+                
+                boundsData.x = x;
+                boundsData.y = y;
+                boundsData.width = width;
+                boundsData.height = height;
+                // Calculate x2, y2 for consistency with Android format
+                boundsData.x2 = x + width;
+                boundsData.y2 = y + height;
+                // Mark platform explicitly
+                boundsData.platform = 'ios';
+                boundsData.isIOS = true;
+                
+                // Log for debugging
+                console.log(`║   ✅ Created iOS bounds object: x=${x}, y=${y}, width=${width}, height=${height}`);
+              }
               
-              // Log for debugging
-              console.log(`║   ✅ Created iOS bounds object: x=${x}, y=${y}, width=${width}, height=${height}`);
-            } else {
-              console.log(`║   ⚠️ No position data found for this node`);
+              // If we still don't have position info, try to infer platform from node properties
+              if (!boundsData.platform) {
+                // Check for iOS-specific element types
+                if (node.nodeName && node.nodeName.startsWith('XCUIElement')) {
+                  boundsData.platform = 'ios';
+                  boundsData.isIOS = true;
+                  console.log(`║   📱 Detected iOS element from nodeName: ${node.nodeName}`);
+                } 
+                // Check for Android-specific class attributes
+                else if (node.getAttribute && node.getAttribute('class') && 
+                         node.getAttribute('class').includes('android.')) {
+                  boundsData.platform = 'android';
+                  boundsData.isAndroid = true;
+                  console.log(`║   📱 Detected Android element from class: ${node.getAttribute('class')}`);
+                } else {
+                  console.log(`║   ⚠️ No position data or platform indicators found for this node`);
+                }
+              }
+            } catch (err) {
+              console.error(`║   🔥 Error parsing position data:`, err);
             }
             
             // Add node to detail list
@@ -284,38 +363,68 @@ class XPathManager {
           
           // For element nodes, extract bounds information carefully
           if (node.nodeType === 1 && node.getAttribute) {
-            // For Android elements with bounds attribute
-            const bounds = node.getAttribute('bounds');
-            if (bounds) {
-              console.log(`║ 📱 Node ${index} has Android bounds: ${bounds}`);
-              safeNode.bounds = bounds;
-              
-              // Parse Android bounds format [x1,y1][x2,y2]
-              const match = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
-              if (match) {
-                const [_, x1, y1, x2, y2] = match.map(Number);
-                safeNode.androidBounds = { x1, y1, x2, y2 };
-                console.log(`║ ✅ Created androidBounds for node ${index}: x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2}`);
-              } else {
-                console.log(`║ ❌ Failed to parse Android bounds for node ${index}: ${bounds}`);
+            try {
+              // First check for Android-specific bounds attribute
+              const bounds = node.getAttribute('bounds');
+              if (bounds) {
+                console.log(`║ 📱 Node ${index} has Android bounds: ${bounds}`);
+                safeNode.bounds = bounds;
+                
+                // Parse Android bounds format [x1,y1][x2,y2]
+                const match = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+                if (match) {
+                  const [_, x1, y1, x2, y2] = match.map(Number);
+                  safeNode.androidBounds = { x1, y1, x2, y2 };
+                  // Also add calculated width and height for consistency
+                  safeNode.width = x2 - x1;
+                  safeNode.height = y2 - y1;
+                  safeNode.x = x1; // Add x,y for cross-platform consistency
+                  safeNode.y = y1;
+                  console.log(`║ ✅ Created androidBounds for node ${index}: x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2}, w=${safeNode.width}, h=${safeNode.height}`);
+                  
+                  // Explicitly mark as Android for highlighting logic
+                  safeNode.isAndroid = true;
+                  safeNode.platform = 'android';
+                } else {
+                  console.log(`║ ❌ Failed to parse Android bounds for node ${index}: ${bounds}`);
+                }
               }
-            }
-            
-            // For iOS elements with x,y,width,height attributes
-            const x = node.getAttribute('x');
-            const y = node.getAttribute('y');
-            const width = node.getAttribute('width');
-            const height = node.getAttribute('height');
-            
-            if (x !== null && y !== null && width !== null && height !== null) {
-              safeNode.x = parseInt(x, 10);
-              safeNode.y = parseInt(y, 10);
-              safeNode.width = parseInt(width, 10);
-              safeNode.height = parseInt(height, 10);
-              console.log(`║ 📱 Node ${index} has iOS bounds: x=${safeNode.x}, y=${safeNode.y}, w=${safeNode.width}, h=${safeNode.height}`);
               
-              // Explicitly mark this as an iOS node to help with debugging
-              safeNode.isIOS = true;
+              // Then check for iOS position attributes - these can coexist with bounds in some cases
+              const x = node.getAttribute('x');
+              const y = node.getAttribute('y');
+              const width = node.getAttribute('width');
+              const height = node.getAttribute('height');
+              
+              if (x !== null && y !== null && width !== null && height !== null) {
+                safeNode.x = parseInt(x, 10);
+                safeNode.y = parseInt(y, 10);
+                safeNode.width = parseInt(width, 10);
+                safeNode.height = parseInt(height, 10);
+                // Calculate bottom-right coordinates for consistency with Android format
+                safeNode.x2 = safeNode.x + safeNode.width;
+                safeNode.y2 = safeNode.y + safeNode.height;
+                
+                console.log(`║ 📱 Node ${index} has iOS bounds: x=${safeNode.x}, y=${safeNode.y}, w=${safeNode.width}, h=${safeNode.height}`);
+                
+                // Explicitly mark this as an iOS node to help with highlighting
+                safeNode.isIOS = true;
+                safeNode.platform = 'ios';
+              }
+              
+              // If no position info was found, see if we can infer platform from node name
+              if (!safeNode.isAndroid && !safeNode.isIOS) {
+                if (node.nodeName && node.nodeName.startsWith('XCUIElement')) {
+                  safeNode.isIOS = true;
+                  safeNode.platform = 'ios';
+                } else if (node.getAttribute && node.getAttribute('class') && 
+                          node.getAttribute('class').includes('android.')) {
+                  safeNode.isAndroid = true; 
+                  safeNode.platform = 'android';
+                }
+              }
+            } catch (err) {
+              console.error(`║ 🔥 Error parsing node ${index} attributes:`, err);
             }
           }
           
@@ -704,18 +813,35 @@ class XPathManager {
    * @param {string} eventType - Type of event
    * @param {Object} data - Event data
    * @param {Object} [options] - Additional options
-   * @param {boolean} [options.debounce=false] - Whether to debounce the event
+   * @param {boolean} [options.bypassDebounce=false] - Whether to bypass debouncing
    * @param {boolean} [options.immediate=false] - Whether to dispatch immediately without timeout
+   * @param {boolean} [options.debug=false] - Whether to enable debug logging for this notification
+   * @param {boolean} [options.force=false] - Whether to force notification even for identical data
    */
   notifyListeners(eventType, data, options = {}) {
-    console.log(`║ 📣 NOTIFY LISTENERS: Event type=${eventType}, listeners=${this.listeners.length}`);
+    const debug = options.debug || this.debug;
+    if (debug) this._log(`║ 📣 NOTIFY LISTENERS: Event type=${eventType}, listeners=${this.listeners.length}`);
+    
+    // Enhanced event key with more robust platform handling
+    const elementId = data.elementId || 'global';
+    const xpathExpression = data.xpathExpression || '';
+    // Handle platform data more carefully
+    const platform = data.platform || data.result?.platform || this.currentPlatform || 'unknown';
     
     // Create unique event key for debouncing all event types
-    const eventKey = `${eventType}:${data.elementId || 'global'}:${data.xpathExpression || ''}:${data.platform || this.currentPlatform}`;
+    const eventKey = `${eventType}:${elementId}:${xpathExpression}:${platform}`;
     const now = Date.now();
     
+    // Add timestamp to data for debugging timing issues
+    const enhancedData = {
+      ...data,
+      _timestamp: now,
+      _platform: platform, // Ensure platform is always set
+      _eventKey: eventKey // Include event key for debugging
+    };
+    
     // Global debouncing for all events to prevent redundant notifications
-    if (!options.bypassDebounce && this._lastEventTimes && this._lastEventTimes[eventKey]) {
+    if (!options.bypassDebounce && !options.force && this._lastEventTimes && this._lastEventTimes[eventKey]) {
       const lastTime = this._lastEventTimes[eventKey];
       const elapsed = now - lastTime;
       
@@ -726,7 +852,7 @@ class XPathManager {
         30; // 30ms for other events
         
       if (elapsed < debounceWindow) {
-        console.log(`║ 🔄 DEBOUNCING: Skipping duplicate ${eventType} event (${elapsed}ms < ${debounceWindow}ms)`);
+        if (debug) this._log(`║ 🔄 DEBOUNCING: Skipping duplicate ${eventType} event (${elapsed}ms < ${debounceWindow}ms)`);
         return; // Skip this duplicate event
       }
     }
@@ -736,61 +862,113 @@ class XPathManager {
     this._lastEventTimes[eventKey] = now;
     
     // Special handling for evaluationComplete events to avoid redundant UI updates
-    if (eventType === 'evaluationComplete' && data.elementId) {
+    if (eventType === 'evaluationComplete' && elementId !== 'global') {
       // If this is a post-highlight update and we've already notified for this element,
       // only send the update if we don't have a recent update for this element/xpath combo
-      if (data.fromHighlighter && this._recentEvaluationUpdates && this._recentEvaluationUpdates[data.elementId]) {
-        const lastUpdateTime = this._recentEvaluationUpdates[data.elementId].time;
+      if (data.fromHighlighter && this._recentEvaluationUpdates && this._recentEvaluationUpdates[elementId]) {
+        const lastUpdateTime = this._recentEvaluationUpdates[elementId].time;
         const elapsed = now - lastUpdateTime;
         
         // If we've updated this element recently, check if the result is the same
-        if (elapsed < 300 && this._recentEvaluationUpdates[data.elementId].count === data.result.numberOfMatches) {
-          console.log(`║ 🔄 SKIPPING REDUNDANT UPDATE: Element ${data.elementId} already updated ${elapsed}ms ago with same count`);
+        if (!options.force && elapsed < 300 && this._recentEvaluationUpdates[elementId].count === data.result?.numberOfMatches) {
+          if (debug) this._log(`║ 🔄 SKIPPING REDUNDANT UPDATE: Element ${elementId} already updated ${elapsed}ms ago with same count`);
           return; // Skip redundant update
         }
       }
       
       // Track this evaluation update
       this._recentEvaluationUpdates = this._recentEvaluationUpdates || {};
-      this._recentEvaluationUpdates[data.elementId] = {
+      this._recentEvaluationUpdates[elementId] = {
         time: now,
-        count: data.result.numberOfMatches
+        count: data.result?.numberOfMatches || 0,
+        xpath: xpathExpression
       };
     }
     
     // Specific logging for highlight events
-    if (eventType === 'highlightsChanged') {
-      console.log(`║ 🔆 HIGHLIGHTS EVENT: XPath=${data.xpathExpression?.slice(0, 30)}...`);
-      console.log(`║   Nodes: ${data.nodes?.length || 0}`);
-      console.log(`║   Platform: ${data.platform || 'not specified'}`);
+    if (debug && eventType === 'highlightsChanged') {
+      this._log(`║ 🔆 HIGHLIGHTS EVENT: XPath=${xpathExpression.slice(0, 30)}...`);
+      this._log(`║   Nodes: ${enhancedData.nodes?.length || 0}`);
+      this._log(`║   Platform: ${platform}`);
+    }
+    
+    // Specific logging for evaluation events
+    if (debug && eventType === 'evaluationComplete') {
+      this._log(`║ 🎯 EVALUATION COMPLETE: Element=${elementId}`);
+      this._log(`║   XPath: ${xpathExpression.slice(0, 30)}...`);
+      this._log(`║   Matches: ${data.result?.numberOfMatches || 0}`);
+      this._log(`║   Platform: ${platform}`);
+      if (data.isBackupNotification) this._log(`║   BACKUP NOTIFICATION`);
+      if (data.consolidated) this._log(`║   CONSOLIDATED EVENT`);
     }
     
     // Dispatch the event - either immediately or with a minimal timeout
     // Using requestAnimationFrame for better integration with React's rendering cycle
     const dispatchEvent = () => {
-      console.log(`║ 🔄 Dispatching event to ${this.listeners.length} listeners`);
+      if (debug) this._log(`║ 🔄 Dispatching event to ${this.listeners.length} listeners`);
       this.listeners.forEach((listener, index) => {
         try {
-          listener(eventType, data);
-          console.log(`║   Listener #${index + 1} completed`);
+          listener(eventType, enhancedData);
+          if (debug) this._log(`║   Listener #${index + 1} completed`);
         } catch (error) {
           console.error(`║   ❌ ERROR in listener #${index + 1}:`, error);
         }
       });
-      console.log(`║ ✅ Event dispatch complete`);
-      console.log("╚══════════════════════════════════════════════════════");
+      if (debug) {
+        this._log(`║ ✅ Event dispatch complete`);
+        this._log("╚══════════════════════════════════════════════════════");
+      }
     };
     
-    // Use requestAnimationFrame for better visual updates when available
-    if (typeof window !== 'undefined' && window.requestAnimationFrame && !options.immediate) {
-      window.requestAnimationFrame(dispatchEvent);
-    } else if (options.immediate) {
+    // Determine dispatch method
+    if (options.immediate) {
       // Immediate dispatch without any timeout
       dispatchEvent();
+    } else if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      // Use requestAnimationFrame for better visual updates when available
+      window.requestAnimationFrame(dispatchEvent);
     } else {
       // Fallback to setTimeout with 0 delay
       setTimeout(dispatchEvent, 0);
     }
+    
+    // Special handling for stuck evaluations
+    // If this is an evaluationComplete event, schedule a backup notification
+    // This helps ensure that UI components receive updates even if they're temporarily not responsive
+    if (eventType === 'evaluationComplete' && elementId !== 'global' && !data.isBackupNotification) {
+      // Don't create backups of backups to avoid recursion
+      // Schedule a backup notification after a delay (~200ms)
+      setTimeout(() => {
+        // Check if any more recent notifications have happened for this element
+        const hasMoreRecentUpdate = this._recentEvaluationUpdates?.[elementId]?.time > now;
+        
+        if (!hasMoreRecentUpdate) {
+          if (debug) this._log(`║ 🔁 Sending BACKUP notification for ${elementId}`);
+          
+          // Send a backup notification
+          this.notifyListeners(eventType, {
+            ...data,
+            isBackupNotification: true,
+            _originalTimestamp: now,
+            _backupTimestamp: Date.now()
+          }, {
+            immediate: true,
+            bypassDebounce: true,
+            force: true,
+            debug: debug
+          });
+        }
+      }, 200);
+    }
+  }
+  
+  /**
+   * Enable or disable debug mode
+   * @param {boolean} enabled - Whether to enable debug logging
+   */
+  setDebugMode(enabled) {
+    this.debug = enabled;
+    this._log(`Debug mode ${enabled ? 'enabled' : 'disabled'}`, true);
   }
 }
 
