@@ -501,6 +501,13 @@ export const ElementCard = ({
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}
               onPressEnter={() => saveInlineEdit('devName')}
+              onKeyDown={(e) => {
+                // Handle Escape key to cancel editing
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelEditing();
+                }
+              }}
               autoFocus
               size="small"
               style={{ width: '100%', height: '22px' }}
