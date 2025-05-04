@@ -62,6 +62,27 @@ export const saveProjectState = (pages, selectedPageId, currentView, fileHandle)
             ...aiAnalysis,
             // Keep code generation results
             code: aiAnalysis.code,
+            // Properly preserve locators with XPath data if they exist
+            locators: aiAnalysis.locators ? 
+              aiAnalysis.locators.map(loc => ({
+                id: loc.id,
+                devName: loc.devName,
+                name: loc.name,
+                value: loc.value,
+                description: loc.description,
+                stateId: loc.stateId,
+                platform: loc.platform,
+                // Preserve essential XPath data
+                xpath: loc.xpath ? {
+                  xpathExpression: loc.xpath.xpathExpression,
+                  numberOfMatches: loc.xpath.numberOfMatches || 0,
+                  isValid: loc.xpath.isValid !== false,
+                  // Preserve alternative XPaths if they exist
+                  alternativeXpaths: loc.xpath.alternativeXpaths || [],
+                  // Preserve evaluated alternatives if they exist
+                  evaluatedAlternatives: loc.xpath.evaluatedAlternatives || []
+                } : null
+              })) : [],
             // Remove or minimize large data structures
             matchingNodes: aiAnalysis.matchingNodes ? 
               aiAnalysis.matchingNodes.length : 0, // Just keep the count
@@ -70,6 +91,21 @@ export const saveProjectState = (pages, selectedPageId, currentView, fileHandle)
                 id: el.id,
                 devName: el.devName,
                 name: el.name,
+                value: el.value,
+                description: el.description,
+                stateId: el.stateId,
+                platform: el.platform,
+                // Preserve essential XPath evaluation data
+                xpath: el.xpath ? {
+                  xpathExpression: el.xpath.xpathExpression,
+                  numberOfMatches: el.xpath.numberOfMatches || 0,
+                  isValid: el.xpath.isValid !== false,
+                  // Preserve alternative XPaths if they exist
+                  alternativeXpaths: el.xpath.alternativeXpaths || [],
+                  // Preserve evaluated alternatives if they exist
+                  evaluatedAlternatives: el.xpath.evaluatedAlternatives || []
+                  // Omitting matchingNodes to save space
+                } : null,
                 // Omit large base64 data and raw XML
               })) : [],
           } : null;
