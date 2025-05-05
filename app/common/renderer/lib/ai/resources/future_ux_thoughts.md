@@ -1,5 +1,12 @@
 # Future UX Thoughts for AI Module
 
+## References
+- [Mind Map Module Design](./mindmap_module_design.md) - Core design of the mind map feature
+- [Recorder Implementation Plan](./recorder_implementation_plan.md) - Detailed implementation plan for the recording module
+- [Inspector Integration Analysis](./inspector_integration_analysis.md) - Analysis of integration points with Appium Inspector
+- [Implementation Structure Requirements](./implementation_structure_requirements.md) - Structural requirements and constraints
+- [Framework Strategy Thoughts](./framework_strategy_thoughts.md) - Considerations for test framework integration
+
 ## Current UX Flow Analysis
 - The current sequential workflow (capture → analyze → generate) follows a logical progression
 - Visual element identification provides user-friendly feedback

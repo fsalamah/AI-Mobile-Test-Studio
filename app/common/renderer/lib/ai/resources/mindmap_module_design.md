@@ -3,6 +3,13 @@
 ## Overview
 This document outlines the high-level design for an AI-assisted mindmap module integrated into Appium Inspector, creating a comprehensive solution for test flow recording, visualization, generation, and execution.
 
+## References
+- [Recorder Implementation Plan](./recorder_implementation_plan.md) - Detailed implementation plan for the recording module
+- [Inspector Integration Analysis](./inspector_integration_analysis.md) - Analysis of integration points with Appium Inspector
+- [Implementation Structure Requirements](./implementation_structure_requirements.md) - Structural requirements and constraints
+- [Framework Strategy Thoughts](./framework_strategy_thoughts.md) - Considerations for test framework integration
+- [Future UX Thoughts](./future_ux_thoughts.md) - UX considerations and future plans
+
 ## Core System Architecture
 
 ### 1. Enhanced Testing Workflow

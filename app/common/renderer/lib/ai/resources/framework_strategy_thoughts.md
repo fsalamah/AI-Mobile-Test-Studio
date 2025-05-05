@@ -1,5 +1,12 @@
 # Test Automation Framework Strategy
 
+## References
+- [Mind Map Module Design](./mindmap_module_design.md) - Core design of the mind map feature
+- [Recorder Implementation Plan](./recorder_implementation_plan.md) - Detailed implementation plan for the recording module
+- [Inspector Integration Analysis](./inspector_integration_analysis.md) - Analysis of integration points with Appium Inspector
+- [Implementation Structure Requirements](./implementation_structure_requirements.md) - Structural requirements and constraints
+- [Future UX Thoughts](./future_ux_thoughts.md) - UX considerations and future plans
+
 ## Integration with Existing Projects
 Discussion date: May 5, 2025
 
