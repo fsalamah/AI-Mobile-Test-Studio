@@ -1,5 +1,5 @@
 // SidePanel.jsx
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Layout, Button, Dropdown, Menu, Input } from "antd";
 import {
     PlusOutlined,
@@ -10,9 +10,13 @@ import {
     LeftOutlined,
     RightOutlined,
     RobotOutlined,
-    SettingOutlined
+    SettingOutlined,
+    HistoryOutlined,
+    DeleteOutlined,
+    FileOutlined
 } from "@ant-design/icons";
 import PageTree from "./PageTree.jsx";
+import { getRecentProjects, removeRecentProject } from "./utils/FileOperationsUtils.js";
 
 const { Sider } = Layout;
 const { Search } = Input;
@@ -41,6 +45,45 @@ const SidePanel = ({
         document.dispatchEvent(new CustomEvent('showNewPageModal'));
     };
 
+    // State to hold recent projects
+    const [recentProjects, setRecentProjects] = useState([]);
+    
+    // Load recent projects when component mounts or when operations occur
+    useEffect(() => {
+        // Set up an interval to refresh recent projects every 5 seconds
+        setRecentProjects(getRecentProjects());
+        
+        const refreshInterval = setInterval(() => {
+            setRecentProjects(getRecentProjects());
+        }, 5000);
+        
+        // Also refresh when menu is opened
+        const handleMenuOpen = () => {
+            setRecentProjects(getRecentProjects());
+        };
+        
+        // Clean up interval on unmount
+        return () => {
+            clearInterval(refreshInterval);
+        };
+    }, []);
+    
+    // Handler for opening a recent project
+    const handleOpenRecentProject = (projectName) => {
+        if (fileOperations.openRecentProject) {
+            fileOperations.openRecentProject(projectName);
+        }
+    };
+    
+    // Handler for removing a project from recent list
+    const handleRemoveRecentProject = (e, projectName) => {
+        e.stopPropagation(); // Prevent the menu item click from propagating
+        
+        // Remove from list
+        const updatedProjects = removeRecentProject(projectName);
+        setRecentProjects(updatedProjects);
+    };
+
     const menu = (
         <Menu>
             <Menu.Item 
@@ -65,6 +108,38 @@ const SidePanel = ({
             >
                 {saving ? "Saving..." : "Save Project"}
             </Menu.Item>
+            
+            {/* Recent Projects Submenu */}
+            {recentProjects.length > 0 && (
+                <Menu.SubMenu 
+                    key="recent_projects" 
+                    icon={<HistoryOutlined />} 
+                    title="Recent Projects"
+                >
+                    {recentProjects.map((project, index) => (
+                        <Menu.Item 
+                            key={`recent_${index}`}
+                            icon={<FileOutlined />}
+                            onClick={() => handleOpenRecentProject(project.name)}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {project.name}
+                                </span>
+                                <Button 
+                                    type="text" 
+                                    size="small" 
+                                    danger 
+                                    icon={<DeleteOutlined />}
+                                    style={{ padding: '0 4px', marginLeft: '8px' }}
+                                    onClick={(e) => handleRemoveRecentProject(e, project.name)}
+                                    title="Remove from recent projects"
+                                />
+                            </div>
+                        </Menu.Item>
+                    ))}
+                </Menu.SubMenu>
+            )}
             
             <Menu.Divider />
             
@@ -99,6 +174,7 @@ const SidePanel = ({
     const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : isCollapsedInternal;
     const resizerRef = useRef(null);
     const siderRef = useRef(null);
+    const containerRef = useRef(null);
     const isDraggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
@@ -118,8 +194,10 @@ const SidePanel = ({
     // Handle resizer drag
     const handleMouseMove = (e) => {
         if (!isDraggingRef.current) return;
+        
+        // Calculate new width based on delta movement
         const delta = e.clientX - startXRef.current;
-        const newWidth = Math.max(50, Math.min(600, startWidthRef.current + delta));
+        const newWidth = Math.max(60, Math.min(600, startWidthRef.current + delta));
         setSiderWidth(newWidth);
     };
 
@@ -180,8 +258,8 @@ const SidePanel = ({
     }, [isCollapsed, onCollapseChange]);
 
     return (
-        <div style={{ position: 'relative', height: '100%', display: 'flex' }}>
-            
+        <div ref={containerRef} style={{ height: '100%', display: 'flex', position: 'relative' }}>
+            {/* Main sidebar component */}
             <Sider 
                 width={siderWidth} 
                 theme="light" 
@@ -191,7 +269,8 @@ const SidePanel = ({
                     display: 'flex', 
                     flexDirection: 'column',
                     transition: 'width 0.2s ease',
-                    minWidth: isCollapsed ? '60px' : '200px'
+                    minWidth: isCollapsed ? '60px' : '200px',
+                    height: '100%'
                 }}
                 ref={siderRef}
                 collapsed={isCollapsed}
@@ -212,7 +291,16 @@ const SidePanel = ({
                             onClick={() => document.dispatchEvent(new CustomEvent('navigateToAiModelConfig'))} 
                             title="AI Model Configuration"
                         />
-                        <Dropdown overlay={menu} trigger={['click']}>
+                        <Dropdown 
+                            overlay={menu} 
+                            trigger={['click']}
+                            onVisibleChange={(visible) => {
+                                if (visible) {
+                                    // Refresh recent projects list when dropdown is opened
+                                    setRecentProjects(getRecentProjects());
+                                }
+                            }}
+                        >
                             <Button icon={<EllipsisOutlined />} aria-label="File Actions" />
                         </Dropdown>
                     </div>
@@ -248,21 +336,19 @@ const SidePanel = ({
                 </div>
             </Sider>
             
-            {/* Resizer */}
+            {/* Resizer component - positioned as a flex item right after the sidebar */}
             <div 
                 ref={resizerRef}
                 style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    // When collapsed, position at the edge of the collapsed sidebar (60px)
-                    left: siderWidth,
                     width: '8px',
+                    height: '100%',
                     cursor: isCollapsed ? 'default' : 'ew-resize',
                     zIndex: 100,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    position: 'relative',
+                    marginLeft: '-8px', /* Pull back to overlap with sidebar edge */
                 }}
                 onMouseDown={isCollapsed ? null : handleMouseDown}
             >
@@ -289,6 +375,7 @@ const SidePanel = ({
                         zIndex: 200
                     }}
                 />
+                {/* Visible divider line */}
                 <div
                     style={{
                         width: '4px',
@@ -298,6 +385,9 @@ const SidePanel = ({
                     }}
                 />
             </div>
+            
+            {/* Empty flex item to fill the remaining space */}
+            <div style={{ flexGrow: 1, height: '100%' }} />
         </div>
     );
 };

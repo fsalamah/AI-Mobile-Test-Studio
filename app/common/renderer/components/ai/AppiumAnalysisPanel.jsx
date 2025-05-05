@@ -16,7 +16,14 @@ import ModelConfigPage from "./ModelConfigPage.jsx";
 
 // Import utilities
 import { buildTreeData, generateId } from "./utils/TreeUtils.js";
-import { chooseFile, saveToFile, openSavedFile, tryOpenLastFile } from "./utils/FileOperationsUtils.js";
+import { 
+    chooseFile, 
+    saveToFile, 
+    openSavedFile, 
+    tryOpenLastFile,
+    openRecentProject,
+    getRecentProjects 
+} from "./utils/FileOperationsUtils.js";
 
 // Import AI pipeline functions
 import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
@@ -106,10 +113,15 @@ export default function AppiumAnalysisPanel({
                         }
                     }
                     
-                    // Restore file handle if available
+                    // Note on file handle: We don't actually restore the file handle object
+                    // from localStorage because File System Access API handles cannot be
+                    // serialized or preserved across sessions. We only store metadata
+                    // about the file. The actual file handle will be re-requested when needed.
                     if (savedState.fileHandle) {
-                        console.log("Restoring file handle");
-                        setFileHandle(savedState.fileHandle);
+                        console.log("Note: Saved file handle info available, but will require user re-selection on save");
+                        // We store only the metadata for reference, but the handle itself won't be valid
+                        // The saveToFile function will handle requesting a new file handle when needed
+                        setFileHandle(null);
                     }
                 }
             } else {
@@ -500,6 +512,16 @@ export default function AppiumAnalysisPanel({
         
         openSavedFile: async () => {
             await openSavedFile(setPages, setFileHandle, resetUIState);
+        },
+        
+        // Handler for opening a recent project
+        openRecentProject: async (projectName) => {
+            await openRecentProject(projectName, setPages, setFileHandle, resetUIState);
+        },
+        
+        // Get recent projects list
+        getRecentProjects: () => {
+            return getRecentProjects();
         },
         
         // Handler for returning to inspector when embedded

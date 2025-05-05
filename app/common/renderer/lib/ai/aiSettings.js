@@ -8,7 +8,8 @@
 // Settings keys
 export const AI_SETTINGS_KEYS = {
   LAST_PAGES_FILE_PATH: 'ai_last_pages_file_path',
-  LAST_PAGES_FILE_NAME: 'ai_last_pages_file_name'
+  LAST_PAGES_FILE_NAME: 'ai_last_pages_file_name',
+  RECENT_PROJECTS: 'ai_recent_projects'
 };
 
 /**

@@ -134,14 +134,25 @@ export const saveProjectState = (pages, selectedPageId, currentView, fileHandle)
         lastSavedState.currentView = currentView;
       }
 
-      // Only save file handle if it changed
-      if (fileHandle && JSON.stringify(fileHandle) !== JSON.stringify(lastSavedState.fileHandle)) {
-        const fileHandleData = {
-          path: fileHandle.path || null,
-          name: fileHandle.name || null
-        };
-        localStorage.setItem(FILE_HANDLE_KEY, JSON.stringify(fileHandleData));
-        lastSavedState.fileHandle = {...fileHandleData};
+      // Only save file handle metadata if it changed
+      // Note: We can't store the actual file handle object, only metadata
+      if (fileHandle) {
+        try {
+          const fileHandleData = {
+            path: fileHandle.path || null,
+            name: fileHandle.name || null,
+            // Only store a timestamp to indicate this is stale data across sessions
+            timestamp: Date.now()
+          };
+          
+          // Only save if it's different from what we have
+          if (JSON.stringify(fileHandleData) !== JSON.stringify(lastSavedState.fileHandle)) {
+            localStorage.setItem(FILE_HANDLE_KEY, JSON.stringify(fileHandleData));
+            lastSavedState.fileHandle = {...fileHandleData};
+          }
+        } catch (handleErr) {
+          console.warn("Could not serialize file handle metadata:", handleErr);
+        }
       }
       
     } catch (error) {
