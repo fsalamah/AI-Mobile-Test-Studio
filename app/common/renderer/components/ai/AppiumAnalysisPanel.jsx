@@ -12,6 +12,7 @@ import CodeViewer from "./CodeViewer.jsx";
 import AIProgressModal from "./AIProgressModal.jsx";
 import EmptyStateMessage from "./EmptyStateMessage.jsx";
 import { PageOperations } from "./PageOperations.jsx";
+import RecordingView from "./RecordingView.jsx";
 import ModelConfigPage from "./ModelConfigPage.jsx";
 
 // Import utilities
@@ -30,6 +31,17 @@ import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
 import { executeXpathPipeline } from "../../lib/ai/pipeline.js";
 // Model configuration provider for setting project context
 import modelConfigProvider from "../../lib/ai/modelConfigProvider.js";
+
+// Import Inspector actions for recording functionality
+import { 
+    startRecording as startRecordingAction, 
+    pauseRecording as pauseRecordingAction, 
+    clearRecording as clearRecordingAction,
+    RECORD_ACTION
+} from "../../actions/Inspector.js";
+
+// Import our custom action recorder
+import ActionRecorder from "../../lib/ai/actionRecorder.js";
 
 // Import project state manager
 import { saveProjectState, loadProjectState, hasSavedProjectState } from "../../lib/ai/projectStateManager.js";
@@ -73,6 +85,16 @@ export default function AppiumAnalysisPanel({
     
     const dispatch = useDispatch();
     const inspectorState = useSelector((state) => state.inspector);
+    
+    // Monitor for Redux actions in the Inspector state
+    useEffect(() => {
+        // Check if we need to record any changes in the inspectorState's recordedActions
+        if (ActionRecorder.isRecording() && inspectorState?.recordedActions?.length > 0) {
+            const lastStandardAction = inspectorState.recordedActions[inspectorState.recordedActions.length - 1];
+            // Record the latest action from the standard recorder to our detailed recorder
+            ActionRecorder.recordAction(inspectorState, lastStandardAction);
+        }
+    }, [inspectorState?.recordedActions]);
 
     // Use the imported buildTreeData from TreeUtils
     const { treeData, expandedKeys: initialExpandedKeys } = useMemo(
@@ -143,17 +165,24 @@ export default function AppiumAnalysisPanel({
         };
     }, [projectId]);
     
-    // Setup event listener for AI model config navigation
+    // Setup event listeners for navigation
     useEffect(() => {
         const handleNavigateToAiModelConfig = () => {
             console.log("Navigating to AI Model Config");
             setShowModelConfig(true);
         };
         
+        const handleNavigateToRecordingView = () => {
+            console.log("Navigating to Recording View");
+            setCurrentView('recordingView');
+        };
+        
         document.addEventListener('navigateToAiModelConfig', handleNavigateToAiModelConfig);
+        document.addEventListener('navigateToRecordingView', handleNavigateToRecordingView);
         
         return () => {
             document.removeEventListener('navigateToAiModelConfig', handleNavigateToAiModelConfig);
+            document.removeEventListener('navigateToRecordingView', handleNavigateToRecordingView);
         };
     }, []);
 
@@ -643,6 +672,25 @@ export default function AppiumAnalysisPanel({
                         onBack={() => navigateFromCodeViewer()}
                         onSave={updatePage}
                         onRegenerate={() => handleOnProceedToPom(currentPageForCode)}
+                    />
+                )}
+                
+                {currentView === 'recordingView' && (
+                    <RecordingView
+                        navigateBack={() => {
+                            // Return to previous view or default to page list
+                            if (selectedPageId) {
+                                setCurrentView('pageDetail');
+                            } else {
+                                setCurrentView('pageList');
+                            }
+                        }}
+                        inspectorState={inspectorState}
+                        startRecording={() => dispatch(startRecordingAction())}
+                        pauseRecording={() => dispatch(pauseRecordingAction())}
+                        clearRecording={() => dispatch(clearRecordingAction())}
+                        isRecording={inspectorState?.isRecording || false}
+                        recordedActions={inspectorState?.recordedActions || []}
                     />
                 )}
             </Content>

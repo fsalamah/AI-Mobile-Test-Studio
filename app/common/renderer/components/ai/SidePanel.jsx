@@ -13,7 +13,8 @@ import {
     SettingOutlined,
     HistoryOutlined,
     DeleteOutlined,
-    FileOutlined
+    FileOutlined,
+    VideoCameraOutlined
 } from "@ant-design/icons";
 import PageTree from "./PageTree.jsx";
 import { getRecentProjects, removeRecentProject } from "./utils/FileOperationsUtils.js";
@@ -290,6 +291,11 @@ const SidePanel = ({
                             icon={<RobotOutlined />} 
                             onClick={() => document.dispatchEvent(new CustomEvent('navigateToAiModelConfig'))} 
                             title="AI Model Configuration"
+                        />
+                        <Button 
+                            icon={<VideoCameraOutlined />} 
+                            onClick={() => document.dispatchEvent(new CustomEvent('navigateToRecordingView'))} 
+                            title="Session Recording"
                         />
                         <Dropdown 
                             overlay={menu} 
