@@ -325,69 +325,78 @@ const RecordingView = ({
             // Use the actual TransitionAnalysisPipeline to analyze transitions
             message.info(`Starting transition analysis for ${updatedRecording.length} states...`);
             
-            // Call the pipeline to analyze transitions
-            const transitions = await TransitionAnalysisPipeline.analyzeTransitions(updatedRecording);
+            // Create a copy of recording with dummy states to ensure all real states get AI analysis
+            // We'll add a copy of first state before first state and a copy of last state after last state
+            // This is necessary because the TransitionAnalysisPipeline needs pairs of states to analyze transitions
             
-            // Process the transition results and update the recording
-            // Important: First state (index 0) and last state (updatedRecording.length-1) should not have AI analysis
-            // as there's no transition leading to the first state and no transition after the last state
-            
-            // First, make sure all states have the aiAnalysis attribute but set to null
-            updatedRecording = updatedRecording.map(state => ({
-                ...state,
-                aiAnalysis: null,
-                aiAnalysisRaw: null
-            }));
-            
-            // Process each transition - NOTE: transitions array has length = states.length - 1
-            for (let i = 0; i < transitions.length; i++) {
-                const transition = transitions[i];
-                
-                // We assign the transition analysis to the TARGET state (not the source)
-                // So the transition from state[0] to state[1] is assigned to state[1]
-                const targetStateIndex = i + 1;
-                
-                // Skip the first state (no incoming transition) and last state (no outgoing transition)
-                if (targetStateIndex <= 0 || targetStateIndex >= updatedRecording.length - 1) {
-                    continue;
-                }
-                
-                // Format transition info as markdown for the target state
-                const targetState = updatedRecording[targetStateIndex];
-                const actionType = targetState.action?.action || 'State Change';
-                const elementTarget = targetState.action?.element?.text || 
-                                     targetState.action?.element?.resourceId || 
-                                     transition.actionTarget || 
-                                     'Unknown Element';
-                
-                // Update the current state with AI analysis
-                updatedRecording[targetStateIndex] = {
-                    ...targetState,
-                    aiAnalysis: formatTransitionToMarkdown(transition, targetState, actionType, elementTarget, targetStateIndex, updatedRecording.length),
-                    aiAnalysisRaw: transition // Store the raw JSON data
-                };
-                
-                message.info(`Processed transition for state ${targetStateIndex + 1} of ${updatedRecording.length}`);
-            }
-            
-            // Final verification - make sure first and last states have aiAnalysis = null
             if (updatedRecording.length > 0) {
-                // First state should have null analysis
-                updatedRecording[0] = {
-                    ...updatedRecording[0],
+                message.info("Preparing recording data with dummy states for complete analysis...");
+                
+                // First, make sure all states have the aiAnalysis attribute but set to null
+                updatedRecording = updatedRecording.map(state => ({
+                    ...state,
                     aiAnalysis: null,
                     aiAnalysisRaw: null
-                };
+                }));
                 
-                // Last state should have null analysis
-                const lastIndex = updatedRecording.length - 1;
-                updatedRecording[lastIndex] = {
-                    ...updatedRecording[lastIndex],
-                    aiAnalysis: null,
-                    aiAnalysisRaw: null
-                };
+                // Create dummy states for analysis (won't be added to actual recording)
+                const firstState = { ...updatedRecording[0] };
+                const lastState = { ...updatedRecording[updatedRecording.length - 1] };
                 
-                message.info(`Verified first and last states have no analysis as expected`);
+                // Create an extended array with dummy states for analysis
+                const extendedRecording = [
+                    firstState,                    // Dummy state before first (copy of first)
+                    ...updatedRecording,           // All real states
+                    lastState                      // Dummy state after last (copy of last)
+                ];
+                
+                message.info(`Analyzing ${extendedRecording.length} states (including 2 dummy states)...`);
+                
+                // Call the pipeline with the extended recording that includes dummy states
+                const transitions = await TransitionAnalysisPipeline.analyzeTransitions(extendedRecording);
+                
+                // Process the transition results for the REAL states
+                // Important: transition[0] is about dummy->first, transition[n] is about last->dummy
+                // We need to adjust indices accordingly
+                for (let i = 0; i < transitions.length; i++) {
+                    // Calculate the indices for the real recording:
+                    // - transition[0] applies to real state 0 (the first dummy->first transition)
+                    // - transition[length-1] applies to the last real state (last->dummy transition)
+                    // - all others apply to states i
+                    
+                    // In the transitions array:
+                    // - Transition 0 is dummy->first (applied to real state 0)
+                    // - Transition 1 is first->second (applied to real state 1)
+                    // - ...and so on
+                    const transition = transitions[i];
+                    
+                    // Calculate real state index to update (i-1 since transition indices are shifted)
+                    const realStateIndex = i;
+                    
+                    // Skip transitions that refer to dummy states
+                    if (realStateIndex < 0 || realStateIndex >= updatedRecording.length) {
+                        continue;
+                    }
+                    
+                    // Get the real state to update
+                    const realState = updatedRecording[realStateIndex];
+                    
+                    // Format analysis info
+                    const actionType = realState.action?.action || 'State Change';
+                    const elementTarget = realState.action?.element?.text || 
+                                         realState.action?.element?.resourceId || 
+                                         transition.actionTarget || 
+                                         'Unknown Element';
+                    
+                    // Update the real state with AI analysis
+                    updatedRecording[realStateIndex] = {
+                        ...realState,
+                        aiAnalysis: formatTransitionToMarkdown(transition, realState, actionType, elementTarget, realStateIndex, updatedRecording.length),
+                        aiAnalysisRaw: transition // Store the raw JSON data
+                    };
+                    
+                    message.info(`Processed analysis for state ${realStateIndex + 1} of ${updatedRecording.length}`);
+                }
             }
             
             // Update the recording with AI analysis
@@ -1473,13 +1482,10 @@ public void verifyFinalState() {
                                                                     </span>
                                                                     {!detailedRecording[selectedEntryIndex].aiAnalysis && (
                                                                         <Badge 
-                                                                            count={selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
-                                                                                "First/Last State" : "Not Available"} 
+                                                                            count="Not Available" 
                                                                             style={{ 
-                                                                                backgroundColor: selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
-                                                                                    '#87d068' : '#f0f0f0',
-                                                                                color: selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
-                                                                                    '#fff' : '#bfbfbf',
+                                                                                backgroundColor: '#f0f0f0',
+                                                                                color: '#bfbfbf',
                                                                                 fontSize: '10px',
                                                                                 fontWeight: 'normal',
                                                                                 textTransform: 'uppercase'
@@ -1648,11 +1654,7 @@ public void verifyFinalState() {
                                                                             No AI Analysis Available
                                                                         </Text>
                                                                         <Text style={{ fontSize: '14px', textAlign: 'center', marginBottom: '20px', color: '#333' }}>
-                                                                            {selectedEntryIndex === 0 ? 
-                                                                                "This is the first state in the recording sequence. First states don't have AI analysis because there is no transition leading to them." :
-                                                                            selectedEntryIndex === detailedRecording.length - 1 ?
-                                                                                "This is the last state in the recording sequence. Last states don't have AI analysis because there is no transition after them." :
-                                                                                "This recording state hasn't been processed with AI yet."}
+                                                                            This recording state hasn't been processed with AI yet.
                                                                         </Text>
                                                                         <div style={{ 
                                                                             backgroundColor: 'white', 
@@ -1672,17 +1674,15 @@ public void verifyFinalState() {
                                                                                 <li>View detailed insights for each state</li>
                                                                             </ol>
                                                                         </div>
-                                                                        {!(selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1) && (
-                                                                            <Button
-                                                                                type="primary"
-                                                                                icon={<ThunderboltOutlined />}
-                                                                                onClick={handleProcessWithAI}
-                                                                                loading={processingAI}
-                                                                                style={{ background: '#722ED1', borderColor: '#722ED1' }}
-                                                                            >
-                                                                                Process with AI Now
-                                                                            </Button>
-                                                                        )}
+                                                                        <Button
+                                                                            type="primary"
+                                                                            icon={<ThunderboltOutlined />}
+                                                                            onClick={handleProcessWithAI}
+                                                                            loading={processingAI}
+                                                                            style={{ background: '#722ED1', borderColor: '#722ED1' }}
+                                                                        >
+                                                                            Process with AI Now
+                                                                        </Button>
                                                                     </div>
                                                                 </div>
                                                             )
