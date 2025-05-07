@@ -7,34 +7,57 @@ const customScrollbarStyle = `
 /* Custom scrollbar styles */
 /* WebKit browsers (Chrome, Safari) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 12px !important;
-  height: 12px !important;
+  width: 14px !important;
+  height: 14px !important;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f5f5f5 !important;
-  border-radius: 4px !important;
-  border: 1px solid #e8e8e8 !important;
+  background: #f0f0f0 !important;
+  border-radius: 0 !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #bdbdbd !important;
-  border-radius: 4px !important;
-  border: 2px solid #f5f5f5 !important;
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.1) !important;
+  background-color: #c1c1c1 !important;
+  border-radius: 7px !important;
+  border: 3px solid #f0f0f0 !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #a0a0a0 !important;
 }
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: #f0f0f0 !important;
+}
 /* Firefox and other browsers */
 .custom-scrollbar {
   scrollbar-width: thin !important;
-  scrollbar-color: #bdbdbd #f5f5f5 !important;
-  overflow: auto !important;
+  scrollbar-color: #c1c1c1 #f0f0f0 !important;
 }
-/* Make sure scrollbars are always visible for scrollable content */
-.custom-scrollbar-visible {
-  overflow: scroll !important;
-  scrollbar-width: thin !important;
-  scrollbar-color: #bdbdbd #f5f5f5 !important;
+/* Force scrollbars to be visible */
+.force-scrollbar {
+  overflow-y: scroll !important;
+  min-height: 100px !important;
+}
+/* Ensure tab panels are properly sized */
+.ant-tabs-tabpane {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+.ant-tabs-content {
+  height: 100% !important;
+  flex: 1 !important;
+}
+.ant-tabs-content-holder {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+.recording-tabs .ant-tabs-nav {
+  margin-bottom: 0 !important;
+}
+/* Ensure content fits properly */
+.recording-view-container {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  min-height: 100vh !important;
 }
 `;
 
@@ -613,7 +636,7 @@ const RecordingView = ({
     };
 
     return (
-        <Layout style={{ 
+        <Layout className="recording-view-container" style={{ 
             height: '100vh', 
             background: '#fff',
             display: 'flex',
@@ -668,11 +691,13 @@ const RecordingView = ({
                     defaultActiveKey="detailed" 
                     onChange={setActiveTab}
                     type="card"
+                    className="recording-tabs"
                     style={{ 
                         margin: '16px 16px 0',
                         display: 'flex', 
                         flexDirection: 'column', 
-                        height: 'calc(100% - 16px)'
+                        height: 'calc(100% - 16px)',
+                        overflow: 'hidden'
                     }}
                     items={[
                     {
@@ -686,7 +711,12 @@ const RecordingView = ({
                                 </div>
                             </div>
                         ) : detailedRecording.length > 0 ? (
-                            <div style={{ display: 'flex', height: 'calc(100% - 16px)', overflow: 'hidden' }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                height: 'calc(100% - 16px)', 
+                                overflow: 'hidden',
+                                minHeight: '500px'
+                            }}>
                                 {/* Column 1 - Entries list */}
                                 <div style={{ 
                                     width: '25%', 
@@ -724,14 +754,12 @@ const RecordingView = ({
                                         </Space>
                                     </div>
                                     <div 
-                                        className="custom-scrollbar"
+                                        className="custom-scrollbar force-scrollbar"
                                         style={{ 
-                                            overflowY: 'scroll', // Use 'scroll' instead of 'auto' to always show scrollbar
                                             height: 'calc(100% - 48px)', // Subtract header height
                                             padding: '0 2px',
-                                            borderLeft: '1px solid #f0f0f0', // Add border to make scrollbar more visible
                                             borderRight: '1px solid #f0f0f0',
-                                            boxShadow: 'inset 0 0 6px rgba(0,0,0,0.05)' // Add subtle inner shadow for depth
+                                            background: '#fafafa'
                                         }}
                                     >
                                         {detailedRecording
@@ -888,13 +916,11 @@ const RecordingView = ({
                                                 </Space>
                                             </div>
                                             
-                                            <div className="custom-scrollbar" style={{ 
-                                                overflow: 'auto', 
+                                            <div className="custom-scrollbar force-scrollbar" style={{ 
                                                 padding: '16px', 
                                                 height: 'calc(100% - 48px)', // Subtract header height
                                                 textAlign: 'center',
-                                                borderLeft: '1px solid #f0f0f0', // Add border to make scrollbar more visible
-                                                borderRight: '1px solid #f0f0f0'
+                                                background: '#ffffff'
                                             }}>
                                                 {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
                                                     <img 
@@ -951,7 +977,11 @@ const RecordingView = ({
                                             <div style={{ flex: 1, overflow: 'hidden', maxHeight: 'calc(100% - 48px)' }}>
                                                 <Tabs 
                                                     defaultActiveKey="action"
-                                                    style={{ height: '100%' }}
+                                                    style={{ 
+                                                        height: '100%',
+                                                        display: 'flex',
+                                                        flexDirection: 'column'
+                                                    }}
                                                     tabPosition="top"
                                                     type="card"
                                                     size="middle"
@@ -972,12 +1002,10 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ 
+                                                                <div className="custom-scrollbar force-scrollbar" style={{ 
                                                                     padding: '16px', 
-                                                                    height: 'calc(100% - 32px)', 
-                                                                    overflow: 'auto',
-                                                                    borderLeft: '1px solid #f0f0f0',
-                                                                    borderRight: '1px solid #f0f0f0'
+                                                                    height: 'calc(100% - 32px)',
+                                                                    background: '#ffffff'
                                                                 }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
@@ -1001,12 +1029,10 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ 
+                                                                <div className="custom-scrollbar force-scrollbar" style={{ 
                                                                     padding: '16px', 
-                                                                    height: 'calc(100% - 32px)', 
-                                                                    overflow: 'auto',
-                                                                    borderLeft: '1px solid #f0f0f0',
-                                                                    borderRight: '1px solid #f0f0f0'
+                                                                    height: 'calc(100% - 32px)',
+                                                                    background: '#ffffff'
                                                                 }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
@@ -1031,12 +1057,10 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ 
+                                                                <div className="custom-scrollbar force-scrollbar" style={{ 
                                                                     padding: '16px', 
-                                                                    height: 'calc(100% - 32px)', 
-                                                                    overflow: 'auto',
-                                                                    borderLeft: '1px solid #f0f0f0',
-                                                                    borderRight: '1px solid #f0f0f0'
+                                                                    height: 'calc(100% - 32px)',
+                                                                    background: '#ffffff'
                                                                 }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
@@ -1147,7 +1171,7 @@ const RecordingView = ({
                                     </Text>
                                 }
                             >
-                                <pre style={{ 
+                                <pre className="custom-scrollbar" style={{ 
                                     backgroundColor: '#f5f5f5', 
                                     padding: '16px', 
                                     borderRadius: '4px', 
