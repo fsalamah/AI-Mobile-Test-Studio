@@ -669,38 +669,73 @@ const RecordingView = ({
                                                 const isSelected = selectedEntryIndex === detailedRecording.indexOf(entry);
                                                 const hasScreenshot = !!entry.deviceArtifacts?.screenshotBase64;
                                                 const realIndex = detailedRecording.indexOf(entry);
+                                                const hasAction = !!entry.action;
                                                 
                                                 return (
                                                     <div 
                                                         key={realIndex}
                                                         onClick={() => setSelectedEntryIndex(realIndex)}
                                                         style={{
-                                                            padding: '12px 16px',
+                                                            padding: '8px 12px',
+                                                            borderLeft: isSelected ? '3px solid #1890ff' : '3px solid transparent',
                                                             borderBottom: '1px solid #f0f0f0',
                                                             backgroundColor: isSelected ? '#e6f7ff' : (entry.isCondensed ? '#f9f9f9' : 'transparent'),
                                                             cursor: 'pointer',
-                                                            opacity: entry.isCondensed ? 0.7 : 1
+                                                            opacity: entry.isCondensed ? 0.8 : 1,
+                                                            transition: 'all 0.2s ease',
+                                                            height: '40px',
+                                                            display: 'flex',
+                                                            alignItems: 'center'
                                                         }}
                                                     >
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span><strong>#{realIndex + 1}</strong></span>
-                                                            <Space size={4}>
-                                                                {entry.isCondensed && <Badge status="warning" />}
-                                                                {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff' }}/>}
-                                                            </Space>
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
-                                                            {new Date(entry.actionTime).toLocaleTimeString()}
-                                                        </div>
                                                         <div style={{ 
-                                                            marginTop: '4px',
-                                                            whiteSpace: 'nowrap',
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis'
+                                                            width: '24px', 
+                                                            height: '24px', 
+                                                            borderRadius: '50%', 
+                                                            backgroundColor: isSelected ? '#1890ff' : '#f0f0f0',
+                                                            color: isSelected ? '#fff' : '#595959',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '12px',
+                                                            fontWeight: 'bold',
+                                                            marginRight: '8px'
                                                         }}>
-                                                            {entry.action 
-                                                                ? <span style={{ color: '#1890ff' }}>{entry.action.action || 'Unknown'}</span> 
-                                                                : 'State change'
+                                                            {realIndex + 1}
+                                                        </div>
+                                                        
+                                                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                                                            <div style={{ 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between',
+                                                                fontSize: '11px',
+                                                                lineHeight: '1.2'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    whiteSpace: 'nowrap',
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    fontWeight: 500,
+                                                                    color: hasAction ? '#1890ff' : '#595959',
+                                                                    maxWidth: 'calc(100% - 50px)'
+                                                                }}>
+                                                                    {hasAction 
+                                                                        ? entry.action.action || 'Unknown' 
+                                                                        : 'State change'
+                                                                    }
+                                                                </div>
+                                                                <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
+                                                                    {new Date(entry.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div style={{ display: 'flex', marginLeft: '4px' }}>
+                                                            {entry.isCondensed && 
+                                                                <Badge status="warning" style={{ marginRight: '6px' }} />
+                                                            }
+                                                            {hasScreenshot && 
+                                                                <FileImageOutlined style={{ color: '#1890ff', fontSize: '12px' }}/>
                                                             }
                                                         </div>
                                                     </div>
