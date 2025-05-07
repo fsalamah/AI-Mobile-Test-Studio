@@ -795,8 +795,9 @@ const RecordingView = ({
                         )
                     }
                 ]}
-            />
-        </>
+                />
+            </Content>
+        </Layout>
     );
 };
 
