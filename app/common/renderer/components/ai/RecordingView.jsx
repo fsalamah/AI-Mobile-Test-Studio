@@ -5,23 +5,34 @@ import React, { useState, useEffect } from "react";
 const scrollbarStyleId = 'custom-scrollbar-styles';
 const customScrollbarStyle = `
 /* Custom scrollbar styles */
+/* WebKit browsers (Chrome, Safari) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
+  width: 12px !important;
+  height: 12px !important;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: #f5f5f5 !important;
   border-radius: 4px !important;
+  border: 1px solid #e8e8e8 !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: #bdbdbd !important;
   border-radius: 4px !important;
   border: 2px solid #f5f5f5 !important;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.1) !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #a0a0a0 !important;
 }
+/* Firefox and other browsers */
 .custom-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: #bdbdbd #f5f5f5 !important;
+  overflow: auto !important;
+}
+/* Make sure scrollbars are always visible for scrollable content */
+.custom-scrollbar-visible {
+  overflow: scroll !important;
   scrollbar-width: thin !important;
   scrollbar-color: #bdbdbd #f5f5f5 !important;
 }
@@ -675,7 +686,7 @@ const RecordingView = ({
                                 </div>
                             </div>
                         ) : detailedRecording.length > 0 ? (
-                            <div style={{ display: 'flex', height: 'calc(100% - 50px)', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', height: 'calc(100% - 16px)', overflow: 'hidden' }}>
                                 {/* Column 1 - Entries list */}
                                 <div style={{ 
                                     width: '25%', 
@@ -715,11 +726,12 @@ const RecordingView = ({
                                     <div 
                                         className="custom-scrollbar"
                                         style={{ 
-                                            overflowY: 'auto', 
-                                            height: '100%',
+                                            overflowY: 'scroll', // Use 'scroll' instead of 'auto' to always show scrollbar
+                                            height: 'calc(100% - 48px)', // Subtract header height
                                             padding: '0 2px',
                                             borderLeft: '1px solid #f0f0f0', // Add border to make scrollbar more visible
-                                            borderRight: '1px solid #f0f0f0'
+                                            borderRight: '1px solid #f0f0f0',
+                                            boxShadow: 'inset 0 0 6px rgba(0,0,0,0.05)' // Add subtle inner shadow for depth
                                         }}
                                     >
                                         {detailedRecording
@@ -876,7 +888,14 @@ const RecordingView = ({
                                                 </Space>
                                             </div>
                                             
-                                            <div className="custom-scrollbar" style={{ overflow: 'auto', padding: '16px', flex: 1, textAlign: 'center' }}>
+                                            <div className="custom-scrollbar" style={{ 
+                                                overflow: 'auto', 
+                                                padding: '16px', 
+                                                height: 'calc(100% - 48px)', // Subtract header height
+                                                textAlign: 'center',
+                                                borderLeft: '1px solid #f0f0f0', // Add border to make scrollbar more visible
+                                                borderRight: '1px solid #f0f0f0'
+                                            }}>
                                                 {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
                                                     <img 
                                                         src={`data:image/png;base64,${detailedRecording[selectedEntryIndex].deviceArtifacts.screenshotBase64}`} 
@@ -918,7 +937,8 @@ const RecordingView = ({
                                                 display: 'flex',
                                                 justifyContent: 'space-between',
                                                 alignItems: 'center',
-                                                height: '48px'
+                                                height: '48px',
+                                                flexShrink: 0
                                             }}>
                                                 <Text strong>{new Date(detailedRecording[selectedEntryIndex].actionTime).toLocaleString()}</Text>
                                                 {detailedRecording[selectedEntryIndex].action && (
@@ -928,7 +948,7 @@ const RecordingView = ({
                                                 )}
                                             </div>
                                             
-                                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                                            <div style={{ flex: 1, overflow: 'hidden', maxHeight: 'calc(100% - 48px)' }}>
                                                 <Tabs 
                                                     defaultActiveKey="action"
                                                     style={{ height: '100%' }}
@@ -939,7 +959,8 @@ const RecordingView = ({
                                                         margin: '0 12px',
                                                         marginTop: '12px',
                                                         background: '#f9f9f9',
-                                                        borderRadius: '4px 4px 0 0'
+                                                        borderRadius: '4px 4px 0 0',
+                                                        flexShrink: 0
                                                     }}
                                                     items={[
                                                         {
@@ -951,7 +972,13 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ 
+                                                                    padding: '16px', 
+                                                                    height: 'calc(100% - 32px)', 
+                                                                    overflow: 'auto',
+                                                                    borderLeft: '1px solid #f0f0f0',
+                                                                    borderRight: '1px solid #f0f0f0'
+                                                                }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
@@ -974,7 +1001,13 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ 
+                                                                    padding: '16px', 
+                                                                    height: 'calc(100% - 32px)', 
+                                                                    overflow: 'auto',
+                                                                    borderLeft: '1px solid #f0f0f0',
+                                                                    borderRight: '1px solid #f0f0f0'
+                                                                }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
@@ -998,7 +1031,13 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ 
+                                                                    padding: '16px', 
+                                                                    height: 'calc(100% - 32px)', 
+                                                                    overflow: 'auto',
+                                                                    borderLeft: '1px solid #f0f0f0',
+                                                                    borderRight: '1px solid #f0f0f0'
+                                                                }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
@@ -1022,35 +1061,67 @@ const RecordingView = ({
                                         <div style={{ 
                                             padding: '40px 20px', 
                                             textAlign: 'center', 
-                                            background: '#fafafa', 
-                                            border: '1px dashed #d9d9d9', 
+                                            background: '#f9f9f9', 
+                                            border: '1px dashed #1890ff', 
                                             borderRadius: '4px',
-                                            maxWidth: '400px'
+                                            maxWidth: '400px',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
                                         }}>
-                                            <InfoCircleOutlined style={{ fontSize: '32px', color: '#bfbfbf', marginBottom: '16px' }} />
-                                            <div>
-                                                <Text type="secondary">Select an entry from the list to view details</Text>
+                                            <InfoCircleOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong style={{ fontSize: '16px' }}>No Entry Selected</Text>
+                                            </div>
+                                            <Text type="secondary">Select an entry from the list on the left to view its details</Text>
+                                            <div style={{ marginTop: '16px' }}>
+                                                <Button 
+                                                    type="primary" 
+                                                    size="small"
+                                                    onClick={() => detailedRecording.length > 0 && setSelectedEntryIndex(0)}
+                                                    disabled={detailedRecording.length === 0}
+                                                >
+                                                    Select First Entry
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         ) : (
-                            <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
-                                <Text type="secondary">No actions have been recorded yet.</Text>
-                                <div style={{ marginTop: '16px' }}>
+                            <div style={{ 
+                                textAlign: 'center', 
+                                padding: '60px 40px', 
+                                background: '#f9f9f9', 
+                                border: '1px dashed #1890ff', 
+                                borderRadius: '8px',
+                                margin: '40px auto',
+                                maxWidth: '500px',
+                                boxShadow: '0 2px 12px rgba(0, 0, 0, 0.05)'
+                            }}>
+                                <VideoCameraOutlined style={{ fontSize: '64px', color: '#1890ff', marginBottom: '24px' }} />
+                                <div style={{ marginBottom: '16px' }}>
+                                    <Title level={4}>No Actions Recorded</Title>
+                                    <Text type="secondary" style={{ fontSize: '16px' }}>Start recording to capture actions and state changes</Text>
+                                </div>
+                                <div style={{ marginTop: '24px' }}>
                                     {!inspectorState?.driver ? (
-                                        <Text type="warning">Connect to a device in the Inspector to enable recording</Text>
+                                        <div>
+                                            <Badge status="warning" style={{ marginRight: '8px' }} />
+                                            <Text type="warning" strong>Connect to a device in the Inspector to enable recording</Text>
+                                        </div>
                                     ) : !standardIsRecording ? (
                                         <Button
                                             type="primary"
                                             icon={<VideoCameraOutlined />}
                                             onClick={handleStartRecording}
+                                            size="large"
                                         >
                                             Start Recording
                                         </Button>
                                     ) : (
-                                        <Text>Recording is active. Perform actions in the Inspector to record them.</Text>
+                                        <div>
+                                            <Badge status="processing" style={{ marginRight: '8px' }} />
+                                            <Text strong style={{ color: '#1890ff' }}>Recording is active. Perform actions in the Inspector to record them.</Text>
+                                        </div>
                                     )}
                                 </div>
                             </div>
