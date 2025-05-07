@@ -8,7 +8,9 @@ import {
     message,
     Spin,
     Tabs,
-    Select
+    Select,
+    Upload,
+    Switch
 } from "antd";
 import {
     ArrowLeftOutlined,
@@ -17,7 +19,10 @@ import {
     ClearOutlined,
     CopyOutlined,
     SaveOutlined,
-    FileImageOutlined
+    FileImageOutlined,
+    UploadOutlined,
+    EyeOutlined,
+    EyeInvisibleOutlined
 } from "@ant-design/icons";
 import ActionRecorder from "../../lib/ai/actionRecorder";
 
@@ -38,6 +43,7 @@ const RecordingView = ({
     const [detailedRecording, setDetailedRecording] = useState([]);
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(null);
     const [activeTab, setActiveTab] = useState("recording");
+    const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
 
     // Subscribe to ActionRecorder updates
     useEffect(() => {
@@ -145,6 +151,87 @@ const RecordingView = ({
         } catch (error) {
             message.error(`Failed to save recording: ${error.message}`);
         }
+    };
+    
+    // Handle loading a recording from file
+    const handleLoadRecording = async (file) => {
+        try {
+            const fileReader = new FileReader();
+            
+            fileReader.onload = (event) => {
+                try {
+                    const fileContent = event.target.result;
+                    const jsonData = JSON.parse(fileContent);
+                    
+                    if (!Array.isArray(jsonData)) {
+                        throw new Error('Invalid recording format. Expected an array of actions.');
+                    }
+                    
+                    // Check if it's a standard recording or detailed recording
+                    const isDetailedRecording = jsonData.length > 0 && 
+                                               (jsonData[0].deviceArtifacts || 
+                                                jsonData[0].actionTime);
+                    
+                    if (isDetailedRecording) {
+                        // Check if any elements are missing the isCondensed flag
+                        let missingCondensedFlag = false;
+                        for (let i = 0; i < jsonData.length; i++) {
+                            if (jsonData[i].isCondensed === undefined) {
+                                missingCondensedFlag = true;
+                                break;
+                            }
+                        }
+                        
+                        if (missingCondensedFlag) {
+                            message.info('Some entries missing condensed state flags - applying condensing logic');
+                        }
+                        
+                        // Always apply detectCondensed=true to ensure proper condensed state flags
+                        ActionRecorder.loadRecording(jsonData, { detectCondensed: true });
+                        setDetailedRecording(ActionRecorder.getRecording());
+                        setActiveTab('detailed');
+                        
+                        // Check condensed stats
+                        const allRecordings = ActionRecorder.getRecording();
+                        const totalRecordings = allRecordings.length;
+                        
+                        // Explicitly count entries marked as condensed
+                        let condensed = 0;
+                        for (let i = 0; i < allRecordings.length; i++) {
+                            if (allRecordings[i].isCondensed === true) {
+                                condensed++;
+                            }
+                        }
+                        
+                        const condensedPercentage = totalRecordings > 0 ? Math.round((condensed / totalRecordings) * 100) : 0;
+                        
+                        console.log("Condensed entries check:", allRecordings.map((e, i) => {
+                            return `Entry ${i}: isCondensed=${e.isCondensed}`;
+                        }).join('\n'));
+                        
+                        message.success(`Recording loaded: ${totalRecordings} total entries (${condensed} condensed, ${condensedPercentage}%)`);
+                    } else {
+                        // Load into standard recording - we need to dispatch to Redux
+                        // This would require specific Redux actions for standard recording
+                        // which we don't have direct control over here
+                        message.info('Standard recording format detected, but loading is not fully supported');
+                    }
+                } catch (err) {
+                    message.error(`Error parsing recording file: ${err.message}`);
+                }
+            };
+            
+            fileReader.onerror = () => {
+                message.error('Error reading the file');
+            };
+            
+            fileReader.readAsText(file);
+        } catch (error) {
+            message.error(`Failed to load recording: ${error.message}`);
+        }
+        
+        // Don't upload the file
+        return false;
     };
 
     // Helper to render a selected entry details
@@ -273,6 +360,13 @@ const RecordingView = ({
                             Pause Recording
                         </Button>
                     )}
+                    <Upload 
+                        beforeUpload={handleLoadRecording}
+                        showUploadList={false}
+                        accept=".json"
+                    >
+                        <Button icon={<UploadOutlined />}>Load Recording</Button>
+                    </Upload>
                     <Button
                         icon={<ClearOutlined />}
                         onClick={handleClearRecording}
@@ -320,34 +414,54 @@ const RecordingView = ({
                             <div style={{ display: 'flex', height: 'calc(70vh)' }}>
                                 {/* Left panel - Entries list */}
                                 <div style={{ width: '30%', borderRight: '1px solid #f0f0f0', overflowY: 'auto' }}>
-                                    {detailedRecording.map((entry, index) => {
-                                        const isSelected = selectedEntryIndex === index;
-                                        const hasScreenshot = !!entry.deviceArtifacts?.screenshotBase64;
-                                        
-                                        return (
-                                            <div 
-                                                key={index}
-                                                onClick={() => setSelectedEntryIndex(index)}
-                                                style={{
-                                                    padding: '10px',
-                                                    borderBottom: '1px solid #f0f0f0',
-                                                    backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between'
-                                                }}
-                                            >
-                                                <div>
-                                                    <div><strong>#{index + 1}</strong> - {new Date(entry.actionTime).toLocaleTimeString()}</div>
-                                                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                                                        {entry.action ? `Action: ${entry.action.action || 'Unknown'}` : 'State change'}
+                                    <div style={{ padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0f0f0', backgroundColor: '#fafafa' }}>
+                                        <Text strong>Recording Entries</Text>
+                                        <Space>
+                                            <Text type="secondary" style={{ fontSize: '12px' }}>Show Condensed</Text>
+                                            <Switch 
+                                                checked={showCondensed}
+                                                onChange={setShowCondensed}
+                                                checkedChildren={<EyeOutlined />}
+                                                unCheckedChildren={<EyeInvisibleOutlined />}
+                                                size="small"
+                                            />
+                                        </Space>
+                                    </div>
+                                    {detailedRecording
+                                        .filter(entry => showCondensed || !entry.isCondensed)
+                                        .map((entry, index) => {
+                                            const isSelected = selectedEntryIndex === index;
+                                            const hasScreenshot = !!entry.deviceArtifacts?.screenshotBase64;
+                                            const realIndex = detailedRecording.indexOf(entry);
+                                            
+                                            return (
+                                                <div 
+                                                    key={realIndex}
+                                                    onClick={() => setSelectedEntryIndex(realIndex)}
+                                                    style={{
+                                                        padding: '10px',
+                                                        borderBottom: '1px solid #f0f0f0',
+                                                        backgroundColor: isSelected ? '#e6f7ff' : (entry.isCondensed ? '#f9f9f9' : 'transparent'),
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        opacity: entry.isCondensed ? 0.7 : 1
+                                                    }}
+                                                >
+                                                    <div style={{ width: '100%' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span><strong>#{realIndex + 1}</strong> - {new Date(entry.actionTime).toLocaleTimeString()}</span>
+                                                            {entry.isCondensed && <Text type="secondary" style={{ fontSize: '11px' }}>Condensed</Text>}
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                                                            {entry.action ? `Action: ${entry.action.action || 'Unknown'}` : 'State change'}
+                                                        </div>
                                                     </div>
+                                                    {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff', marginLeft: '8px' }}/>}
                                                 </div>
-                                                {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff' }}/>}
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                 </div>
                                 
                                 {/* Right panel - Entry details */}

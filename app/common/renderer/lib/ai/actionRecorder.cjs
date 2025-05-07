@@ -1,6 +1,6 @@
-// actionRecorder.js
+// actionRecorder.cjs
 /**
- * Action Recorder Service
+ * Action Recorder Service (CommonJS version)
  * 
  * This module provides functionality to record user actions and device states
  * during Appium Inspector sessions. It includes built-in condensing capabilities
@@ -20,14 +20,10 @@
  * 4. Get filtered recording: ActionRecorder.getFilteredRecording(includeCondensed)
  * 5. Stop recording: ActionRecorder.stopRecording()
  */
-import _ from 'lodash';
-
-// Import condensing functionality
-// We'll use the inline version rather than importing from recordingCondenser.js
-// to avoid module compatibility issues
+const _ = require('lodash');
 
 // Import config
-import { CONFIG } from './config.js';
+const { CONFIG } = require('./config.cjs');
 
 // Initialize the recording array
 let detailedRecording = [];
@@ -529,4 +525,4 @@ const ActionRecorder = {
   }
 };
 
-export default ActionRecorder;
+module.exports = ActionRecorder;

@@ -4,8 +4,9 @@ const GEM20= 'gemini-2.0-flash'
 // Notice: This is a demo key - replace with your own API key for production use
 export const CONFIG = {
   API: {
-    KEY: "YOUR_API_KEY", // Replace with your API key in production
-    BASE_URL: "https://api.openai.com/v1", // Default OpenAI API base URL
+    KEY: "AIzaSyB_8rkCNp8RAQkoYXK3KqMBtjJKG6KkDDs", // Replace with your API key in production
+    BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai/", // Default API base URL
+    MODEL:"gemini-2.0-flash"
   },
   GENERATION: {
     seed: 988,
@@ -22,7 +23,15 @@ export const CONFIG = {
   POM_MODEL:{MODEL:GEM25,API: {
     KEY: "AIzaSyB_8rkCNp8RAQkoYXK3KqMBtjJKG6KkDDs",
     BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    MODEL:"gemini-2.0-flash"
   }},
   POM_GUIDE:"guide.txt",
-  POM_PAGEBASE_CLASS: "PageBase.txt"
+  POM_PAGEBASE_CLASS: "PageBase.txt",
+  CONDENSER: {
+    enabled: true,              // Enable/disable inline condensing
+    checkXml:false,             // Check XML source for changes
+    checkScreenshot: true,      // Check screenshots for changes
+    screenshotThreshold: 0.1,   // Similarity threshold (1.0 = exact match)
+    defaultOutputSuffix: "_condensed"  // Default suffix for output files
+  }
 };
