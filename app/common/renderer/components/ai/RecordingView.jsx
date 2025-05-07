@@ -43,6 +43,12 @@ const customScrollbarStyle = `
 .ant-tabs-content {
   height: 100% !important;
   flex: 1 !important;
+  display: flex !important;
+}
+.ant-tabs-tabpane-active {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 .ant-tabs-content-holder {
   overflow: hidden !important;
@@ -51,13 +57,28 @@ const customScrollbarStyle = `
 .recording-tabs .ant-tabs-nav {
   margin-bottom: 0 !important;
 }
+.recording-tabs .ant-tabs-content-holder {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.recording-tabs {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin-bottom: 0 !important;
+}
 /* Ensure content fits properly */
 .recording-view-container {
   display: flex !important;
   flex-direction: column !important;
-  height: 100vh !important;
+  height: 100% !important;
   overflow: hidden !important;
-  min-height: 100vh !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
 }
 `;
 
@@ -117,6 +138,7 @@ const RecordingView = ({
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(null);
     const [activeTab, setActiveTab] = useState("recording");
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
+    const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
 
     // Add custom scrollbar styles on component mount
     useEffect(() => {
@@ -162,6 +184,11 @@ const RecordingView = ({
             ActionRecorder.recordAction(inspectorState);
         }
     }, [inspectorState?.sourceXML, inspectorState?.screenshot]);
+    
+    // Reset screenshot dimensions when selected entry changes
+    useEffect(() => {
+        setScreenshotDimensions({ width: 'auto', height: 'auto' });
+    }, [selectedEntryIndex]);
 
     const handleStartRecording = async () => {
         try {
@@ -637,7 +664,6 @@ const RecordingView = ({
 
     return (
         <Layout className="recording-view-container" style={{ 
-            height: '100vh', 
             background: '#fff',
             display: 'flex',
             flexDirection: 'column',
@@ -682,10 +708,13 @@ const RecordingView = ({
             {/* Main Content - Fill available space */}
             <Content style={{ 
                 padding: 0, // Remove padding to maximize space
-                flexGrow: 1, 
+                flexGrow: 1,
                 display: 'flex', 
                 flexDirection: 'column',
-                overflow: 'hidden' // Content itself doesn't scroll
+                overflow: 'hidden', // Content itself doesn't scroll
+                position: 'relative',
+                flex: '1 1 auto',
+                minHeight: 0
             }}>
                 <Tabs 
                     defaultActiveKey="detailed" 
@@ -693,11 +722,12 @@ const RecordingView = ({
                     type="card"
                     className="recording-tabs"
                     style={{ 
-                        margin: '16px 16px 0',
+                        margin: '8px 8px 0',
                         display: 'flex', 
                         flexDirection: 'column', 
-                        height: 'calc(100% - 16px)',
-                        overflow: 'hidden'
+                        height: 'calc(100% - 8px)',
+                        overflow: 'hidden',
+                        flex: 1
                     }}
                     items={[
                     {
@@ -713,9 +743,11 @@ const RecordingView = ({
                         ) : detailedRecording.length > 0 ? (
                             <div style={{ 
                                 display: 'flex', 
-                                height: 'calc(100% - 16px)', 
+                                height: 'calc(100% - 8px)', 
                                 overflow: 'hidden',
-                                minHeight: '500px'
+                                minHeight: '500px',
+                                flex: 1,
+                                margin: 0
                             }}>
                                 {/* Column 1 - Entries list */}
                                 <div style={{ 
@@ -847,11 +879,15 @@ const RecordingView = ({
                                     <>
                                         {/* Column 2 - Screenshot */}
                                         <div style={{ 
-                                            width: '35%', 
+                                            width: screenshotDimensions.width, 
+                                            minWidth: '300px', // Provide a reasonable minimum width
+                                            maxWidth: '45%',  // Ensure it doesn't take up too much space
                                             borderRight: '1px solid #f0f0f0',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            overflow: 'hidden'
+                                            overflow: 'hidden',
+                                            flexShrink: 0,
+                                            transition: 'width 0.3s ease-in-out' // Smooth transition when width changes
                                         }}>
                                             <div style={{ 
                                                 padding: '12px 16px',
@@ -916,19 +952,39 @@ const RecordingView = ({
                                                 </Space>
                                             </div>
                                             
-                                            <div className="custom-scrollbar force-scrollbar" style={{ 
-                                                padding: '16px', 
+                                            <div style={{ 
+                                                padding: '0', 
                                                 height: 'calc(100% - 48px)', // Subtract header height
+                                                minHeight: '300px', // Ensure minimum height for container
                                                 textAlign: 'center',
-                                                background: '#ffffff'
+                                                background: '#ffffff',
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                overflow: 'hidden'
                                             }}>
                                                 {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
                                                     <img 
                                                         src={`data:image/png;base64,${detailedRecording[selectedEntryIndex].deviceArtifacts.screenshotBase64}`} 
                                                         alt={`Screenshot at ${new Date(detailedRecording[selectedEntryIndex].actionTime).toLocaleString()}`}
+                                                        onLoad={(e) => {
+                                                            // Get the container height
+                                                            const containerHeight = e.target.parentElement.clientHeight;
+                                                            
+                                                            // Calculate the width based on aspect ratio
+                                                            const aspectRatio = e.target.naturalWidth / e.target.naturalHeight;
+                                                            const scaledWidth = containerHeight * aspectRatio;
+                                                            
+                                                            // Update the dimensions
+                                                            setScreenshotDimensions({
+                                                                width: `${scaledWidth}px`,
+                                                                height: `${containerHeight}px`
+                                                            });
+                                                        }}
                                                         style={{ 
-                                                            maxWidth: '100%',
-                                                            maxHeight: 'calc(100vh - 220px)',
+                                                            width: 'auto',
+                                                            height: '100%', 
+                                                            objectFit: 'contain',
                                                             border: '1px solid #d9d9d9',
                                                             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
                                                         }}
@@ -1164,7 +1220,17 @@ const RecordingView = ({
                         ) : standardRecordedActions && standardRecordedActions.length > 0 ? (
                             <Card 
                                 title="Recorded Actions" 
-                                style={{ margin: '16px' }}
+                                style={{ 
+                                    margin: '8px',
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}
+                                bodyStyle={{
+                                    flex: 1,
+                                    padding: '8px 16px',
+                                    overflow: 'hidden'
+                                }}
                                 extra={
                                     <Text type="secondary">
                                         {standardRecordedActions.length} actions recorded
