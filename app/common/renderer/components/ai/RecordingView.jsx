@@ -189,7 +189,7 @@ const RecordingView = ({
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
     const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
     const [processingAI, setProcessingAI] = useState(false);
-    const [aiViewMode, setAiViewMode] = useState('formatted');
+    const [aiViewMode, setAiViewMode] = useState('raw');
 
     // Add custom scrollbar styles on component mount
     useEffect(() => {
@@ -236,10 +236,10 @@ const RecordingView = ({
         }
     }, [inspectorState?.sourceXML, inspectorState?.screenshot]);
     
-    // Reset screenshot dimensions and view settings when selected entry changes
+    // Reset screenshot dimensions when selected entry changes
     useEffect(() => {
         setScreenshotDimensions({ width: 'auto', height: 'auto' });
-        setAiViewMode('formatted'); // Reset to formatted view for better UX
+        setAiViewMode('raw'); // Reset to raw JSON view as preferred
     }, [selectedEntryIndex]);
 
     const handleStartRecording = async () => {
