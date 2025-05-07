@@ -329,63 +329,65 @@ const RecordingView = ({
             const transitions = await TransitionAnalysisPipeline.analyzeTransitions(updatedRecording);
             
             // Process the transition results and update the recording
-            // Each transition occurs between two states, so we need to update both states
+            // Important: First state (index 0) and last state (updatedRecording.length-1) should not have AI analysis
+            // as there's no transition leading to the first state and no transition after the last state
+            
+            // First, make sure all states have the aiAnalysis attribute but set to null
+            updatedRecording = updatedRecording.map(state => ({
+                ...state,
+                aiAnalysis: null,
+                aiAnalysisRaw: null
+            }));
+            
+            // Process each transition - NOTE: transitions array has length = states.length - 1
             for (let i = 0; i < transitions.length; i++) {
                 const transition = transitions[i];
-                const currentStateIndex = i;
                 
-                // Format transition info as markdown for the current state
-                const currentState = updatedRecording[currentStateIndex];
-                const actionType = currentState.action?.action || 'State Change';
-                const elementTarget = currentState.action?.element?.text || 
-                                     currentState.action?.element?.resourceId || 
+                // We assign the transition analysis to the TARGET state (not the source)
+                // So the transition from state[0] to state[1] is assigned to state[1]
+                const targetStateIndex = i + 1;
+                
+                // Skip the first state (no incoming transition) and last state (no outgoing transition)
+                if (targetStateIndex <= 0 || targetStateIndex >= updatedRecording.length - 1) {
+                    continue;
+                }
+                
+                // Format transition info as markdown for the target state
+                const targetState = updatedRecording[targetStateIndex];
+                const actionType = targetState.action?.action || 'State Change';
+                const elementTarget = targetState.action?.element?.text || 
+                                     targetState.action?.element?.resourceId || 
                                      transition.actionTarget || 
                                      'Unknown Element';
                 
                 // Update the current state with AI analysis
-                updatedRecording[currentStateIndex] = {
-                    ...currentState,
-                    aiAnalysis: formatTransitionToMarkdown(transition, currentState, actionType, elementTarget, i, updatedRecording.length),
+                updatedRecording[targetStateIndex] = {
+                    ...targetState,
+                    aiAnalysis: formatTransitionToMarkdown(transition, targetState, actionType, elementTarget, targetStateIndex, updatedRecording.length),
                     aiAnalysisRaw: transition // Store the raw JSON data
                 };
                 
-                message.info(`Processed state ${i + 1} of ${updatedRecording.length}`);
+                message.info(`Processed transition for state ${targetStateIndex + 1} of ${updatedRecording.length}`);
             }
             
-            // Handle the last state which doesn't have a "to" transition
+            // Final verification - make sure first and last states have aiAnalysis = null
             if (updatedRecording.length > 0) {
-                const lastIndex = updatedRecording.length - 1;
-                const lastState = updatedRecording[lastIndex];
+                // First state should have null analysis
+                updatedRecording[0] = {
+                    ...updatedRecording[0],
+                    aiAnalysis: null,
+                    aiAnalysisRaw: null
+                };
                 
-                // If we haven't processed the last state yet (no aiAnalysis)
-                if (!lastState.aiAnalysis) {
-                    const actionType = lastState.action?.action || 'Final State';
-                    
-                    // Create a default final state analysis object
-                    const finalStateAnalysis = {
-                        fromActionTime: lastState.actionTime,
-                        toActionTime: lastState.actionTime,
-                        hasTransition: false,
-                        transitionDescription: "Final state - no transition",
-                        technicalActionDescription: `Final ${actionType} state`,
-                        actionTarget: lastState.action?.element?.elementId || null,
-                        actionValue: null,
-                        isPageChanged: false,
-                        isSamePageDifferentState: false,
-                        currentPageName: "Final Screen",
-                        currentPageDescription: "Final state of the recording sequence",
-                        inferredUserActivity: "Completing the workflow"
-                    };
-                    
-                    // Format the final state analysis
-                    updatedRecording[lastIndex] = {
-                        ...lastState,
-                        aiAnalysis: formatFinalStateToMarkdown(lastState, actionType),
-                        aiAnalysisRaw: finalStateAnalysis
-                    };
-                    
-                    message.info(`Processed final state (${lastIndex + 1} of ${updatedRecording.length})`);
-                }
+                // Last state should have null analysis
+                const lastIndex = updatedRecording.length - 1;
+                updatedRecording[lastIndex] = {
+                    ...updatedRecording[lastIndex],
+                    aiAnalysis: null,
+                    aiAnalysisRaw: null
+                };
+                
+                message.info(`Verified first and last states have no analysis as expected`);
             }
             
             // Update the recording with AI analysis
@@ -1470,13 +1472,19 @@ public void verifyFinalState() {
                                                                         AI Analysis
                                                                     </span>
                                                                     {!detailedRecording[selectedEntryIndex].aiAnalysis && (
-                                                                        <Badge count="Not Available" style={{ 
-                                                                            backgroundColor: '#f0f0f0',
-                                                                            color: '#bfbfbf',
-                                                                            fontSize: '10px',
-                                                                            fontWeight: 'normal',
-                                                                            textTransform: 'uppercase'
-                                                                        }} />
+                                                                        <Badge 
+                                                                            count={selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
+                                                                                "First/Last State" : "Not Available"} 
+                                                                            style={{ 
+                                                                                backgroundColor: selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
+                                                                                    '#87d068' : '#f0f0f0',
+                                                                                color: selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1 ? 
+                                                                                    '#fff' : '#bfbfbf',
+                                                                                fontSize: '10px',
+                                                                                fontWeight: 'normal',
+                                                                                textTransform: 'uppercase'
+                                                                            }} 
+                                                                        />
                                                                     )}
                                                                 </span>
                                                             ),
@@ -1640,7 +1648,11 @@ public void verifyFinalState() {
                                                                             No AI Analysis Available
                                                                         </Text>
                                                                         <Text style={{ fontSize: '14px', textAlign: 'center', marginBottom: '20px', color: '#333' }}>
-                                                                            This recording state hasn't been processed with AI yet.
+                                                                            {selectedEntryIndex === 0 ? 
+                                                                                "This is the first state in the recording sequence. First states don't have AI analysis because there is no transition leading to them." :
+                                                                            selectedEntryIndex === detailedRecording.length - 1 ?
+                                                                                "This is the last state in the recording sequence. Last states don't have AI analysis because there is no transition after them." :
+                                                                                "This recording state hasn't been processed with AI yet."}
                                                                         </Text>
                                                                         <div style={{ 
                                                                             backgroundColor: 'white', 
@@ -1660,15 +1672,17 @@ public void verifyFinalState() {
                                                                                 <li>View detailed insights for each state</li>
                                                                             </ol>
                                                                         </div>
-                                                                        <Button
-                                                                            type="primary"
-                                                                            icon={<ThunderboltOutlined />}
-                                                                            onClick={handleProcessWithAI}
-                                                                            loading={processingAI}
-                                                                            style={{ background: '#722ED1', borderColor: '#722ED1' }}
-                                                                        >
-                                                                            Process with AI Now
-                                                                        </Button>
+                                                                        {!(selectedEntryIndex === 0 || selectedEntryIndex === detailedRecording.length - 1) && (
+                                                                            <Button
+                                                                                type="primary"
+                                                                                icon={<ThunderboltOutlined />}
+                                                                                onClick={handleProcessWithAI}
+                                                                                loading={processingAI}
+                                                                                style={{ background: '#722ED1', borderColor: '#722ED1' }}
+                                                                            >
+                                                                                Process with AI Now
+                                                                            </Button>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             )
