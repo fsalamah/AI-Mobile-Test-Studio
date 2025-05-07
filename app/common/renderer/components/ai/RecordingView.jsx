@@ -1,5 +1,28 @@
 // RecordingView.jsx
 import React, { useState, useEffect } from "react";
+
+// Add custom scrollbar styles
+const customScrollbarStyle = `
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #d9d9d9;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #bfbfbf;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 #f5f5f5;
+}
+`;
+
 import {
     Button,
     Card,
@@ -559,6 +582,8 @@ const RecordingView = ({
             flexDirection: 'column',
             overflow: 'hidden' // Prevent main container from scrolling
         }}>
+            {/* Add custom scrollbar styles */}
+            <style>{customScrollbarStyle}</style>
             {/* Header with Title and Back Button */}
             <Header style={{ 
                 height: 'auto', 
@@ -662,7 +687,14 @@ const RecordingView = ({
                                             </Tooltip>
                                         </Space>
                                     </div>
-                                    <div style={{ overflowY: 'auto', height: '100%' }}>
+                                    <div 
+                                        className="custom-scrollbar"
+                                        style={{ 
+                                            overflowY: 'auto', 
+                                            height: '100%',
+                                            padding: '0 2px'
+                                        }}
+                                    >
                                         {detailedRecording
                                             .filter(entry => showCondensed || !entry.isCondensed)
                                             .map((entry, index) => {
@@ -817,7 +849,7 @@ const RecordingView = ({
                                                 </Space>
                                             </div>
                                             
-                                            <div style={{ overflow: 'auto', padding: '16px', flex: 1, textAlign: 'center' }}>
+                                            <div className="custom-scrollbar" style={{ overflow: 'auto', padding: '16px', flex: 1, textAlign: 'center' }}>
                                                 {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
                                                     <img 
                                                         src={`data:image/png;base64,${detailedRecording[selectedEntryIndex].deviceArtifacts.screenshotBase64}`} 
@@ -892,7 +924,7 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
@@ -915,7 +947,7 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
@@ -939,7 +971,7 @@ const RecordingView = ({
                                                                 </span>
                                                             ),
                                                             children: (
-                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                <div className="custom-scrollbar" style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
                                                                     <pre style={{ 
                                                                         backgroundColor: '#f5f5f5', 
                                                                         padding: '16px', 
