@@ -98,7 +98,8 @@ import {
     Divider,
     Layout,
     Badge,
-    Tooltip
+    Tooltip,
+    Radio
 } from "antd";
 import {
     ArrowLeftOutlined,
@@ -125,6 +126,49 @@ import ActionRecorder from "../../lib/ai/actionRecorder";
 import { TransitionAnalysisPipeline } from "../../lib/ai/transitionAnalysisPipeline";
 
 const { Text, Title, Paragraph } = Typography;
+
+// Helper function to syntax highlight JSON
+const syntaxHighlightJson = (json) => {
+    // If it's not a string (already an object), stringify it
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, null, 2);
+    }
+    
+    // Replace specific JSON syntax elements with HTML spans
+    return json
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, 
+            function (match) {
+                let cls = 'number'; // default is number
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key'; // it's a key
+                        match = match.replace(/"/g, '').replace(/:$/, '');
+                        return '<span style="color: #9cdcfe;">"' + match + '"</span><span style="color: #d4d4d4;">:</span>';
+                    } else {
+                        cls = 'string'; // it's a string
+                        return '<span style="color: #ce9178;">' + match + '</span>';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean'; // it's a boolean
+                    return '<span style="color: #569cd6;">' + match + '</span>';
+                } else if (/null/.test(match)) {
+                    cls = 'null'; // it's null
+                    return '<span style="color: #569cd6;">' + match + '</span>';
+                } else {
+                    // it's a number
+                    return '<span style="color: #b5cea8;">' + match + '</span>';
+                }
+            }
+        )
+        .replace(/\{/g, '<span style="color: #d4d4d4;">{</span>')
+        .replace(/\}/g, '<span style="color: #d4d4d4;">}</span>')
+        .replace(/\[/g, '<span style="color: #d4d4d4;">[</span>')
+        .replace(/\]/g, '<span style="color: #d4d4d4;">]</span>')
+        .replace(/,/g, '<span style="color: #d4d4d4;">,</span>');
+};
 const { Option } = Select;
 const { Header, Content } = Layout;
 
@@ -145,6 +189,7 @@ const RecordingView = ({
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
     const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
     const [processingAI, setProcessingAI] = useState(false);
+    const [aiViewMode, setAiViewMode] = useState('formatted');
 
     // Add custom scrollbar styles on component mount
     useEffect(() => {
@@ -191,9 +236,10 @@ const RecordingView = ({
         }
     }, [inspectorState?.sourceXML, inspectorState?.screenshot]);
     
-    // Reset screenshot dimensions when selected entry changes
+    // Reset screenshot dimensions and view settings when selected entry changes
     useEffect(() => {
         setScreenshotDimensions({ width: 'auto', height: 'auto' });
+        setAiViewMode('formatted'); // Reset to formatted view for better UX
     }, [selectedEntryIndex]);
 
     const handleStartRecording = async () => {
@@ -276,82 +322,69 @@ const RecordingView = ({
             // Create a copy of the recording to update
             let updatedRecording = [...detailedRecording];
             
-            try {
-                // Use the actual TransitionAnalysisPipeline to analyze transitions
-                message.info(`Starting transition analysis for ${updatedRecording.length} states...`);
+            // Use the actual TransitionAnalysisPipeline to analyze transitions
+            message.info(`Starting transition analysis for ${updatedRecording.length} states...`);
+            
+            // Call the pipeline to analyze transitions
+            const transitions = await TransitionAnalysisPipeline.analyzeTransitions(updatedRecording);
+            
+            // Process the transition results and update the recording
+            // Each transition occurs between two states, so we need to update both states
+            for (let i = 0; i < transitions.length; i++) {
+                const transition = transitions[i];
+                const currentStateIndex = i;
                 
-                // Call the pipeline to analyze transitions
-                const transitions = await TransitionAnalysisPipeline.analyzeTransitions(updatedRecording);
+                // Format transition info as markdown for the current state
+                const currentState = updatedRecording[currentStateIndex];
+                const actionType = currentState.action?.action || 'State Change';
+                const elementTarget = currentState.action?.element?.text || 
+                                     currentState.action?.element?.resourceId || 
+                                     transition.actionTarget || 
+                                     'Unknown Element';
                 
-                // Process the transition results and update the recording
-                // Each transition occurs between two states, so we need to update both states
-                for (let i = 0; i < transitions.length; i++) {
-                    const transition = transitions[i];
-                    const currentStateIndex = i;
-                    const nextStateIndex = i + 1;
+                // Update the current state with AI analysis
+                updatedRecording[currentStateIndex] = {
+                    ...currentState,
+                    aiAnalysis: formatTransitionToMarkdown(transition, currentState, actionType, elementTarget, i, updatedRecording.length),
+                    aiAnalysisRaw: transition // Store the raw JSON data
+                };
+                
+                message.info(`Processed state ${i + 1} of ${updatedRecording.length}`);
+            }
+            
+            // Handle the last state which doesn't have a "to" transition
+            if (updatedRecording.length > 0) {
+                const lastIndex = updatedRecording.length - 1;
+                const lastState = updatedRecording[lastIndex];
+                
+                // If we haven't processed the last state yet (no aiAnalysis)
+                if (!lastState.aiAnalysis) {
+                    const actionType = lastState.action?.action || 'Final State';
                     
-                    // Format transition info as markdown for the current state
-                    const currentState = updatedRecording[currentStateIndex];
-                    const actionType = currentState.action?.action || 'State Change';
-                    const elementTarget = currentState.action?.element?.text || 
-                                         currentState.action?.element?.resourceId || 
-                                         transition.actionTarget || 
-                                         'Unknown Element';
-                    
-                    // Update the current state with AI analysis
-                    updatedRecording[currentStateIndex] = {
-                        ...currentState,
-                        aiAnalysis: formatTransitionToMarkdown(transition, currentState, actionType, elementTarget, i, updatedRecording.length)
+                    // Create a default final state analysis object
+                    const finalStateAnalysis = {
+                        fromActionTime: lastState.actionTime,
+                        toActionTime: lastState.actionTime,
+                        hasTransition: false,
+                        transitionDescription: "Final state - no transition",
+                        technicalActionDescription: `Final ${actionType} state`,
+                        actionTarget: lastState.action?.element?.elementId || null,
+                        actionValue: null,
+                        isPageChanged: false,
+                        isSamePageDifferentState: false,
+                        currentPageName: "Final Screen",
+                        currentPageDescription: "Final state of the recording sequence",
+                        inferredUserActivity: "Completing the workflow"
                     };
                     
-                    message.info(`Processed state ${i + 1} of ${updatedRecording.length}`);
-                }
-                
-                // Handle the last state which doesn't have a "to" transition
-                if (updatedRecording.length > 0) {
-                    const lastIndex = updatedRecording.length - 1;
-                    const lastState = updatedRecording[lastIndex];
-                    
-                    // If we haven't processed the last state yet (no aiAnalysis)
-                    if (!lastState.aiAnalysis) {
-                        const actionType = lastState.action?.action || 'Final State';
-                        
-                        // Format the final state analysis
-                        updatedRecording[lastIndex] = {
-                            ...lastState,
-                            aiAnalysis: formatFinalStateToMarkdown(lastState, actionType)
-                        };
-                        
-                        message.info(`Processed final state (${lastIndex + 1} of ${updatedRecording.length})`);
-                    }
-                }
-            } catch (pipelineError) {
-                // If the real pipeline fails, fall back to simulated analysis
-                console.error("Error using TransitionAnalysisPipeline:", pipelineError);
-                message.warning("AI service unavailable, using simulated analysis instead");
-                
-                // For each state, generate simulated analysis
-                for (let i = 0; i < updatedRecording.length; i++) {
-                    // Skip if already processed
-                    if (updatedRecording[i].aiAnalysis) continue;
-                    
-                    // Generate simulated analysis for this state
-                    const currentState = updatedRecording[i];
-                    const actionType = currentState.action?.action || 'State Change';
-                    const elementTarget = currentState.action?.element?.text || 
-                                         currentState.action?.element?.resourceId || 
-                                         'Unknown Element';
-                    
-                    // Add simulated analysis
-                    updatedRecording[i] = {
-                        ...currentState,
-                        aiAnalysis: generateSimulatedAnalysis(i, updatedRecording.length, currentState)
+                    // Format the final state analysis
+                    updatedRecording[lastIndex] = {
+                        ...lastState,
+                        aiAnalysis: formatFinalStateToMarkdown(lastState, actionType),
+                        aiAnalysisRaw: finalStateAnalysis
                     };
                     
-                    message.info(`Simulated analysis for state ${i + 1} of ${updatedRecording.length}`);
-                    
-                    // Add a small delay to make the simulation feel more realistic
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    message.info(`Processed final state (${lastIndex + 1} of ${updatedRecording.length})`);
                 }
             }
             
@@ -377,19 +410,33 @@ const RecordingView = ({
     
     // Helper function to format transition analysis as markdown
     const formatTransitionToMarkdown = (transition, state, actionType, elementTarget, index, totalStates) => {
+        // Convert hasTransition boolean to user-friendly status
+        const transitionStatus = transition.hasTransition 
+            ? "✅ Significant state change detected"
+            : "ℹ️ Minor UI update - no significant state change";
+            
+        // Format page change status for better readability
+        let pageChangeStatus = "No page change";
+        if (transition.isPageChanged) {
+            pageChangeStatus = "✅ Full page change";
+        } else if (transition.isSamePageDifferentState) {
+            pageChangeStatus = "↻ Same page with state change";
+        }
+        
         return `## AI Analysis of ${actionType} Action
 
 ### Element Information
-- Target: ${elementTarget}
-- UI Path: ${state.action?.element?.xpath || 'N/A'}
+- **Target Element:** ${elementTarget}
+- **UI Path:** ${state.action?.element?.xpath || 'N/A'}
+- **Action Time:** ${new Date(state.actionTime).toLocaleString()}
 
-### Transition Analysis
-- **Transition:** ${transition.transitionDescription || 'No description available'}
+### Transition Details
+- **Status:** ${transitionStatus}
+- **Transition Description:** ${transition.transitionDescription || 'No description available'}
 - **Technical Action:** ${transition.technicalActionDescription || 'No action description available'}
-- **Target:** ${transition.actionTarget || 'Unknown target'}
-- **Value:** ${transition.actionValue || 'No value'}
-- **Page Changed:** ${transition.isPageChanged ? 'Yes' : 'No'}
-- **Same Page Different State:** ${transition.isSamePageDifferentState ? 'Yes' : 'No'}
+- **Element Target:** ${transition.actionTarget || 'Unknown target'}
+- **Input Value:** ${transition.actionValue || 'No value'}
+- **Page Change:** ${pageChangeStatus}
 
 ### Page Information
 - **Current Page:** ${transition.currentPageName || 'Unknown page'}
@@ -404,23 +451,77 @@ public void test${actionType.replace(/\s+/g, '')}() {
     WebElement element = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
     
     // Perform the ${actionType.toLowerCase()} action
-    element.click();
+    ${generateCodeForAction(actionType, transition.actionValue)}
     
     // Add appropriate assertion here
-    Assert.assertTrue("${transition.currentPageName || 'Element'} should be visible after action", 
-                    element.isDisplayed());
+    ${generateAssertionForTransition(transition)}
 }
 \`\`\`
 
 ### Reliability Assessment
-- Element identification confidence: High
-- Action replayability: Medium
-- Test stability: Medium
+- **Element Identification:** ${getRatingEmoji('High')} High
+- **Action Replayability:** ${getRatingEmoji('Medium')} Medium
+- **Test Stability:** ${getRatingEmoji('Medium')} Medium
 
 ### Suggested Improvements
 - Consider adding wait conditions before interacting with element
 - Add more specific assertions to validate state after action
+- ${getImprovementSuggestion(transition, actionType)}
 `;
+    };
+    
+    // Helper functions for formatTransitionToMarkdown
+    const generateCodeForAction = (actionType, value) => {
+        actionType = actionType.toLowerCase();
+        
+        if (actionType.includes('tap') || actionType.includes('click')) {
+            return 'element.click();';
+        } else if (actionType.includes('input') || actionType.includes('type') || actionType.includes('send')) {
+            return `element.sendKeys("${value || 'sample text'}");`;
+        } else if (actionType.includes('swipe') || actionType.includes('scroll')) {
+            return `// Perform swipe action using TouchActions\nTouchActions action = new TouchActions(driver);\naction.scroll(element, 0, 100).perform();`;
+        } else if (actionType.includes('long')) {
+            return `// Perform long press using TouchActions\nTouchActions action = new TouchActions(driver);\naction.longPress(element).perform();`;
+        } else if (actionType.includes('select')) {
+            return `// Select option\nSelect select = new Select(element);\nselect.selectByVisibleText("${value || 'Option 1'}");`;
+        } else {
+            return 'element.click(); // Generic action';
+        }
+    };
+    
+    const generateAssertionForTransition = (transition) => {
+        if (transition.isPageChanged) {
+            return `// Verify navigation to new page\nWebElement newPageElement = driver.findElement(By.xpath("//some-identifier"));\nAssert.assertTrue("Navigation to ${transition.currentPageName} failed", newPageElement.isDisplayed());`;
+        } else if (transition.isSamePageDifferentState) {
+            return `// Verify state change on same page\nAssert.assertTrue("State change verification failed", \n    driver.findElement(By.xpath("//state-indicator")).getText().contains("new state"));`;
+        } else {
+            return `// Verify element state after action\nAssert.assertTrue("Element state verification failed", element.isEnabled());`;
+        }
+    };
+    
+    const getRatingEmoji = (rating) => {
+        switch(rating) {
+            case 'High':
+                return '🟢';
+            case 'Medium':
+                return '🟡';
+            case 'Low':
+                return '🔴';
+            default:
+                return '⚪';
+        }
+    };
+    
+    const getImprovementSuggestion = (transition, actionType) => {
+        if (transition.isPageChanged) {
+            return `Add explicit wait for the new page "${transition.currentPageName}" to load`;
+        } else if (actionType.toLowerCase().includes('input')) {
+            return 'Validate input field contents after entering data';
+        } else if (actionType.toLowerCase().includes('swipe') || actionType.toLowerCase().includes('scroll')) {
+            return 'Add explicit verification that the intended element is visible after scrolling';
+        } else {
+            return 'Consider adding retry logic for intermittent failures';
+        }
     };
     
     // Helper function to format final state analysis
@@ -428,8 +529,13 @@ public void test${actionType.replace(/\s+/g, '')}() {
         return `## AI Analysis of Final State
 
 ### Final State Information
-- Last Action: ${actionType}
-- Final Screen: ${state.deviceArtifacts?.sessionDetails?.activity || 'Unknown Screen'}
+- **Last Action:** ${actionType}
+- **Final Screen:** ${state.deviceArtifacts?.sessionDetails?.activity || 'Unknown Screen'}
+- **Timestamp:** ${new Date(state.actionTime).toLocaleString()}
+
+### Element Information
+- **Last Element:** ${state.action?.element?.elementId || 'No element information'}
+- **UI Path:** ${state.action?.element?.xpath || 'N/A'}
 
 ### Test Code Recommendation
 \`\`\`java
@@ -438,48 +544,26 @@ public void verifyFinalState() {
     // Verify the final state is correct
     WebElement finalElement = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
     Assert.assertTrue("Final state should be visible", finalElement.isDisplayed());
+    
+    // Check for any page-specific elements to confirm we're on the correct page
+    WebElement pageSpecificElement = driver.findElement(By.id("page-specific-id"));
+    Assert.assertTrue("Page-specific element should be visible", pageSpecificElement.isDisplayed());
 }
 \`\`\`
 
 ### Test Completion Analysis
-- Test completed successfully
-- All key interactions were recorded
-- Recommend adding final state verification
+- ✅ Test sequence recorded successfully
+- ✅ All key interactions were captured
+- ℹ️ Final state verification recommended
 
 ### Next Steps
 - Add proper test setup and teardown
 - Consider adding wait conditions before interactions
 - Implement proper test reporting
+- Add error handling and recovery logic
 `;
     };
     
-    // Helper function to generate simulated analysis
-    const generateSimulatedAnalysis = (index, totalCount, state) => {
-        const actionType = state.action?.action || 'State Change';
-        const elementTarget = state.action?.element?.text || 
-                             state.action?.element?.resourceId || 
-                             'Unknown Element';
-        
-        // Determine if this is the final state
-        if (index === totalCount - 1) {
-            return formatFinalStateToMarkdown(state, actionType);
-        }
-        
-        // Simulated transition for non-final states
-        const simulatedTransition = {
-            transitionDescription: `User ${actionType.toLowerCase()}ed on ${elementTarget}`,
-            technicalActionDescription: `${actionType} performed on element with ${state.action?.element?.xpath ? 'XPath' : 'identifier'} ${state.action?.element?.xpath || elementTarget}`,
-            actionTarget: elementTarget,
-            actionValue: state.action?.args?.text || null,
-            isPageChanged: Math.random() > 0.5,
-            isSamePageDifferentState: Math.random() > 0.7,
-            currentPageName: ['Login', 'Dashboard', 'Settings', 'Product Details'][Math.floor(Math.random() * 4)] + ' Screen',
-            currentPageDescription: 'This screen allows the user to interact with application features.',
-            inferredUserActivity: ['Filling form', 'Navigating', 'Selecting options', 'Viewing details'][Math.floor(Math.random() * 4)]
-        };
-        
-        return formatTransitionToMarkdown(simulatedTransition, state, actionType, elementTarget, index, totalCount);
-    };
     
     const saveToFile = () => {
         try {
@@ -1402,30 +1486,134 @@ public void verifyFinalState() {
                                                                     height: 'calc(100% - 32px)',
                                                                     background: '#ffffff'
                                                                 }}>
-                                                                    {typeof detailedRecording[selectedEntryIndex].aiAnalysis === 'string' ? (
-                                                                        <pre style={{ 
-                                                                            backgroundColor: '#f5f5f5', 
-                                                                            padding: '16px', 
-                                                                            borderRadius: '4px', 
-                                                                            overflow: 'auto',
-                                                                            height: '100%',
-                                                                            margin: 0,
-                                                                            whiteSpace: 'pre-wrap'
+                                                                    {/* AI analysis view with mode toggle */}
+                                                                    <>
+                                                                        {/* Toggle button header */}
+                                                                        <div style={{
+                                                                            display: 'flex',
+                                                                            justifyContent: 'space-between',
+                                                                            alignItems: 'center',
+                                                                            marginBottom: '12px',
+                                                                            backgroundColor: '#f9f0ff', 
+                                                                            padding: '8px 12px',
+                                                                            borderRadius: '4px',
+                                                                            border: '1px solid #d3adf7'
                                                                         }}>
-                                                                            {detailedRecording[selectedEntryIndex].aiAnalysis}
-                                                                        </pre>
-                                                                    ) : (
-                                                                        <pre style={{ 
-                                                                            backgroundColor: '#f5f5f5', 
-                                                                            padding: '16px', 
-                                                                            borderRadius: '4px', 
-                                                                            overflow: 'auto',
-                                                                            height: '100%',
-                                                                            margin: 0
-                                                                        }}>
-                                                                            {JSON.stringify(detailedRecording[selectedEntryIndex].aiAnalysis, null, 2)}
-                                                                        </pre>
-                                                                    )}
+                                                                            <div style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center'
+                                                                            }}>
+                                                                                <ExperimentOutlined style={{ fontSize: '18px', color: '#722ED1', marginRight: '8px' }} />
+                                                                                <Text strong style={{ color: '#722ED1' }}>AI-Generated Analysis</Text>
+                                                                            </div>
+                                                                            
+                                                                            <Space>
+                                                                                <Text type="secondary" style={{ marginRight: '8px', fontSize: '13px' }}>View mode:</Text>
+                                                                                <Radio.Group 
+                                                                                    value={aiViewMode} 
+                                                                                    onChange={(e) => setAiViewMode(e.target.value)}
+                                                                                    size="small"
+                                                                                    buttonStyle="solid"
+                                                                                >
+                                                                                    <Radio.Button value="formatted">
+                                                                                        <CodeOutlined style={{ marginRight: '4px' }} />
+                                                                                        Formatted
+                                                                                    </Radio.Button>
+                                                                                    <Radio.Button value="raw">
+                                                                                        <span role="img" aria-label="json" style={{ marginRight: '4px' }}>{ }</span>
+                                                                                        Raw JSON
+                                                                                    </Radio.Button>
+                                                                                </Radio.Group>
+                                                                            </Space>
+                                                                        </div>
+                                                                        
+                                                                        {/* Content based on view mode */}
+                                                                        {aiViewMode === 'formatted' ? (
+                                                                                    // Formatted view
+                                                                                    <div style={{
+                                                                                        backgroundColor: '#f9f0ff', 
+                                                                                        padding: '20px', 
+                                                                                        borderRadius: '6px', 
+                                                                                        overflow: 'auto',
+                                                                                        height: 'calc(100% - 50px)',
+                                                                                        border: '1px solid #d3adf7',
+                                                                                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
+                                                                                    }}>
+                                                                                        <div
+                                                                                            style={{ 
+                                                                                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                                                                                fontSize: '14px',
+                                                                                                lineHeight: '1.6',
+                                                                                                whiteSpace: 'pre-wrap'
+                                                                                            }}
+                                                                                            dangerouslySetInnerHTML={{
+                                                                                                __html: detailedRecording[selectedEntryIndex].aiAnalysis
+                                                                                                    // Convert markdown headings to styled HTML
+                                                                                                    .replace(/## (.*)/g, '<h2 style="color: #722ED1; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #d3adf7; padding-bottom: 8px;">$1</h2>')
+                                                                                                    .replace(/### (.*)/g, '<h3 style="color: #722ED1; margin-top: 16px; margin-bottom: 8px;">$1</h3>')
+                                                                                                    // Make code blocks look nicer
+                                                                                                    .replace(/```java([\s\S]*?)```/g, '<div style="background-color: #f0f0f0; padding: 12px; border-radius: 4px; margin: 12px 0; border-left: 4px solid #722ED1;"><pre style="margin: 0; overflow-x: auto;">$1</pre></div>')
+                                                                                                    // Style list items with purple bullets
+                                                                                                    .replace(/- (.*)/g, '<div style="margin: 4px 0; padding-left: 8px; display: flex; align-items: flex-start;"><span style="color: #722ED1; margin-right: 8px;">•</span><span>$1</span></div>')
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    // Raw JSON view
+                                                                                    <div style={{
+                                                                                        backgroundColor: '#1e1e1e', 
+                                                                                        padding: '16px', 
+                                                                                        borderRadius: '6px', 
+                                                                                        overflow: 'auto',
+                                                                                        height: 'calc(100% - 50px)',
+                                                                                        border: '1px solid #444',
+                                                                                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                                                                                        color: '#d4d4d4'
+                                                                                    }}>
+                                                                                        <div style={{
+                                                                                            display: 'flex',
+                                                                                            justifyContent: 'space-between',
+                                                                                            marginBottom: '12px',
+                                                                                            borderBottom: '1px solid #444',
+                                                                                            paddingBottom: '8px'
+                                                                                        }}>
+                                                                                            <Text strong style={{ color: '#c586c0' }}>
+                                                                                                AI Analysis Raw Response
+                                                                                            </Text>
+                                                                                            <Button 
+                                                                                                size="small" 
+                                                                                                type="text"
+                                                                                                icon={<CopyOutlined />}
+                                                                                                onClick={() => {
+                                                                                                    navigator.clipboard.writeText(
+                                                                                                        JSON.stringify(detailedRecording[selectedEntryIndex].aiAnalysisRaw, null, 2)
+                                                                                                    );
+                                                                                                    message.success('JSON copied to clipboard!');
+                                                                                                }}
+                                                                                                style={{ color: '#d4d4d4' }}
+                                                                                            >
+                                                                                                Copy JSON
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                        
+                                                                                        <pre style={{
+                                                                                            margin: 0,
+                                                                                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                                                                                            fontSize: '13px',
+                                                                                            lineHeight: '1.5',
+                                                                                            color: '#d4d4d4'
+                                                                                        }}>
+                                                                                            {detailedRecording[selectedEntryIndex].aiAnalysisRaw ? (
+                                                                                                <div dangerouslySetInnerHTML={{
+                                                                                                    __html: syntaxHighlightJson(JSON.stringify(detailedRecording[selectedEntryIndex].aiAnalysisRaw, null, 2))
+                                                                                                }}/>
+                                                                                            ) : (
+                                                                                                "Raw JSON data not available"
+                                                                                            )}
+                                                                                        </pre>
+                                                                                    </div>
+                                                                                )}
+                                                                    </>
                                                                 </div>
                                                             ) : (
                                                                 <div style={{ 
@@ -1434,14 +1622,53 @@ public void verifyFinalState() {
                                                                     alignItems: 'center', 
                                                                     justifyContent: 'center',
                                                                     height: '100%',
-                                                                    color: '#bfbfbf'
+                                                                    color: '#722ED1',
+                                                                    padding: '30px',
                                                                 }}>
-                                                                    <ExperimentOutlined style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }} />
-                                                                    <Text type="secondary">No AI analysis available for this state</Text>
-                                                                    <div style={{ marginTop: '16px', maxWidth: '450px', textAlign: 'center' }}>
-                                                                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                                                                            Use the "Process with AI" button in the toolbar to analyze this recording
+                                                                    <div style={{
+                                                                        backgroundColor: '#f9f0ff',
+                                                                        borderRadius: '8px',
+                                                                        padding: '30px',
+                                                                        display: 'flex',
+                                                                        flexDirection: 'column',
+                                                                        alignItems: 'center',
+                                                                        maxWidth: '500px',
+                                                                        border: '1px dashed #d3adf7'
+                                                                    }}>
+                                                                        <ExperimentOutlined style={{ fontSize: '64px', marginBottom: '16px', color: '#722ED1' }} />
+                                                                        <Text strong style={{ fontSize: '18px', color: '#722ED1', marginBottom: '10px' }}>
+                                                                            No AI Analysis Available
                                                                         </Text>
+                                                                        <Text style={{ fontSize: '14px', textAlign: 'center', marginBottom: '20px', color: '#333' }}>
+                                                                            This recording state hasn't been processed with AI yet.
+                                                                        </Text>
+                                                                        <div style={{ 
+                                                                            backgroundColor: 'white', 
+                                                                            padding: '15px', 
+                                                                            borderRadius: '6px',
+                                                                            border: '1px solid #d3adf7',
+                                                                            marginBottom: '16px',
+                                                                            width: '100%'
+                                                                        }}>
+                                                                            <Text strong style={{ display: 'block', marginBottom: '8px', color: '#222' }}>
+                                                                                How to Generate AI Analysis:
+                                                                            </Text>
+                                                                            <ol style={{ paddingLeft: '20px', margin: '0', color: '#333' }}>
+                                                                                <li style={{ marginBottom: '6px' }}>Complete your recording session</li>
+                                                                                <li style={{ marginBottom: '6px' }}>Click the <Text strong style={{ color: '#722ED1' }}>Process with AI</Text> button in the toolbar</li>
+                                                                                <li style={{ marginBottom: '6px' }}>Wait for the AI to analyze all transitions</li>
+                                                                                <li>View detailed insights for each state</li>
+                                                                            </ol>
+                                                                        </div>
+                                                                        <Button
+                                                                            type="primary"
+                                                                            icon={<ThunderboltOutlined />}
+                                                                            onClick={handleProcessWithAI}
+                                                                            loading={processingAI}
+                                                                            style={{ background: '#722ED1', borderColor: '#722ED1' }}
+                                                                        >
+                                                                            Process with AI Now
+                                                                        </Button>
                                                                     </div>
                                                                 </div>
                                                             )
