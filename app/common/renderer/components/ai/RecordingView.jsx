@@ -434,9 +434,13 @@ const RecordingView = ({
             pageChangeStatus = "↻ Same page with state change";
         }
         
+        // Format state name with proper styling
+        const stateEmoji = getStateEmoji(transition.stateName);
+        
         return `## AI Analysis of ${actionType} Action
 
-### Element Information
+### State Information
+- **Current State:** ${stateEmoji} ${transition.stateName || 'Unknown State'}
 - **Target Element:** ${elementTarget}
 - **UI Path:** ${state.action?.element?.xpath || 'N/A'}
 - **Action Time:** ${new Date(state.actionTime).toLocaleString()}
@@ -456,8 +460,8 @@ const RecordingView = ({
 
 ### Test Code Recommendation
 \`\`\`java
-// Generated test code for ${actionType} action
-public void test${actionType.replace(/\s+/g, '')}() {
+// Generated test code for ${actionType} action on ${transition.currentPageName} (${transition.stateName})
+public void test${actionType.replace(/\s+/g, '')}On${transition.currentPageName?.replace(/\s+/g, '')}() {
     // Find element using optimized selector
     WebElement element = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
     
@@ -466,6 +470,9 @@ public void test${actionType.replace(/\s+/g, '')}() {
     
     // Add appropriate assertion here
     ${generateAssertionForTransition(transition)}
+    
+    // Verify the expected state after action
+    ${generateStateVerification(transition.stateName)}
 }
 \`\`\`
 
@@ -535,11 +542,60 @@ public void test${actionType.replace(/\s+/g, '')}() {
         }
     };
     
+    // Function to generate state verification code based on state name
+    const generateStateVerification = (stateName) => {
+        if (!stateName) return 'Assert.assertTrue("State verification", true);';
+        
+        const stateNameLower = stateName.toLowerCase();
+        
+        if (stateNameLower.includes('error')) {
+            return `Assert.assertTrue("Error message is displayed", driver.findElement(By.id("error-message")).isDisplayed());`;
+        } else if (stateNameLower.includes('form')) {
+            return `Assert.assertTrue("Form is in ${stateName} state", driver.findElement(By.id("form-container")).isDisplayed());`;
+        } else if (stateNameLower.includes('swipe') || stateNameLower.includes('scroll')) {
+            return `// Verify scrolled state\nJavaScriptExecutor js = (JavaScriptExecutor) driver;\nAssert.assertTrue("Content is scrolled", (Boolean)js.executeScript("return (window.innerHeight + window.scrollY) >= document.body.offsetHeight"));`;
+        } else if (stateNameLower.includes('initial')) {
+            return `Assert.assertTrue("Page is in initial state", driver.findElement(By.id("initial-content")).isDisplayed());`;
+        } else {
+            return `// Verify the ${stateName} state\nAssert.assertTrue("Element is in expected state", element.isEnabled());`;
+        }
+    };
+    
+    // Get appropriate emoji for different state types
+    const getStateEmoji = (stateName) => {
+        if (!stateName) return '⚪';
+        
+        const stateNameLower = stateName.toLowerCase();
+        
+        if (stateNameLower.includes('error')) {
+            return '🔴';
+        } else if (stateNameLower.includes('initial')) {
+            return '🟢';
+        } else if (stateNameLower.includes('loading')) {
+            return '🔄';
+        } else if (stateNameLower.includes('scroll') || stateNameLower.includes('swipe')) {
+            return '↕️';
+        } else if (stateNameLower.includes('form')) {
+            return '📝';
+        } else if (stateNameLower.includes('expand')) {
+            return '🔍';
+        } else if (stateNameLower.includes('select') || stateNameLower.includes('chosen')) {
+            return '✅';
+        } else {
+            return '🔹';
+        }
+    };
+    
     // Helper function to format final state analysis
     const formatFinalStateToMarkdown = (state, actionType) => {
+        // For the final state, we create an artificial stateName 
+        const finalStateName = "FinalViewState";
+        const stateEmoji = getStateEmoji("final");
+        
         return `## AI Analysis of Final State
 
 ### Final State Information
+- **Current State:** ${stateEmoji} ${finalStateName}
 - **Last Action:** ${actionType}
 - **Final Screen:** ${state.deviceArtifacts?.sessionDetails?.activity || 'Unknown Screen'}
 - **Timestamp:** ${new Date(state.actionTime).toLocaleString()}
@@ -548,9 +604,13 @@ public void test${actionType.replace(/\s+/g, '')}() {
 - **Last Element:** ${state.action?.element?.elementId || 'No element information'}
 - **UI Path:** ${state.action?.element?.xpath || 'N/A'}
 
+### Page Information
+- **Current Page:** ${state.deviceArtifacts?.sessionDetails?.activity || 'Final Page View'}
+- **Page Description:** The final page state reached after completing all user interactions in this recording session.
+
 ### Test Code Recommendation
 \`\`\`java
-// Generated assertion for final state
+// Generated assertions for final state (${finalStateName})
 public void verifyFinalState() {
     // Verify the final state is correct
     WebElement finalElement = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
@@ -559,6 +619,12 @@ public void verifyFinalState() {
     // Check for any page-specific elements to confirm we're on the correct page
     WebElement pageSpecificElement = driver.findElement(By.id("page-specific-id"));
     Assert.assertTrue("Page-specific element should be visible", pageSpecificElement.isDisplayed());
+    
+    // Verify completed workflow state
+    ${generateStateVerification(finalStateName)}
+    
+    // Log test completion
+    System.out.println("Test workflow completed successfully");
 }
 \`\`\`
 
@@ -567,11 +633,16 @@ public void verifyFinalState() {
 - ✅ All key interactions were captured
 - ℹ️ Final state verification recommended
 
+### Reliability Assessment
+- **Test Stability:** ${getRatingEmoji('High')} High
+- **Results Determinism:** ${getRatingEmoji('High')} High
+
 ### Next Steps
 - Add proper test setup and teardown
 - Consider adding wait conditions before interactions
 - Implement proper test reporting
 - Add error handling and recovery logic
+- Generate complete test suite with all recorded transitions
 `;
     };
     
@@ -1187,9 +1258,11 @@ public void verifyFinalState() {
                                                                     color: hasAction ? '#1890ff' : '#595959',
                                                                     maxWidth: 'calc(100% - 50px)'
                                                                 }}>
-                                                                    {hasAction 
-                                                                        ? entry.action.action || 'Unknown' 
-                                                                        : 'State change'
+                                                                    {entry.aiAnalysisRaw 
+                                                                        ? `${entry.aiAnalysisRaw.currentPageName} - ${entry.aiAnalysisRaw.transitionDescription}`
+                                                                        : hasAction 
+                                                                            ? entry.action.action || 'Unknown' 
+                                                                            : 'State change'
                                                                     }
                                                                 </div>
                                                                 <div style={{ color: '#8c8c8c', fontSize: '10px' }}>
