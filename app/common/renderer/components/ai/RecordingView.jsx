@@ -559,13 +559,20 @@ const RecordingView = ({
     };
 
     return (
-        <Layout style={{ height: '100%', background: '#fff' }}>
+        <Layout style={{ 
+            height: '100%', 
+            background: '#fff',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden' // Prevent main container from scrolling
+        }}>
             {/* Header with Title and Back Button */}
             <Header style={{ 
                 height: 'auto', 
                 padding: '12px 16px',
                 background: '#fff', 
-                borderBottom: '1px solid #f0f0f0' 
+                borderBottom: '1px solid #f0f0f0',
+                flexShrink: 0 // Prevent header from shrinking
             }}>
                 <Row align="middle" justify="space-between">
                     <Col>
@@ -592,24 +599,37 @@ const RecordingView = ({
                 </Row>
             </Header>
             
-            {/* Fixed Toolbar */}
-            <Affix offsetTop={0}>
-                <div style={{ 
-                    padding: '12px 16px',
-                    background: '#fafafa', 
-                    borderBottom: '1px solid #f0f0f0',
-                    zIndex: 10
-                }}>
-                    {renderToolbar()}
-                </div>
-            </Affix>
+            {/* Fixed Toolbar - Outside of Affix since Layout handles positioning */}
+            <div style={{ 
+                padding: '12px 16px',
+                background: '#fafafa', 
+                borderBottom: '1px solid #f0f0f0',
+                zIndex: 10,
+                flexShrink: 0 // Prevent toolbar from shrinking
+            }}>
+                {renderToolbar()}
+            </div>
             
-            {/* Main Content */}
-            <Content style={{ padding: '16px', overflow: 'auto' }}>
+            {/* Main Content - Fill available space */}
+            <Content style={{ 
+                padding: '16px', 
+                flexGrow: 1, 
+                display: 'flex', 
+                flexDirection: 'column',
+                overflow: 'hidden' // Content itself doesn't scroll
+            }}>
                 <Tabs 
                     defaultActiveKey="detailed" 
                     onChange={setActiveTab}
                     type="card"
+                    style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        flexGrow: 1,
+                        height: '100%'
+                    }}
+                    tabBarStyle={{ flexShrink: 0 }}
+                    tabPosition="top"
                     items={[
                     {
                         key: 'detailed',
@@ -622,13 +642,19 @@ const RecordingView = ({
                                 </div>
                             </div>
                         ) : detailedRecording.length > 0 ? (
-                            <div style={{ display: 'flex', height: 'calc(70vh)' }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                height: '100%', 
+                                overflow: 'hidden', // Container shouldn't scroll
+                                flexGrow: 1
+                            }}>
                                 {/* Left panel - Entries list */}
                                 <div style={{ 
                                     width: '30%', 
                                     borderRight: '1px solid #f0f0f0', 
                                     display: 'flex',
-                                    flexDirection: 'column'
+                                    flexDirection: 'column',
+                                    overflow: 'hidden' // Prevent this container from scrolling
                                 }}>
                                     <div style={{ 
                                         padding: '10px 16px', 
@@ -636,7 +662,8 @@ const RecordingView = ({
                                         backgroundColor: '#fafafa',
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        flexShrink: 0 // Prevent header from shrinking
                                     }}>
                                         <Space>
                                             <Badge 
@@ -656,7 +683,12 @@ const RecordingView = ({
                                         </Tooltip>
                                     </div>
                                     
-                                    <div style={{ overflowY: 'auto', flexGrow: 1 }}>
+                                    {/* This div is the only scrollable part in the left panel */}
+                                    <div style={{ 
+                                        overflowY: 'auto', 
+                                        flexGrow: 1,
+                                        height: '100%'
+                                    }}>
                                         {detailedRecording
                                             .filter(entry => showCondensed || !entry.isCondensed)
                                             .map((entry, index) => {
@@ -718,8 +750,13 @@ const RecordingView = ({
                                     </div>
                                 </div>
                                 
-                                {/* Right panel - Entry details */}
-                                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '0 16px' }}>
+                                {/* Right panel - Entry details - This div is scrollable */}
+                                <div style={{ 
+                                    flexGrow: 1, 
+                                    overflowY: 'auto', 
+                                    padding: '0 16px',
+                                    height: '100%'
+                                }}>
                                     {renderEntryDetails()}
                                 </div>
                             </div>
@@ -757,21 +794,24 @@ const RecordingView = ({
                         ) : standardRecordedActions && standardRecordedActions.length > 0 ? (
                             <Card 
                                 title="Recorded Actions" 
+                                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                                bodyStyle={{ flex: 1, overflow: 'hidden', padding: 0 }}
                                 extra={
                                     <Text type="secondary">
                                         {standardRecordedActions.length} actions recorded
                                     </Text>
                                 }
                             >
-                                <pre style={{ 
-                                    backgroundColor: '#f5f5f5', 
-                                    padding: '16px', 
-                                    borderRadius: '4px', 
-                                    overflow: 'auto',
-                                    maxHeight: '60vh'
-                                }}>
-                                    {JSON.stringify(standardRecordedActions, null, 2)}
-                                </pre>
+                                <div style={{ padding: '16px', height: '100%', overflow: 'auto' }}>
+                                    <pre style={{ 
+                                        backgroundColor: '#f5f5f5', 
+                                        padding: '16px', 
+                                        borderRadius: '4px',
+                                        margin: 0
+                                    }}>
+                                        {JSON.stringify(standardRecordedActions, null, 2)}
+                                    </pre>
+                                </div>
                             </Card>
                         ) : (
                             <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
