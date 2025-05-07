@@ -115,7 +115,9 @@ import {
     SettingOutlined,
     DownloadOutlined,
     FilterOutlined,
-    ReloadOutlined
+    ReloadOutlined,
+    RobotOutlined,
+    ThunderboltOutlined
 } from "@ant-design/icons";
 import ActionRecorder from "../../lib/ai/actionRecorder";
 
@@ -139,6 +141,7 @@ const RecordingView = ({
     const [activeTab, setActiveTab] = useState("recording");
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
     const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
+    const [processingAI, setProcessingAI] = useState(false);
 
     // Add custom scrollbar styles on component mount
     useEffect(() => {
@@ -255,6 +258,28 @@ const RecordingView = ({
                 message.error(`Could not copy text: ${err}`);
             }
         );
+    };
+    
+    const handleProcessWithAI = async () => {
+        if (!detailedRecording || detailedRecording.length === 0) {
+            message.error("No recording data to process");
+            return;
+        }
+        
+        try {
+            setProcessingAI(true);
+            message.info("Processing recording with AI...");
+            
+            // TODO: Implement the actual AI processing by calling the appropriate service
+            // This is a placeholder for now
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            message.success("Recording processed successfully with AI");
+        } catch (error) {
+            message.error(`Failed to process recording with AI: ${error.message}`);
+        } finally {
+            setProcessingAI(false);
+        }
     };
     
     const saveToFile = () => {
@@ -617,6 +642,24 @@ const RecordingView = ({
                             </Button>
                         </Tooltip>
                     </Space>
+                </Col>
+                
+                <Divider type="vertical" style={{ height: '24px' }} />
+                
+                {/* AI Processing Group */}
+                <Col>
+                    <Tooltip title="Process recording with AI to generate test code">
+                        <Button
+                            type="primary"
+                            icon={<ThunderboltOutlined />}
+                            onClick={handleProcessWithAI}
+                            loading={processingAI}
+                            disabled={!hasRecordings}
+                            style={{ background: '#722ED1', borderColor: '#722ED1' }}
+                        >
+                            Process with AI
+                        </Button>
+                    </Tooltip>
                 </Col>
                 
                 <Divider type="vertical" style={{ height: '24px' }} />
