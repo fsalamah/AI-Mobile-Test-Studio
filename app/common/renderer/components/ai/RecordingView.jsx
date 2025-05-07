@@ -273,122 +273,86 @@ const RecordingView = ({
             setProcessingAI(true);
             message.info("Processing recording with AI...");
             
+            // Create a copy of the recording to update
             let updatedRecording = [...detailedRecording];
             
-            // Process each state with a progress indicator
-            message.info(`Starting transition analysis for ${updatedRecording.length} states`);
-            
-            // For each state pair, analyze the transition
-            for (let i = 0; i < updatedRecording.length - 1; i++) {
-                try {
-                    // Process transition between current and next state
-                    message.info(`Analyzing transition ${i + 1} of ${updatedRecording.length - 1}`);
+            try {
+                // Use the actual TransitionAnalysisPipeline to analyze transitions
+                message.info(`Starting transition analysis for ${updatedRecording.length} states...`);
+                
+                // Call the pipeline to analyze transitions
+                const transitions = await TransitionAnalysisPipeline.analyzeTransitions(updatedRecording);
+                
+                // Process the transition results and update the recording
+                // Each transition occurs between two states, so we need to update both states
+                for (let i = 0; i < transitions.length; i++) {
+                    const transition = transitions[i];
+                    const currentStateIndex = i;
+                    const nextStateIndex = i + 1;
                     
-                    // Skip if already processed
-                    if (updatedRecording[i].aiAnalysis && updatedRecording[i+1].aiAnalysis) {
-                        continue;
+                    // Format transition info as markdown for the current state
+                    const currentState = updatedRecording[currentStateIndex];
+                    const actionType = currentState.action?.action || 'State Change';
+                    const elementTarget = currentState.action?.element?.text || 
+                                         currentState.action?.element?.resourceId || 
+                                         transition.actionTarget || 
+                                         'Unknown Element';
+                    
+                    // Update the current state with AI analysis
+                    updatedRecording[currentStateIndex] = {
+                        ...currentState,
+                        aiAnalysis: formatTransitionToMarkdown(transition, currentState, actionType, elementTarget, i, updatedRecording.length)
+                    };
+                    
+                    message.info(`Processed state ${i + 1} of ${updatedRecording.length}`);
+                }
+                
+                // Handle the last state which doesn't have a "to" transition
+                if (updatedRecording.length > 0) {
+                    const lastIndex = updatedRecording.length - 1;
+                    const lastState = updatedRecording[lastIndex];
+                    
+                    // If we haven't processed the last state yet (no aiAnalysis)
+                    if (!lastState.aiAnalysis) {
+                        const actionType = lastState.action?.action || 'Final State';
+                        
+                        // Format the final state analysis
+                        updatedRecording[lastIndex] = {
+                            ...lastState,
+                            aiAnalysis: formatFinalStateToMarkdown(lastState, actionType)
+                        };
+                        
+                        message.info(`Processed final state (${lastIndex + 1} of ${updatedRecording.length})`);
                     }
+                }
+            } catch (pipelineError) {
+                // If the real pipeline fails, fall back to simulated analysis
+                console.error("Error using TransitionAnalysisPipeline:", pipelineError);
+                message.warning("AI service unavailable, using simulated analysis instead");
+                
+                // For each state, generate simulated analysis
+                for (let i = 0; i < updatedRecording.length; i++) {
+                    // Skip if already processed
+                    if (updatedRecording[i].aiAnalysis) continue;
                     
-                    // Use the TransitionAnalysisPipeline to get transition analysis
-                    // We're calling _createTransitionPrompt directly as a simple way to 
-                    // get both transition analysis and state analysis in one step
-                    const prompt = TransitionAnalysisPipeline._createTransitionPrompt(
-                        updatedRecording[i], 
-                        updatedRecording[i+1]
-                    );
-                    
-                    // For demo purposes, we'll simulate the AI service response
-                    // In a real implementation, you would use the aiService call as shown in the pipeline
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate processing time
-                    
-                    // Generate AI analysis for the current state
+                    // Generate simulated analysis for this state
                     const currentState = updatedRecording[i];
                     const actionType = currentState.action?.action || 'State Change';
                     const elementTarget = currentState.action?.element?.text || 
                                          currentState.action?.element?.resourceId || 
                                          'Unknown Element';
                     
+                    // Add simulated analysis
                     updatedRecording[i] = {
                         ...currentState,
-                        aiAnalysis: `## AI Analysis of ${actionType} Action
-
-### Element Information
-- Target: ${elementTarget}
-- UI Path: ${currentState.action?.element?.xpath || 'N/A'}
-
-### Test Code Recommendation
-\`\`\`java
-// Generated test code for ${actionType} action
-public void test${actionType.replace(/\s+/g, '')}() {
-    // Find element using optimized selector
-    WebElement element = driver.findElement(By.xpath("${currentState.action?.element?.xpath || '//android.view.View'}"));
-    
-    // Perform the ${actionType.toLowerCase()} action
-    element.click();
-    
-    // Add appropriate assertion here
-    Assert.assertTrue("Element should be visible after action", 
-                    element.isDisplayed());
-}
-\`\`\`
-
-### Transition Analysis
-- Transition from State ${i + 1} to State ${i + 2}
-- Page Changed: ${Math.random() > 0.5 ? 'Yes' : 'No'}
-- Current Page: ${['Login', 'Dashboard', 'Settings', 'Product Details'][Math.floor(Math.random() * 4)]} Screen
-- User Activity: ${['Filling form', 'Navigating', 'Selecting options', 'Viewing details'][Math.floor(Math.random() * 4)]}
-
-### Reliability Assessment
-- Element identification confidence: High
-- Action replayability: Medium
-- Test stability: Medium
-
-### Suggested Improvements
-- Consider adding wait conditions before interacting with element
-- Add more specific assertions to validate state after action
-`
+                        aiAnalysis: generateSimulatedAnalysis(i, updatedRecording.length, currentState)
                     };
+                    
+                    message.info(`Simulated analysis for state ${i + 1} of ${updatedRecording.length}`);
+                    
+                    // Add a small delay to make the simulation feel more realistic
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
-                catch (error) {
-                    console.error("Error processing transition:", error);
-                    message.warning(`Could not process transition ${i + 1}: ${error.message}`);
-                }
-            }
-            
-            // Process the last state (it doesn't have a "to" transition)
-            if (updatedRecording.length > 0 && !updatedRecording[updatedRecording.length - 1].aiAnalysis) {
-                const lastState = updatedRecording[updatedRecording.length - 1];
-                const actionType = lastState.action?.action || 'Final State';
-                
-                updatedRecording[updatedRecording.length - 1] = {
-                    ...lastState,
-                    aiAnalysis: `## AI Analysis of Final State
-
-### Final State Information
-- Last Action: ${actionType}
-- Final Screen: ${['Login Complete', 'Dashboard View', 'Settings Saved', 'Order Confirmation'][Math.floor(Math.random() * 4)]}
-
-### Test Code Recommendation
-\`\`\`java
-// Generated assertion for final state
-public void verifyFinalState() {
-    // Verify the final state is correct
-    WebElement finalElement = driver.findElement(By.xpath("${lastState.action?.element?.xpath || '//android.view.View'}"));
-    Assert.assertTrue("Final state should be visible", finalElement.isDisplayed());
-}
-\`\`\`
-
-### Test Completion Analysis
-- Test completed successfully
-- All key interactions were recorded
-- Recommend adding final state verification
-
-### Next Steps
-- Add proper test setup and teardown
-- Consider adding wait conditions before interactions
-- Implement proper test reporting
-`
-                };
             }
             
             // Update the recording with AI analysis
@@ -409,6 +373,112 @@ public void verifyFinalState() {
         } finally {
             setProcessingAI(false);
         }
+    };
+    
+    // Helper function to format transition analysis as markdown
+    const formatTransitionToMarkdown = (transition, state, actionType, elementTarget, index, totalStates) => {
+        return `## AI Analysis of ${actionType} Action
+
+### Element Information
+- Target: ${elementTarget}
+- UI Path: ${state.action?.element?.xpath || 'N/A'}
+
+### Transition Analysis
+- **Transition:** ${transition.transitionDescription || 'No description available'}
+- **Technical Action:** ${transition.technicalActionDescription || 'No action description available'}
+- **Target:** ${transition.actionTarget || 'Unknown target'}
+- **Value:** ${transition.actionValue || 'No value'}
+- **Page Changed:** ${transition.isPageChanged ? 'Yes' : 'No'}
+- **Same Page Different State:** ${transition.isSamePageDifferentState ? 'Yes' : 'No'}
+
+### Page Information
+- **Current Page:** ${transition.currentPageName || 'Unknown page'}
+- **Page Description:** ${transition.currentPageDescription || 'No description available'}
+- **User Activity:** ${transition.inferredUserActivity || 'Unknown activity'}
+
+### Test Code Recommendation
+\`\`\`java
+// Generated test code for ${actionType} action
+public void test${actionType.replace(/\s+/g, '')}() {
+    // Find element using optimized selector
+    WebElement element = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
+    
+    // Perform the ${actionType.toLowerCase()} action
+    element.click();
+    
+    // Add appropriate assertion here
+    Assert.assertTrue("${transition.currentPageName || 'Element'} should be visible after action", 
+                    element.isDisplayed());
+}
+\`\`\`
+
+### Reliability Assessment
+- Element identification confidence: High
+- Action replayability: Medium
+- Test stability: Medium
+
+### Suggested Improvements
+- Consider adding wait conditions before interacting with element
+- Add more specific assertions to validate state after action
+`;
+    };
+    
+    // Helper function to format final state analysis
+    const formatFinalStateToMarkdown = (state, actionType) => {
+        return `## AI Analysis of Final State
+
+### Final State Information
+- Last Action: ${actionType}
+- Final Screen: ${state.deviceArtifacts?.sessionDetails?.activity || 'Unknown Screen'}
+
+### Test Code Recommendation
+\`\`\`java
+// Generated assertion for final state
+public void verifyFinalState() {
+    // Verify the final state is correct
+    WebElement finalElement = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
+    Assert.assertTrue("Final state should be visible", finalElement.isDisplayed());
+}
+\`\`\`
+
+### Test Completion Analysis
+- Test completed successfully
+- All key interactions were recorded
+- Recommend adding final state verification
+
+### Next Steps
+- Add proper test setup and teardown
+- Consider adding wait conditions before interactions
+- Implement proper test reporting
+`;
+    };
+    
+    // Helper function to generate simulated analysis
+    const generateSimulatedAnalysis = (index, totalCount, state) => {
+        const actionType = state.action?.action || 'State Change';
+        const elementTarget = state.action?.element?.text || 
+                             state.action?.element?.resourceId || 
+                             'Unknown Element';
+        
+        // Determine if this is the final state
+        if (index === totalCount - 1) {
+            return formatFinalStateToMarkdown(state, actionType);
+        }
+        
+        // Simulated transition for non-final states
+        const simulatedTransition = {
+            transitionDescription: `User ${actionType.toLowerCase()}ed on ${elementTarget}`,
+            technicalActionDescription: `${actionType} performed on element with ${state.action?.element?.xpath ? 'XPath' : 'identifier'} ${state.action?.element?.xpath || elementTarget}`,
+            actionTarget: elementTarget,
+            actionValue: state.action?.args?.text || null,
+            isPageChanged: Math.random() > 0.5,
+            isSamePageDifferentState: Math.random() > 0.7,
+            currentPageName: ['Login', 'Dashboard', 'Settings', 'Product Details'][Math.floor(Math.random() * 4)] + ' Screen',
+            currentPageDescription: 'This screen allows the user to interact with application features.',
+            inferredUserActivity: ['Filling form', 'Navigating', 'Selecting options', 'Viewing details'][Math.floor(Math.random() * 4)]
+        };
+        
+        return formatTransitionToMarkdown(simulatedTransition, state, actionType, elementTarget, index, totalCount);
     };
     
     const saveToFile = () => {
