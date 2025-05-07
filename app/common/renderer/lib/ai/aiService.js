@@ -8,6 +8,11 @@ import { createXpathRepairSchema } from "./xpathFixSchema.js";
 import modelConfigProvider from './modelConfigProvider.js';
 import { PIPELINE_TYPES } from './modelManager.js';
 
+// Define the transition analysis pipeline type if not already defined
+if (!PIPELINE_TYPES.TRANSITION_ANALYSIS) {
+  PIPELINE_TYPES.TRANSITION_ANALYSIS = 'transition_analysis';
+}
+
 export class AIService {
   constructor() {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // Consider making this configurable
@@ -292,6 +297,81 @@ export class AIService {
     throw error;
   }
 }
+
+  /**
+   * Analyze transition between two UI states
+   * @param {string} model - The AI model to use (optional)
+   * @param {Array} prompt - The formatted prompt for transition analysis
+   * @param {number} temperature - Temperature setting (0-1)
+   * @returns {Promise<Object>} - The AI service response with transition analysis
+   */
+  async analyzeTransition(model, prompt, temperature = 0) {
+    try {
+      // Use explicit model if provided, otherwise use CONFIG.API.MODEL (if available) or CONFIG.MODEL
+      const modelName = model || CONFIG.API.MODEL || CONFIG.MODEL;
+      
+      // Use the API key and base URL from CONFIG.API
+      let apiKey = CONFIG.API.KEY;
+      let baseURL = CONFIG.API.BASE_URL;
+      
+      // Log what model we're using
+      Logger.log(`Analyzing transition with model: ${modelName}`, "info");
+      Logger.log(`Using API Base URL: ${baseURL}`, "info");
+      
+      // Throw an error if no valid API key is found
+      if (!apiKey || apiKey === "YOUR_API_KEY") {
+        throw new Error("No valid API key found. Please configure a valid API key in project settings or config.js");
+      }
+      
+      Logger.log(`Analyzing transition with model ${modelName}`, "info");
+      
+      // Temporarily update client if needed
+      let originalBaseURL = null;
+      let originalApiKey = null;
+      
+      if (baseURL !== this.client.baseURL) {
+        originalBaseURL = this.client.baseURL;
+        this.client.baseURL = baseURL;
+      }
+      
+      if (apiKey !== this.client.apiKey) {
+        originalApiKey = this.client.apiKey;
+        this.client.apiKey = apiKey;
+      }
+      
+      try {
+        // Configure OpenAI client with proper settings for this call
+      // This ensures we use the right API key and base URL regardless of what's in this.client
+      const openai = new OpenAI({
+        apiKey: apiKey,
+        baseURL: baseURL,
+        dangerouslyAllowBrowser: true
+      });
+
+      // Use the configured client
+      const response = await openai.chat.completions.create({
+        model: modelName,
+        messages: prompt,
+        temperature:temperature,
+        max_tokens: CONFIG.GENERATION.maxOutputTokens,
+        top_p: CONFIG.GENERATION.topP || 0.0,
+      });
+      
+      return response;
+      } finally {
+        // Restore original client settings
+        if (originalBaseURL) {
+          this.client.baseURL = originalBaseURL;
+        }
+        if (originalApiKey) {
+          this.client.apiKey = originalApiKey;
+        }
+      }
+    } catch (error) {
+      Logger.error(`Error calling model (analyzeTransition):`, error);
+      throw error;
+    }
+  }
 
   /**
    * Repairs failed XPath expressions for elements
