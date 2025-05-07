@@ -1,25 +1,29 @@
 // RecordingView.jsx
 import React, { useState, useEffect } from "react";
 
-// Add custom scrollbar styles
+// Add custom scrollbar styles with useEffect
+const scrollbarStyleId = 'custom-scrollbar-styles';
 const customScrollbarStyle = `
+/* Custom scrollbar styles */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px !important;
+  height: 10px !important;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f5f5f5;
+  background: #f5f5f5 !important;
+  border-radius: 4px !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #d9d9d9;
-  border-radius: 4px;
+  background-color: #bdbdbd !important;
+  border-radius: 4px !important;
+  border: 2px solid #f5f5f5 !important;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #bfbfbf;
+  background-color: #a0a0a0 !important;
 }
 .custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #d9d9d9 #f5f5f5;
+  scrollbar-width: thin !important;
+  scrollbar-color: #bdbdbd #f5f5f5 !important;
 }
 `;
 
@@ -79,6 +83,29 @@ const RecordingView = ({
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(null);
     const [activeTab, setActiveTab] = useState("recording");
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
+
+    // Add custom scrollbar styles on component mount
+    useEffect(() => {
+        // Check if the style element already exists
+        let styleElement = document.getElementById(scrollbarStyleId);
+        
+        if (!styleElement) {
+            // Create style element if it doesn't exist
+            styleElement = document.createElement('style');
+            styleElement.id = scrollbarStyleId;
+            styleElement.textContent = customScrollbarStyle;
+            document.head.appendChild(styleElement);
+        }
+        
+        // Cleanup function
+        return () => {
+            // Only remove if we created it
+            const styleToRemove = document.getElementById(scrollbarStyleId);
+            if (styleToRemove) {
+                document.head.removeChild(styleToRemove);
+            }
+        };
+    }, []);
 
     // Subscribe to ActionRecorder updates
     useEffect(() => {
@@ -582,8 +609,6 @@ const RecordingView = ({
             flexDirection: 'column',
             overflow: 'hidden' // Prevent main container from scrolling
         }}>
-            {/* Add custom scrollbar styles */}
-            <style>{customScrollbarStyle}</style>
             {/* Header with Title and Back Button */}
             <Header style={{ 
                 height: 'auto', 
@@ -692,7 +717,9 @@ const RecordingView = ({
                                         style={{ 
                                             overflowY: 'auto', 
                                             height: '100%',
-                                            padding: '0 2px'
+                                            padding: '0 2px',
+                                            borderLeft: '1px solid #f0f0f0', // Add border to make scrollbar more visible
+                                            borderRight: '1px solid #f0f0f0'
                                         }}
                                     >
                                         {detailedRecording
