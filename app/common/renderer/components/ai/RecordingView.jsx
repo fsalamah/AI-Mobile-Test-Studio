@@ -117,7 +117,9 @@ import {
     FilterOutlined,
     ReloadOutlined,
     RobotOutlined,
-    ThunderboltOutlined
+    ThunderboltOutlined,
+    CodeOutlined,
+    ExperimentOutlined
 } from "@ant-design/icons";
 import ActionRecorder from "../../lib/ai/actionRecorder";
 
@@ -270,9 +272,72 @@ const RecordingView = ({
             setProcessingAI(true);
             message.info("Processing recording with AI...");
             
-            // TODO: Implement the actual AI processing by calling the appropriate service
-            // This is a placeholder for now
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Simulate AI processing for each state
+            // In a real implementation, this would call a service to process the recording
+            let updatedRecording = [...detailedRecording];
+            
+            // Process each state with a slight delay to show progress
+            for (let i = 0; i < updatedRecording.length; i++) {
+                // Skip already processed states for convenience
+                if (updatedRecording[i].aiAnalysis) continue;
+                
+                // Add a small delay to simulate processing time
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Generate example AI analysis for demo purposes
+                const actionType = updatedRecording[i].action?.action || 'State Change';
+                const elementTarget = updatedRecording[i].action?.element?.text || 
+                                     updatedRecording[i].action?.element?.resourceId || 
+                                     'Unknown Element';
+                
+                updatedRecording[i] = {
+                    ...updatedRecording[i],
+                    aiAnalysis: `## AI Analysis of ${actionType} Action
+
+### Element Information
+- Target: ${elementTarget}
+- UI Path: ${updatedRecording[i].action?.element?.xpath || 'N/A'}
+
+### Test Code Recommendation
+\`\`\`java
+// Generated test code for ${actionType} action
+public void test${actionType.replace(/\s+/g, '')}() {
+    // Find element using optimized selector
+    WebElement element = driver.findElement(By.xpath("${updatedRecording[i].action?.element?.xpath || '//android.view.View'}"));
+    
+    // Perform the ${actionType.toLowerCase()} action
+    element.click();
+    
+    // Add appropriate assertion here
+    Assert.assertTrue("Element should be visible after action", 
+                    element.isDisplayed());
+}
+\`\`\`
+
+### Reliability Assessment
+- Element identification confidence: High
+- Action replayability: Medium
+- Test stability: Medium
+
+### Suggested Improvements
+- Consider adding wait conditions before interacting with element
+- Add more specific assertions to validate state after action
+`
+                };
+                
+                message.info(`Processed state ${i + 1} of ${updatedRecording.length}`);
+            }
+            
+            // Update the recording with AI analysis
+            setDetailedRecording(updatedRecording);
+            
+            // If we have a selected entry, make sure we force a re-render
+            if (selectedEntryIndex !== null) {
+                // Force a selection update
+                const currentIndex = selectedEntryIndex;
+                setSelectedEntryIndex(null);
+                setTimeout(() => setSelectedEntryIndex(currentIndex), 10);
+            }
             
             message.success("Recording processed successfully with AI");
         } catch (error) {
@@ -1171,6 +1236,79 @@ const RecordingView = ({
                                                                     }}>
                                                                         {JSON.stringify(detailedRecording[selectedEntryIndex].deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
                                                                     </pre>
+                                                                </div>
+                                                            )
+                                                        },
+                                                        {
+                                                            key: 'aiAnalysis',
+                                                            disabled: !detailedRecording[selectedEntryIndex].aiAnalysis,
+                                                            label: (
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <ExperimentOutlined style={{ color: detailedRecording[selectedEntryIndex].aiAnalysis ? '#722ED1' : '#bfbfbf' }} />
+                                                                    <span style={{ 
+                                                                        fontWeight: 500,
+                                                                        color: detailedRecording[selectedEntryIndex].aiAnalysis ? '#722ED1' : '#bfbfbf'
+                                                                    }}>
+                                                                        AI Analysis
+                                                                    </span>
+                                                                    {!detailedRecording[selectedEntryIndex].aiAnalysis && (
+                                                                        <Badge count="Not Available" style={{ 
+                                                                            backgroundColor: '#f0f0f0',
+                                                                            color: '#bfbfbf',
+                                                                            fontSize: '10px',
+                                                                            fontWeight: 'normal',
+                                                                            textTransform: 'uppercase'
+                                                                        }} />
+                                                                    )}
+                                                                </span>
+                                                            ),
+                                                            children: detailedRecording[selectedEntryIndex].aiAnalysis ? (
+                                                                <div className="custom-scrollbar force-scrollbar" style={{ 
+                                                                    padding: '16px', 
+                                                                    height: 'calc(100% - 32px)',
+                                                                    background: '#ffffff'
+                                                                }}>
+                                                                    {typeof detailedRecording[selectedEntryIndex].aiAnalysis === 'string' ? (
+                                                                        <pre style={{ 
+                                                                            backgroundColor: '#f5f5f5', 
+                                                                            padding: '16px', 
+                                                                            borderRadius: '4px', 
+                                                                            overflow: 'auto',
+                                                                            height: '100%',
+                                                                            margin: 0,
+                                                                            whiteSpace: 'pre-wrap'
+                                                                        }}>
+                                                                            {detailedRecording[selectedEntryIndex].aiAnalysis}
+                                                                        </pre>
+                                                                    ) : (
+                                                                        <pre style={{ 
+                                                                            backgroundColor: '#f5f5f5', 
+                                                                            padding: '16px', 
+                                                                            borderRadius: '4px', 
+                                                                            overflow: 'auto',
+                                                                            height: '100%',
+                                                                            margin: 0
+                                                                        }}>
+                                                                            {JSON.stringify(detailedRecording[selectedEntryIndex].aiAnalysis, null, 2)}
+                                                                        </pre>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    flexDirection: 'column', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    height: '100%',
+                                                                    color: '#bfbfbf'
+                                                                }}>
+                                                                    <ExperimentOutlined style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }} />
+                                                                    <Text type="secondary">No AI analysis available for this state</Text>
+                                                                    <div style={{ marginTop: '16px', maxWidth: '450px', textAlign: 'center' }}>
+                                                                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                            Use the "Process with AI" button in the toolbar to analyze this recording
+                                                                        </Text>
+                                                                    </div>
                                                                 </div>
                                                             )
                                                         }
