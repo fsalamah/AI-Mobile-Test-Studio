@@ -16,8 +16,7 @@ import {
     Divider,
     Layout,
     Badge,
-    Tooltip,
-    Affix
+    Tooltip
 } from "antd";
 import {
     ArrowLeftOutlined,
@@ -257,8 +256,8 @@ const RecordingView = ({
                     background: '#fafafa', 
                     border: '1px dashed #d9d9d9', 
                     borderRadius: '4px',
-                    margin: '0',
-                    height: '100%',
+                    margin: '20px',
+                    height: 'calc(100% - 40px)',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
@@ -280,7 +279,7 @@ const RecordingView = ({
         const hasNext = selectedEntryIndex < detailedRecording.length - 1;
         
         return (
-            <div style={{ padding: '10px' }}>
+            <div style={{ padding: '20px' }}>
                 <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between',
@@ -303,7 +302,7 @@ const RecordingView = ({
                                 count="CONDENSED" 
                                 style={{ 
                                     backgroundColor: '#faad14',
-                                    fontSize: '10px',
+                                    fontSize: '12px',
                                     fontWeight: 'normal'
                                 }} 
                             />
@@ -334,13 +333,11 @@ const RecordingView = ({
                     <Card 
                         title="Screenshot" 
                         style={{ marginBottom: '16px' }}
-                        bodyStyle={{ maxHeight: '200px', overflow: 'auto' }}
                         extra={
                             <Tooltip title="Download screenshot">
                                 <Button 
                                     type="text" 
                                     icon={<DownloadOutlined />} 
-                                    size="small" 
                                     onClick={() => {
                                         const link = document.createElement('a');
                                         link.href = `data:image/png;base64,${screenshot}`;
@@ -356,9 +353,8 @@ const RecordingView = ({
                                 src={`data:image/png;base64,${screenshot}`} 
                                 alt={`Screenshot at ${new Date(entry.actionTime).toLocaleString()}`}
                                 style={{ 
-                                    width: 'auto',
-                                    height: 'auto',
                                     maxWidth: '100%',
+                                    maxHeight: '400px',
                                     border: '1px solid #d9d9d9',
                                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
                                 }}
@@ -369,7 +365,6 @@ const RecordingView = ({
                 
                 <Tabs 
                     defaultActiveKey="action"
-                    type="card"
                     items={[
                         {
                             key: 'action',
@@ -380,55 +375,46 @@ const RecordingView = ({
                                 </span>
                             ),
                             children: (
-                                <Card bodyStyle={{ padding: 0 }}>
-                                    <pre style={{ 
-                                        backgroundColor: '#f5f5f5', 
-                                        padding: '16px', 
-                                        borderRadius: '4px', 
-                                        overflow: 'auto',
-                                        maxHeight: '150px',
-                                        margin: 0
-                                    }}>
-                                        {JSON.stringify(entry.action, null, 2) || "No action data"}
-                                    </pre>
-                                </Card>
+                                <pre style={{ 
+                                    backgroundColor: '#f5f5f5', 
+                                    padding: '16px', 
+                                    borderRadius: '4px', 
+                                    overflow: 'auto',
+                                    maxHeight: '300px'
+                                }}>
+                                    {JSON.stringify(entry.action, null, 2) || "No action data"}
+                                </pre>
                             )
                         },
                         {
                             key: 'source',
                             label: 'Page Source',
                             children: (
-                                <Card bodyStyle={{ padding: 0 }}>
-                                    <pre style={{ 
-                                        backgroundColor: '#f5f5f5', 
-                                        padding: '16px', 
-                                        borderRadius: '4px', 
-                                        overflow: 'auto',
-                                        maxHeight: '150px',
-                                        fontSize: '12px',
-                                        margin: 0
-                                    }}>
-                                        {entry.deviceArtifacts?.pageSource || "No page source available"}
-                                    </pre>
-                                </Card>
+                                <pre style={{ 
+                                    backgroundColor: '#f5f5f5', 
+                                    padding: '16px', 
+                                    borderRadius: '4px', 
+                                    overflow: 'auto',
+                                    maxHeight: '300px',
+                                    fontSize: '12px'
+                                }}>
+                                    {entry.deviceArtifacts?.pageSource || "No page source available"}
+                                </pre>
                             )
                         },
                         {
                             key: 'session',
                             label: 'Session Details',
                             children: (
-                                <Card bodyStyle={{ padding: 0 }}>
-                                    <pre style={{ 
-                                        backgroundColor: '#f5f5f5', 
-                                        padding: '16px', 
-                                        borderRadius: '4px', 
-                                        overflow: 'auto',
-                                        maxHeight: '150px',
-                                        margin: 0
-                                    }}>
-                                        {JSON.stringify(entry.deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
-                                    </pre>
-                                </Card>
+                                <pre style={{ 
+                                    backgroundColor: '#f5f5f5', 
+                                    padding: '16px', 
+                                    borderRadius: '4px', 
+                                    overflow: 'auto',
+                                    maxHeight: '300px'
+                                }}>
+                                    {JSON.stringify(entry.deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
+                                </pre>
                             )
                         }
                     ]}
@@ -449,7 +435,7 @@ const RecordingView = ({
             <Row gutter={[16, 16]} align="middle">
                 {/* Recording Controls Group */}
                 <Col>
-                    <Space size="small">
+                    <Space>
                         {!standardIsRecording ? (
                             <Tooltip title={!inspectorState?.driver ? "Connect to a device first" : "Start recording session"}>
                                 <Button
@@ -491,7 +477,7 @@ const RecordingView = ({
                 
                 {/* File Operations Group */}
                 <Col>
-                    <Space size="small">
+                    <Space>
                         <Upload 
                             beforeUpload={handleLoadRecording}
                             showUploadList={false}
@@ -526,7 +512,7 @@ const RecordingView = ({
                 
                 {/* View Controls Group */}
                 <Col>
-                    <Space size="small" align="center">
+                    <Space align="center">
                         <Tooltip title={showCondensed ? "Hide condensed states" : "Show condensed states"}>
                             <Badge count={condensedCount} size="small" offset={[-5, 0]}>
                                 <Switch 
@@ -538,7 +524,7 @@ const RecordingView = ({
                                 />
                             </Badge>
                         </Tooltip>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                        <Text type="secondary">
                             Condensed States
                         </Text>
                     </Space>
@@ -567,7 +553,7 @@ const RecordingView = ({
 
     return (
         <Layout style={{ 
-            height: '100%', 
+            height: '100vh', 
             background: '#fff',
             display: 'flex',
             flexDirection: 'column',
@@ -576,39 +562,31 @@ const RecordingView = ({
             {/* Header with Title and Back Button */}
             <Header style={{ 
                 height: 'auto', 
-                padding: '12px 16px',
+                padding: '8px 12px',
                 background: '#fff', 
                 borderBottom: '1px solid #f0f0f0',
                 flexShrink: 0 // Prevent header from shrinking
             }}>
-                <Row align="middle" justify="space-between">
-                    <Col>
-                        <Space align="center">
-                            <Button
-                                icon={<ArrowLeftOutlined />}
-                                onClick={navigateBack}
-                                type="text"
-                                aria-label="Back"
-                                title="Go back"
-                            />
-                            <div>
-                                <Title level={4} style={{ margin: 0 }}>
-                                    Session Recording
-                                    {(standardIsRecording || ActionRecorder.isRecording()) && 
-                                    <Text type="danger" style={{ marginLeft: 8, fontSize: '14px' }}>(Recording in progress)</Text>}
-                                </Title>
-                                <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0 }}>
-                                    Record and view inspector actions with page source and screenshots
-                                </Paragraph>
-                            </div>
-                        </Space>
-                    </Col>
-                </Row>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Button
+                        icon={<ArrowLeftOutlined />}
+                        onClick={navigateBack}
+                        type="text"
+                        aria-label="Back"
+                        title="Go back"
+                        style={{ marginRight: '8px', padding: '4px 8px' }}
+                    />
+                    <Title level={4} style={{ margin: 0 }}>
+                        Session Recording
+                        {(standardIsRecording || ActionRecorder.isRecording()) && 
+                        <Text type="danger" style={{ marginLeft: 8 }}>(Recording in progress)</Text>}
+                    </Title>
+                </div>
             </Header>
             
-            {/* Fixed Toolbar - Outside of Affix since Layout handles positioning */}
+            {/* Toolbar */}
             <div style={{ 
-                padding: '12px 16px',
+                padding: '16px',
                 background: '#fafafa', 
                 borderBottom: '1px solid #f0f0f0',
                 zIndex: 10,
@@ -630,13 +608,11 @@ const RecordingView = ({
                     onChange={setActiveTab}
                     type="card"
                     style={{ 
+                        margin: '16px 16px 0',
                         display: 'flex', 
                         flexDirection: 'column', 
-                        flexGrow: 1,
-                        height: '100%'
+                        height: 'calc(100% - 16px)'
                     }}
-                    tabBarStyle={{ flexShrink: 0 }}
-                    tabPosition="top"
                     items={[
                     {
                         key: 'detailed',
@@ -649,53 +625,44 @@ const RecordingView = ({
                                 </div>
                             </div>
                         ) : detailedRecording.length > 0 ? (
-                            <div style={{ 
-                                display: 'flex', 
-                                height: '100%', 
-                                overflow: 'hidden', // Container shouldn't scroll
-                                flexGrow: 1
-                            }}>
-                                {/* Left panel - Entries list */}
+                            <div style={{ display: 'flex', height: 'calc(100% - 50px)', overflow: 'hidden' }}>
+                                {/* Column 1 - Entries list */}
                                 <div style={{ 
-                                    width: '30%', 
+                                    width: '25%', 
                                     borderRight: '1px solid #f0f0f0', 
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    overflow: 'hidden' // Prevent this container from scrolling
+                                    overflow: 'hidden'
                                 }}>
                                     <div style={{ 
-                                        padding: '10px 16px', 
-                                        borderBottom: '1px solid #f0f0f0', 
+                                        padding: '12px 16px',
+                                        borderBottom: '1px solid #f0f0f0',
                                         backgroundColor: '#fafafa',
                                         display: 'flex',
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
-                                        flexShrink: 0 // Prevent header from shrinking
+                                        height: '48px'
                                     }}>
                                         <Space>
                                             <Badge 
                                                 count={detailedRecording.length} 
                                                 style={{ backgroundColor: '#1890ff' }}
-                                                title="Total entries"
-                                            /> 
-                                            <Text strong>Recording Entries</Text>
-                                        </Space>
-                                        
-                                        <Tooltip title="Filter entries">
-                                            <Button 
-                                                type="text" 
-                                                icon={<FilterOutlined />} 
-                                                size="small"
                                             />
-                                        </Tooltip>
+                                            <Text strong>Recorded States</Text>
+                                        </Space>
+                                        <Space>
+                                            <Tooltip title={showCondensed ? "Hide condensed states" : "Show condensed states"}>
+                                                <Switch 
+                                                    checked={showCondensed}
+                                                    onChange={setShowCondensed}
+                                                    checkedChildren={<EyeOutlined />}
+                                                    unCheckedChildren={<EyeInvisibleOutlined />}
+                                                    size="small"
+                                                />
+                                            </Tooltip>
+                                        </Space>
                                     </div>
-                                    
-                                    {/* This div is the only scrollable part in the left panel */}
-                                    <div style={{ 
-                                        overflowY: 'auto', 
-                                        flexGrow: 1,
-                                        height: '100%'
-                                    }}>
+                                    <div style={{ overflowY: 'auto', height: '100%' }}>
                                         {detailedRecording
                                             .filter(entry => showCondensed || !entry.isCondensed)
                                             .map((entry, index) => {
@@ -712,44 +679,29 @@ const RecordingView = ({
                                                             borderBottom: '1px solid #f0f0f0',
                                                             backgroundColor: isSelected ? '#e6f7ff' : (entry.isCondensed ? '#f9f9f9' : 'transparent'),
                                                             cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between',
-                                                            opacity: entry.isCondensed ? 0.7 : 1,
-                                                            transition: 'all 0.2s ease'
+                                                            opacity: entry.isCondensed ? 0.7 : 1
                                                         }}
                                                     >
-                                                        <div style={{ width: '100%' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span>
-                                                                    <strong>#{realIndex + 1}</strong> - {new Date(entry.actionTime).toLocaleTimeString()}
-                                                                </span>
-                                                                <Space size={4}>
-                                                                    {entry.isCondensed && (
-                                                                        <Badge 
-                                                                            status="warning" 
-                                                                            text={<Text type="secondary" style={{ fontSize: '11px' }}>Condensed</Text>}
-                                                                        />
-                                                                    )}
-                                                                    {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff' }}/>}
-                                                                </Space>
-                                                            </div>
-                                                            <div style={{ 
-                                                                fontSize: '12px', 
-                                                                color: '#8c8c8c', 
-                                                                marginTop: '4px',
-                                                                display: 'flex',
-                                                                alignItems: 'center'
-                                                            }}>
-                                                                <Badge 
-                                                                    status={entry.action ? "processing" : "default"} 
-                                                                    style={{ marginRight: '6px' }}
-                                                                />
-                                                                {entry.action 
-                                                                    ? <strong style={{ color: '#1890ff' }}>{entry.action.action || 'Unknown'}</strong> 
-                                                                    : 'State change'
-                                                                }
-                                                            </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span><strong>#{realIndex + 1}</strong></span>
+                                                            <Space size={4}>
+                                                                {entry.isCondensed && <Badge status="warning" />}
+                                                                {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff' }}/>}
+                                                            </Space>
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
+                                                            {new Date(entry.actionTime).toLocaleTimeString()}
+                                                        </div>
+                                                        <div style={{ 
+                                                            marginTop: '4px',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {entry.action 
+                                                                ? <span style={{ color: '#1890ff' }}>{entry.action.action || 'Unknown'}</span> 
+                                                                : 'State change'
+                                                            }
                                                         </div>
                                                     </div>
                                                 );
@@ -757,15 +709,237 @@ const RecordingView = ({
                                     </div>
                                 </div>
                                 
-                                {/* Right panel - Entry details - This div is scrollable */}
-                                <div style={{ 
-                                    flexGrow: 1, 
-                                    overflowY: 'auto', 
-                                    padding: '8px',
-                                    height: '100%'
-                                }}>
-                                    {renderEntryDetails()}
-                                </div>
+                                {selectedEntryIndex !== null && detailedRecording[selectedEntryIndex] ? (
+                                    <>
+                                        {/* Column 2 - Screenshot */}
+                                        <div style={{ 
+                                            width: '35%', 
+                                            borderRight: '1px solid #f0f0f0',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                padding: '12px 16px',
+                                                borderBottom: '1px solid #f0f0f0',
+                                                backgroundColor: '#fafafa',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                height: '48px'
+                                            }}>
+                                                <Space>
+                                                    <Badge 
+                                                        count={selectedEntryIndex + 1} 
+                                                        style={{ backgroundColor: '#1890ff' }}
+                                                    />
+                                                    <Text strong>Screenshot</Text>
+                                                    {detailedRecording[selectedEntryIndex].isCondensed && (
+                                                        <Badge 
+                                                            count="CONDENSED" 
+                                                            style={{ backgroundColor: '#faad14', fontSize: '12px' }}
+                                                        />
+                                                    )}
+                                                </Space>
+                                                
+                                                <Space>
+                                                    <Tooltip title="Previous entry">
+                                                        <Button 
+                                                            type="text" 
+                                                            icon={<ArrowLeftOutlined />}
+                                                            disabled={selectedEntryIndex === 0}
+                                                            onClick={() => setSelectedEntryIndex(selectedEntryIndex - 1)}
+                                                            size="small"
+                                                        />
+                                                    </Tooltip>
+                                                    <Tooltip title="Next entry">
+                                                        <Button 
+                                                            type="text" 
+                                                            icon={<ArrowLeftOutlined style={{ transform: 'rotate(180deg)' }} />}
+                                                            disabled={selectedEntryIndex === detailedRecording.length - 1}
+                                                            onClick={() => setSelectedEntryIndex(selectedEntryIndex + 1)}
+                                                            size="small"
+                                                        />
+                                                    </Tooltip>
+                                                    
+                                                    {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 && (
+                                                        <Tooltip title="Download screenshot">
+                                                            <Button 
+                                                                type="text" 
+                                                                icon={<DownloadOutlined />}
+                                                                size="small"
+                                                                onClick={() => {
+                                                                    const entry = detailedRecording[selectedEntryIndex];
+                                                                    const screenshot = entry.deviceArtifacts?.screenshotBase64;
+                                                                    const link = document.createElement('a');
+                                                                    link.href = `data:image/png;base64,${screenshot}`;
+                                                                    link.download = `screenshot-${selectedEntryIndex + 1}-${new Date(entry.actionTime).getTime()}.png`;
+                                                                    link.click();
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                </Space>
+                                            </div>
+                                            
+                                            <div style={{ overflow: 'auto', padding: '16px', flex: 1, textAlign: 'center' }}>
+                                                {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
+                                                    <img 
+                                                        src={`data:image/png;base64,${detailedRecording[selectedEntryIndex].deviceArtifacts.screenshotBase64}`} 
+                                                        alt={`Screenshot at ${new Date(detailedRecording[selectedEntryIndex].actionTime).toLocaleString()}`}
+                                                        style={{ 
+                                                            maxWidth: '100%',
+                                                            maxHeight: 'calc(100vh - 220px)',
+                                                            border: '1px solid #d9d9d9',
+                                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        flexDirection: 'column', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        height: '100%',
+                                                        color: '#bfbfbf'
+                                                    }}>
+                                                        <FileImageOutlined style={{ fontSize: '64px', marginBottom: '16px' }} />
+                                                        <Text type="secondary">No screenshot available</Text>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Column 3 - Details with tabs */}
+                                        <div style={{ 
+                                            flex: 1,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                padding: '12px 16px',
+                                                borderBottom: '1px solid #f0f0f0',
+                                                backgroundColor: '#fafafa',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                height: '48px'
+                                            }}>
+                                                <Text strong>{new Date(detailedRecording[selectedEntryIndex].actionTime).toLocaleString()}</Text>
+                                                {detailedRecording[selectedEntryIndex].action && (
+                                                    <Text type="secondary">
+                                                        {detailedRecording[selectedEntryIndex].action.action || 'Action Data'}
+                                                    </Text>
+                                                )}
+                                            </div>
+                                            
+                                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                                                <Tabs 
+                                                    defaultActiveKey="action"
+                                                    style={{ height: '100%' }}
+                                                    tabPosition="top"
+                                                    type="card"
+                                                    size="middle"
+                                                    tabBarStyle={{ 
+                                                        margin: '0 12px',
+                                                        marginTop: '12px',
+                                                        background: '#f9f9f9',
+                                                        borderRadius: '4px 4px 0 0'
+                                                    }}
+                                                    items={[
+                                                        {
+                                                            key: 'action',
+                                                            label: (
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <Badge status={detailedRecording[selectedEntryIndex].action ? "processing" : "default"} />
+                                                                    <span style={{ fontWeight: 500 }}>Action Data</span>
+                                                                </span>
+                                                            ),
+                                                            children: (
+                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                    <pre style={{ 
+                                                                        backgroundColor: '#f5f5f5', 
+                                                                        padding: '16px', 
+                                                                        borderRadius: '4px', 
+                                                                        overflow: 'auto',
+                                                                        height: '100%',
+                                                                        margin: 0
+                                                                    }}>
+                                                                        {JSON.stringify(detailedRecording[selectedEntryIndex].action, null, 2) || "No action data"}
+                                                                    </pre>
+                                                                </div>
+                                                            )
+                                                        },
+                                                        {
+                                                            key: 'source',
+                                                            label: (
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <FileImageOutlined />
+                                                                    <span style={{ fontWeight: 500 }}>Page Source</span>
+                                                                </span>
+                                                            ),
+                                                            children: (
+                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                    <pre style={{ 
+                                                                        backgroundColor: '#f5f5f5', 
+                                                                        padding: '16px', 
+                                                                        borderRadius: '4px', 
+                                                                        overflow: 'auto',
+                                                                        height: '100%',
+                                                                        margin: 0,
+                                                                        fontSize: '12px'
+                                                                    }}>
+                                                                        {detailedRecording[selectedEntryIndex].deviceArtifacts?.pageSource || "No page source available"}
+                                                                    </pre>
+                                                                </div>
+                                                            )
+                                                        },
+                                                        {
+                                                            key: 'session',
+                                                            label: (
+                                                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <InfoCircleOutlined />
+                                                                    <span style={{ fontWeight: 500 }}>Session Details</span>
+                                                                </span>
+                                                            ),
+                                                            children: (
+                                                                <div style={{ padding: '16px', height: 'calc(100% - 32px)', overflow: 'auto' }}>
+                                                                    <pre style={{ 
+                                                                        backgroundColor: '#f5f5f5', 
+                                                                        padding: '16px', 
+                                                                        borderRadius: '4px', 
+                                                                        overflow: 'auto',
+                                                                        height: '100%',
+                                                                        margin: 0
+                                                                    }}>
+                                                                        {JSON.stringify(detailedRecording[selectedEntryIndex].deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
+                                                                    </pre>
+                                                                </div>
+                                                            )
+                                                        }
+                                                    ]}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <div style={{ 
+                                            padding: '40px 20px', 
+                                            textAlign: 'center', 
+                                            background: '#fafafa', 
+                                            border: '1px dashed #d9d9d9', 
+                                            borderRadius: '4px',
+                                            maxWidth: '400px'
+                                        }}>
+                                            <InfoCircleOutlined style={{ fontSize: '32px', color: '#bfbfbf', marginBottom: '16px' }} />
+                                            <div>
+                                                <Text type="secondary">Select an entry from the list to view details</Text>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
@@ -801,26 +975,22 @@ const RecordingView = ({
                         ) : standardRecordedActions && standardRecordedActions.length > 0 ? (
                             <Card 
                                 title="Recorded Actions" 
-                                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-                                bodyStyle={{ flex: 1, overflow: 'hidden', padding: 0 }}
+                                style={{ margin: '16px' }}
                                 extra={
                                     <Text type="secondary">
                                         {standardRecordedActions.length} actions recorded
                                     </Text>
                                 }
                             >
-                                <div style={{ padding: '16px', height: '100%', overflow: 'auto' }}>
-                                    <pre style={{ 
-                                        backgroundColor: '#f5f5f5', 
-                                        padding: '16px', 
-                                        borderRadius: '4px',
-                                        margin: 0,
-                                        width: '100%',
-                                        height: 'auto'
-                                    }}>
-                                        {JSON.stringify(standardRecordedActions, null, 2)}
-                                    </pre>
-                                </div>
+                                <pre style={{ 
+                                    backgroundColor: '#f5f5f5', 
+                                    padding: '16px', 
+                                    borderRadius: '4px', 
+                                    overflow: 'auto',
+                                    maxHeight: 'calc(100vh - 300px)'
+                                }}>
+                                    {JSON.stringify(standardRecordedActions, null, 2)}
+                                </pre>
                             </Card>
                         ) : (
                             <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
