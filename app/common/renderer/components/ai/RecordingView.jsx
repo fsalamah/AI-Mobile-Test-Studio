@@ -257,7 +257,12 @@ const RecordingView = ({
                     background: '#fafafa', 
                     border: '1px dashed #d9d9d9', 
                     borderRadius: '4px',
-                    margin: '20px 0'
+                    margin: '0',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center'
                 }}>
                     <InfoCircleOutlined style={{ fontSize: '32px', color: '#bfbfbf', marginBottom: '16px' }} />
                     <div>
@@ -329,6 +334,7 @@ const RecordingView = ({
                     <Card 
                         title="Screenshot" 
                         style={{ marginBottom: '16px' }}
+                        bodyStyle={{ maxHeight: '200px', overflow: 'auto' }}
                         extra={
                             <Tooltip title="Download screenshot">
                                 <Button 
@@ -350,8 +356,9 @@ const RecordingView = ({
                                 src={`data:image/png;base64,${screenshot}`} 
                                 alt={`Screenshot at ${new Date(entry.actionTime).toLocaleString()}`}
                                 style={{ 
-                                    maxWidth: '100%', 
-                                    maxHeight: '400px', 
+                                    width: 'auto',
+                                    height: 'auto',
+                                    maxWidth: '100%',
                                     border: '1px solid #d9d9d9',
                                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
                                 }}
@@ -379,7 +386,7 @@ const RecordingView = ({
                                         padding: '16px', 
                                         borderRadius: '4px', 
                                         overflow: 'auto',
-                                        maxHeight: '300px',
+                                        maxHeight: '150px',
                                         margin: 0
                                     }}>
                                         {JSON.stringify(entry.action, null, 2) || "No action data"}
@@ -397,7 +404,7 @@ const RecordingView = ({
                                         padding: '16px', 
                                         borderRadius: '4px', 
                                         overflow: 'auto',
-                                        maxHeight: '300px',
+                                        maxHeight: '150px',
                                         fontSize: '12px',
                                         margin: 0
                                     }}>
@@ -416,7 +423,7 @@ const RecordingView = ({
                                         padding: '16px', 
                                         borderRadius: '4px', 
                                         overflow: 'auto',
-                                        maxHeight: '300px',
+                                        maxHeight: '150px',
                                         margin: 0
                                     }}>
                                         {JSON.stringify(entry.deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
@@ -612,7 +619,7 @@ const RecordingView = ({
             
             {/* Main Content - Fill available space */}
             <Content style={{ 
-                padding: '16px', 
+                padding: 0, // Remove padding to maximize space
                 flexGrow: 1, 
                 display: 'flex', 
                 flexDirection: 'column',
@@ -754,7 +761,7 @@ const RecordingView = ({
                                 <div style={{ 
                                     flexGrow: 1, 
                                     overflowY: 'auto', 
-                                    padding: '0 16px',
+                                    padding: '8px',
                                     height: '100%'
                                 }}>
                                     {renderEntryDetails()}
@@ -807,7 +814,9 @@ const RecordingView = ({
                                         backgroundColor: '#f5f5f5', 
                                         padding: '16px', 
                                         borderRadius: '4px',
-                                        margin: 0
+                                        margin: 0,
+                                        width: '100%',
+                                        height: 'auto'
                                     }}>
                                         {JSON.stringify(standardRecordedActions, null, 2)}
                                     </pre>
