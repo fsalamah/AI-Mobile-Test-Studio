@@ -10,7 +10,14 @@ import {
     Tabs,
     Select,
     Upload,
-    Switch
+    Switch,
+    Row,
+    Col,
+    Divider,
+    Layout,
+    Badge,
+    Tooltip,
+    Affix
 } from "antd";
 import {
     ArrowLeftOutlined,
@@ -22,12 +29,18 @@ import {
     FileImageOutlined,
     UploadOutlined,
     EyeOutlined,
-    EyeInvisibleOutlined
+    EyeInvisibleOutlined,
+    InfoCircleOutlined,
+    SettingOutlined,
+    DownloadOutlined,
+    FilterOutlined,
+    ReloadOutlined
 } from "@ant-design/icons";
 import ActionRecorder from "../../lib/ai/actionRecorder";
 
 const { Text, Title, Paragraph } = Typography;
 const { Option } = Select;
+const { Header, Content } = Layout;
 
 const RecordingView = ({
     navigateBack,
@@ -238,8 +251,18 @@ const RecordingView = ({
     const renderEntryDetails = () => {
         if (selectedEntryIndex === null || !detailedRecording[selectedEntryIndex]) {
             return (
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                    <Text type="secondary">Select an entry to view details</Text>
+                <div style={{ 
+                    padding: '40px 20px', 
+                    textAlign: 'center', 
+                    background: '#fafafa', 
+                    border: '1px dashed #d9d9d9', 
+                    borderRadius: '4px',
+                    margin: '20px 0'
+                }}>
+                    <InfoCircleOutlined style={{ fontSize: '32px', color: '#bfbfbf', marginBottom: '16px' }} />
+                    <div>
+                        <Text type="secondary">Select an entry from the list to view details</Text>
+                    </div>
                 </div>
             );
         }
@@ -247,67 +270,158 @@ const RecordingView = ({
         const entry = detailedRecording[selectedEntryIndex];
         const screenshot = entry.deviceArtifacts?.screenshotBase64;
         
+        // Get previous and next entries for navigation
+        const hasPrevious = selectedEntryIndex > 0;
+        const hasNext = selectedEntryIndex < detailedRecording.length - 1;
+        
         return (
             <div style={{ padding: '10px' }}>
-                <Title level={5}>Entry #{selectedEntryIndex + 1} - {new Date(entry.actionTime).toLocaleString()}</Title>
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '16px',
+                    borderBottom: '1px solid #f0f0f0',
+                    paddingBottom: '12px'
+                }}>
+                    <Space align="center">
+                        <Badge 
+                            count={selectedEntryIndex + 1} 
+                            style={{ backgroundColor: '#1890ff' }} 
+                            overflowCount={999}
+                        />
+                        <Title level={4} style={{ margin: 0 }}>
+                            {new Date(entry.actionTime).toLocaleString()}
+                        </Title>
+                        {entry.isCondensed && (
+                            <Badge 
+                                count="CONDENSED" 
+                                style={{ 
+                                    backgroundColor: '#faad14',
+                                    fontSize: '10px',
+                                    fontWeight: 'normal'
+                                }} 
+                            />
+                        )}
+                    </Space>
+                    
+                    <Space>
+                        <Tooltip title="Previous entry">
+                            <Button 
+                                type="text" 
+                                icon={<ArrowLeftOutlined />} 
+                                disabled={!hasPrevious}
+                                onClick={() => setSelectedEntryIndex(selectedEntryIndex - 1)}
+                            />
+                        </Tooltip>
+                        <Tooltip title="Next entry">
+                            <Button 
+                                type="text" 
+                                icon={<ArrowLeftOutlined style={{ transform: 'rotate(180deg)' }} />} 
+                                disabled={!hasNext}
+                                onClick={() => setSelectedEntryIndex(selectedEntryIndex + 1)}
+                            />
+                        </Tooltip>
+                    </Space>
+                </div>
                 
                 {screenshot && (
-                    <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                        <img 
-                            src={`data:image/png;base64,${screenshot}`} 
-                            alt={`Screenshot at ${new Date(entry.actionTime).toLocaleString()}`}
-                            style={{ maxWidth: '100%', maxHeight: '400px', border: '1px solid #d9d9d9' }}
-                        />
-                    </div>
+                    <Card 
+                        title="Screenshot" 
+                        style={{ marginBottom: '16px' }}
+                        extra={
+                            <Tooltip title="Download screenshot">
+                                <Button 
+                                    type="text" 
+                                    icon={<DownloadOutlined />} 
+                                    size="small" 
+                                    onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = `data:image/png;base64,${screenshot}`;
+                                        link.download = `screenshot-${selectedEntryIndex + 1}-${new Date(entry.actionTime).getTime()}.png`;
+                                        link.click();
+                                    }}
+                                />
+                            </Tooltip>
+                        }
+                    >
+                        <div style={{ textAlign: 'center' }}>
+                            <img 
+                                src={`data:image/png;base64,${screenshot}`} 
+                                alt={`Screenshot at ${new Date(entry.actionTime).toLocaleString()}`}
+                                style={{ 
+                                    maxWidth: '100%', 
+                                    maxHeight: '400px', 
+                                    border: '1px solid #d9d9d9',
+                                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                                }}
+                            />
+                        </div>
+                    </Card>
                 )}
                 
                 <Tabs 
                     defaultActiveKey="action"
+                    type="card"
                     items={[
                         {
                             key: 'action',
-                            label: 'Action',
+                            label: (
+                                <span>
+                                    <Badge status={entry.action ? "processing" : "default"} />
+                                    Action Data
+                                </span>
+                            ),
                             children: (
-                                <pre style={{ 
-                                    backgroundColor: '#f5f5f5', 
-                                    padding: '16px', 
-                                    borderRadius: '4px', 
-                                    overflow: 'auto',
-                                    maxHeight: '300px'
-                                }}>
-                                    {JSON.stringify(entry.action, null, 2) || "No action data"}
-                                </pre>
+                                <Card bodyStyle={{ padding: 0 }}>
+                                    <pre style={{ 
+                                        backgroundColor: '#f5f5f5', 
+                                        padding: '16px', 
+                                        borderRadius: '4px', 
+                                        overflow: 'auto',
+                                        maxHeight: '300px',
+                                        margin: 0
+                                    }}>
+                                        {JSON.stringify(entry.action, null, 2) || "No action data"}
+                                    </pre>
+                                </Card>
                             )
                         },
                         {
                             key: 'source',
                             label: 'Page Source',
                             children: (
-                                <pre style={{ 
-                                    backgroundColor: '#f5f5f5', 
-                                    padding: '16px', 
-                                    borderRadius: '4px', 
-                                    overflow: 'auto',
-                                    maxHeight: '300px',
-                                    fontSize: '12px'
-                                }}>
-                                    {entry.deviceArtifacts?.pageSource || "No page source available"}
-                                </pre>
+                                <Card bodyStyle={{ padding: 0 }}>
+                                    <pre style={{ 
+                                        backgroundColor: '#f5f5f5', 
+                                        padding: '16px', 
+                                        borderRadius: '4px', 
+                                        overflow: 'auto',
+                                        maxHeight: '300px',
+                                        fontSize: '12px',
+                                        margin: 0
+                                    }}>
+                                        {entry.deviceArtifacts?.pageSource || "No page source available"}
+                                    </pre>
+                                </Card>
                             )
                         },
                         {
                             key: 'session',
                             label: 'Session Details',
                             children: (
-                                <pre style={{ 
-                                    backgroundColor: '#f5f5f5', 
-                                    padding: '16px', 
-                                    borderRadius: '4px', 
-                                    overflow: 'auto',
-                                    maxHeight: '300px'
-                                }}>
-                                    {JSON.stringify(entry.deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
-                                </pre>
+                                <Card bodyStyle={{ padding: 0 }}>
+                                    <pre style={{ 
+                                        backgroundColor: '#f5f5f5', 
+                                        padding: '16px', 
+                                        borderRadius: '4px', 
+                                        overflow: 'auto',
+                                        maxHeight: '300px',
+                                        margin: 0
+                                    }}>
+                                        {JSON.stringify(entry.deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
+                                    </pre>
+                                </Card>
                             )
                         }
                     ]}
@@ -316,90 +430,187 @@ const RecordingView = ({
         );
     };
 
-    return (
-        <>
-            <div style={{ marginBottom: '20px', paddingBottom: '0px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                    <Space align="center">
-                        <Button
-                            icon={<ArrowLeftOutlined />}
-                            onClick={navigateBack}
-                            type="text"
-                            aria-label="Back"
-                            title="Go back"
-                        />
-                        <Title level={4} style={{ margin: 0 }}>
-                            Session Recording
-                            {(standardIsRecording || ActionRecorder.isRecording()) && 
-                              <Text type="danger" style={{ marginLeft: 8, fontSize: '14px' }}>(Recording in progress)</Text>}
-                        </Title>
+    // Function to render the toolbar with action buttons
+    const renderToolbar = () => {
+        const hasRecordings = (standardRecordedActions && standardRecordedActions.length > 0) || 
+                            (detailedRecording && detailedRecording.length > 0);
+        
+        // Count condensed entries for the badge
+        const condensedCount = detailedRecording.filter(entry => entry.isCondensed).length;
+        
+        return (
+            <Row gutter={[16, 16]} align="middle">
+                {/* Recording Controls Group */}
+                <Col>
+                    <Space size="small">
+                        {!standardIsRecording ? (
+                            <Tooltip title={!inspectorState?.driver ? "Connect to a device first" : "Start recording session"}>
+                                <Button
+                                    type="primary"
+                                    icon={<VideoCameraOutlined />}
+                                    onClick={handleStartRecording}
+                                    loading={loading}
+                                    disabled={!inspectorState?.driver}
+                                >
+                                    Start Recording
+                                </Button>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title="Pause current recording">
+                                <Button
+                                    type="primary"
+                                    danger
+                                    icon={<PauseCircleOutlined />}
+                                    onClick={handlePauseRecording}
+                                    loading={loading}
+                                >
+                                    Pause Recording
+                                </Button>
+                            </Tooltip>
+                        )}
+                        <Tooltip title="Clear all recordings">
+                            <Button
+                                icon={<ClearOutlined />}
+                                onClick={handleClearRecording}
+                                disabled={!hasRecordings}
+                            >
+                                Clear
+                            </Button>
+                        </Tooltip>
                     </Space>
-                    <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0, paddingLeft: '36px' }}>
-                        Record and view inspector actions with page source and screenshots
-                    </Paragraph>
-                </div>
-                <Space wrap>
-                    {!standardIsRecording ? (
-                        <Button
-                            type="primary"
-                            icon={<VideoCameraOutlined />}
-                            onClick={handleStartRecording}
-                            loading={loading}
-                            disabled={!inspectorState?.driver}
+                </Col>
+                
+                <Divider type="vertical" style={{ height: '24px' }} />
+                
+                {/* File Operations Group */}
+                <Col>
+                    <Space size="small">
+                        <Upload 
+                            beforeUpload={handleLoadRecording}
+                            showUploadList={false}
+                            accept=".json"
                         >
-                            Start Recording
-                        </Button>
-                    ) : (
-                        <Button
-                            type="primary"
-                            danger
-                            icon={<PauseCircleOutlined />}
-                            onClick={handlePauseRecording}
-                            loading={loading}
-                        >
-                            Pause Recording
-                        </Button>
+                            <Tooltip title="Load recording from JSON file">
+                                <Button icon={<UploadOutlined />}>Load</Button>
+                            </Tooltip>
+                        </Upload>
+                        <Tooltip title="Save recording to JSON file">
+                            <Button
+                                icon={<DownloadOutlined />}
+                                onClick={saveToFile}
+                                disabled={!hasRecordings}
+                            >
+                                Save
+                            </Button>
+                        </Tooltip>
+                        <Tooltip title="Copy recording data as JSON">
+                            <Button
+                                icon={<CopyOutlined />}
+                                onClick={copyToClipboard}
+                                disabled={!hasRecordings}
+                            >
+                                {copied ? "Copied!" : "Copy"}
+                            </Button>
+                        </Tooltip>
+                    </Space>
+                </Col>
+                
+                <Divider type="vertical" style={{ height: '24px' }} />
+                
+                {/* View Controls Group */}
+                <Col>
+                    <Space size="small" align="center">
+                        <Tooltip title={showCondensed ? "Hide condensed states" : "Show condensed states"}>
+                            <Badge count={condensedCount} size="small" offset={[-5, 0]}>
+                                <Switch 
+                                    checked={showCondensed}
+                                    onChange={setShowCondensed}
+                                    checkedChildren={<EyeOutlined />}
+                                    unCheckedChildren={<EyeInvisibleOutlined />}
+                                    disabled={!hasRecordings}
+                                />
+                            </Badge>
+                        </Tooltip>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                            Condensed States
+                        </Text>
+                    </Space>
+                </Col>
+                
+                {/* Stats Section */}
+                <Col flex="auto" style={{ textAlign: 'right' }}>
+                    {hasRecordings && (
+                        <Space>
+                            <Badge count={detailedRecording.length} style={{ backgroundColor: '#52c41a' }} />
+                            <Text type="secondary">Total Events</Text>
+                            
+                            {condensedCount > 0 && (
+                                <>
+                                    <Divider type="vertical" />
+                                    <Badge count={condensedCount} style={{ backgroundColor: '#faad14' }} />
+                                    <Text type="secondary">Condensed</Text>
+                                </>
+                            )}
+                        </Space>
                     )}
-                    <Upload 
-                        beforeUpload={handleLoadRecording}
-                        showUploadList={false}
-                        accept=".json"
-                    >
-                        <Button icon={<UploadOutlined />}>Load Recording</Button>
-                    </Upload>
-                    <Button
-                        icon={<ClearOutlined />}
-                        onClick={handleClearRecording}
-                        disabled={(!standardRecordedActions || standardRecordedActions.length === 0) && 
-                                (!detailedRecording || detailedRecording.length === 0)}
-                    >
-                        Clear Recording
-                    </Button>
-                    <Button
-                        icon={<CopyOutlined />}
-                        onClick={copyToClipboard}
-                        disabled={(!standardRecordedActions || standardRecordedActions.length === 0) && 
-                                 (!detailedRecording || detailedRecording.length === 0)}
-                    >
-                        {copied ? "Copied!" : "Copy JSON"}
-                    </Button>
-                    <Button
-                        icon={<SaveOutlined />}
-                        onClick={saveToFile}
-                        disabled={(!standardRecordedActions || standardRecordedActions.length === 0) && 
-                                 (!detailedRecording || detailedRecording.length === 0)}
-                    >
-                        Save to File
-                    </Button>
-                </Space>
-            </div>
+                </Col>
+            </Row>
+        );
+    };
 
-            <Tabs 
-                defaultActiveKey="detailed" 
-                onChange={setActiveTab}
-                type="card"
-                style={{ marginTop: '16px' }}
-                items={[
+    return (
+        <Layout style={{ height: '100%', background: '#fff' }}>
+            {/* Header with Title and Back Button */}
+            <Header style={{ 
+                height: 'auto', 
+                padding: '12px 16px',
+                background: '#fff', 
+                borderBottom: '1px solid #f0f0f0' 
+            }}>
+                <Row align="middle" justify="space-between">
+                    <Col>
+                        <Space align="center">
+                            <Button
+                                icon={<ArrowLeftOutlined />}
+                                onClick={navigateBack}
+                                type="text"
+                                aria-label="Back"
+                                title="Go back"
+                            />
+                            <div>
+                                <Title level={4} style={{ margin: 0 }}>
+                                    Session Recording
+                                    {(standardIsRecording || ActionRecorder.isRecording()) && 
+                                    <Text type="danger" style={{ marginLeft: 8, fontSize: '14px' }}>(Recording in progress)</Text>}
+                                </Title>
+                                <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0 }}>
+                                    Record and view inspector actions with page source and screenshots
+                                </Paragraph>
+                            </div>
+                        </Space>
+                    </Col>
+                </Row>
+            </Header>
+            
+            {/* Fixed Toolbar */}
+            <Affix offsetTop={0}>
+                <div style={{ 
+                    padding: '12px 16px',
+                    background: '#fafafa', 
+                    borderBottom: '1px solid #f0f0f0',
+                    zIndex: 10
+                }}>
+                    {renderToolbar()}
+                </div>
+            </Affix>
+            
+            {/* Main Content */}
+            <Content style={{ padding: '16px', overflow: 'auto' }}>
+                <Tabs 
+                    defaultActiveKey="detailed" 
+                    onChange={setActiveTab}
+                    type="card"
+                    items={[
                     {
                         key: 'detailed',
                         label: 'Detailed Recording',
@@ -413,59 +624,102 @@ const RecordingView = ({
                         ) : detailedRecording.length > 0 ? (
                             <div style={{ display: 'flex', height: 'calc(70vh)' }}>
                                 {/* Left panel - Entries list */}
-                                <div style={{ width: '30%', borderRight: '1px solid #f0f0f0', overflowY: 'auto' }}>
-                                    <div style={{ padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0f0f0', backgroundColor: '#fafafa' }}>
-                                        <Text strong>Recording Entries</Text>
+                                <div style={{ 
+                                    width: '30%', 
+                                    borderRight: '1px solid #f0f0f0', 
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    <div style={{ 
+                                        padding: '10px 16px', 
+                                        borderBottom: '1px solid #f0f0f0', 
+                                        backgroundColor: '#fafafa',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
                                         <Space>
-                                            <Text type="secondary" style={{ fontSize: '12px' }}>Show Condensed</Text>
-                                            <Switch 
-                                                checked={showCondensed}
-                                                onChange={setShowCondensed}
-                                                checkedChildren={<EyeOutlined />}
-                                                unCheckedChildren={<EyeInvisibleOutlined />}
+                                            <Badge 
+                                                count={detailedRecording.length} 
+                                                style={{ backgroundColor: '#1890ff' }}
+                                                title="Total entries"
+                                            /> 
+                                            <Text strong>Recording Entries</Text>
+                                        </Space>
+                                        
+                                        <Tooltip title="Filter entries">
+                                            <Button 
+                                                type="text" 
+                                                icon={<FilterOutlined />} 
                                                 size="small"
                                             />
-                                        </Space>
+                                        </Tooltip>
                                     </div>
-                                    {detailedRecording
-                                        .filter(entry => showCondensed || !entry.isCondensed)
-                                        .map((entry, index) => {
-                                            const isSelected = selectedEntryIndex === index;
-                                            const hasScreenshot = !!entry.deviceArtifacts?.screenshotBase64;
-                                            const realIndex = detailedRecording.indexOf(entry);
-                                            
-                                            return (
-                                                <div 
-                                                    key={realIndex}
-                                                    onClick={() => setSelectedEntryIndex(realIndex)}
-                                                    style={{
-                                                        padding: '10px',
-                                                        borderBottom: '1px solid #f0f0f0',
-                                                        backgroundColor: isSelected ? '#e6f7ff' : (entry.isCondensed ? '#f9f9f9' : 'transparent'),
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        opacity: entry.isCondensed ? 0.7 : 1
-                                                    }}
-                                                >
-                                                    <div style={{ width: '100%' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                            <span><strong>#{realIndex + 1}</strong> - {new Date(entry.actionTime).toLocaleTimeString()}</span>
-                                                            {entry.isCondensed && <Text type="secondary" style={{ fontSize: '11px' }}>Condensed</Text>}
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                                                            {entry.action ? `Action: ${entry.action.action || 'Unknown'}` : 'State change'}
+                                    
+                                    <div style={{ overflowY: 'auto', flexGrow: 1 }}>
+                                        {detailedRecording
+                                            .filter(entry => showCondensed || !entry.isCondensed)
+                                            .map((entry, index) => {
+                                                const isSelected = selectedEntryIndex === detailedRecording.indexOf(entry);
+                                                const hasScreenshot = !!entry.deviceArtifacts?.screenshotBase64;
+                                                const realIndex = detailedRecording.indexOf(entry);
+                                                
+                                                return (
+                                                    <div 
+                                                        key={realIndex}
+                                                        onClick={() => setSelectedEntryIndex(realIndex)}
+                                                        style={{
+                                                            padding: '12px 16px',
+                                                            borderBottom: '1px solid #f0f0f0',
+                                                            backgroundColor: isSelected ? '#e6f7ff' : (entry.isCondensed ? '#f9f9f9' : 'transparent'),
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            opacity: entry.isCondensed ? 0.7 : 1,
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                    >
+                                                        <div style={{ width: '100%' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span>
+                                                                    <strong>#{realIndex + 1}</strong> - {new Date(entry.actionTime).toLocaleTimeString()}
+                                                                </span>
+                                                                <Space size={4}>
+                                                                    {entry.isCondensed && (
+                                                                        <Badge 
+                                                                            status="warning" 
+                                                                            text={<Text type="secondary" style={{ fontSize: '11px' }}>Condensed</Text>}
+                                                                        />
+                                                                    )}
+                                                                    {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff' }}/>}
+                                                                </Space>
+                                                            </div>
+                                                            <div style={{ 
+                                                                fontSize: '12px', 
+                                                                color: '#8c8c8c', 
+                                                                marginTop: '4px',
+                                                                display: 'flex',
+                                                                alignItems: 'center'
+                                                            }}>
+                                                                <Badge 
+                                                                    status={entry.action ? "processing" : "default"} 
+                                                                    style={{ marginRight: '6px' }}
+                                                                />
+                                                                {entry.action 
+                                                                    ? <strong style={{ color: '#1890ff' }}>{entry.action.action || 'Unknown'}</strong> 
+                                                                    : 'State change'
+                                                                }
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    {hasScreenshot && <FileImageOutlined style={{ color: '#1890ff', marginLeft: '8px' }}/>}
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                    </div>
                                 </div>
                                 
                                 {/* Right panel - Entry details */}
-                                <div style={{ flexGrow: 1, overflowY: 'auto' }}>
+                                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '0 16px' }}>
                                     {renderEntryDetails()}
                                 </div>
                             </div>
