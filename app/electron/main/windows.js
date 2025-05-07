@@ -44,6 +44,9 @@ function buildSessionWindow() {
       sandbox: false,
       nodeIntegration: true,
       contextIsolation: false,
+      webSecurity: !isDev, // Disable web security in development mode only
+      allowRunningInsecureContent: isDev, // Allow insecure content in development mode only
+      cors: false, // Disable CORS in development mode
       additionalArguments: openFilePath ? [`filename=${openFilePath}`] : [],
     },
   });
@@ -62,6 +65,14 @@ export function setupMainWindow() {
     splashWindow.destroy();
     mainWindow.show();
     mainWindow.focus();
+    
+    // Show a warning in development mode that web security is disabled
+    if (isDev) {
+      console.log('Development mode: Web security is disabled to allow direct API calls');
+      // Optionally, you could send a message to the renderer process to display a warning
+      mainWindow.webContents.send('dev-mode-security-warning', 
+        'Web security is disabled in development mode to allow direct API calls. Do not use in production.');
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -109,4 +120,9 @@ export function launchNewSessionWindow() {
   const win = buildSessionWindow();
   win[pathLoadMethod](mainPath);
   win.show();
+  
+  // Log whether web security is disabled (helpful for debugging)
+  if (isDev) {
+    console.log('Development mode: Web security is disabled to allow direct API calls');
+  }
 }
