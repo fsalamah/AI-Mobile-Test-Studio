@@ -33,5 +33,10 @@ export const CONFIG = {
     checkScreenshot: true,      // Check screenshots for changes
     screenshotThreshold: 0.1,   // Similarity threshold (1.0 = exact match)
     defaultOutputSuffix: "_condensed"  // Default suffix for output files
+  },
+  TRANSITION_ANALYSIS: {
+    maxParallelRequests: 10,    // Maximum number of parallel AI requests
+    batchThreshold: 20,         // Number of transitions above which to use batching
+    processingChunkSize: 5      // Number of transitions to process in each chunk
   }
 };

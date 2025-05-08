@@ -494,47 +494,55 @@ const RecordingView = ({
                     percent: 5
                 }));
                 
-                // COMPLETELY NEW APPROACH: Process each pair of consecutive states
-                // We'll analyze each pair separately, without batching or concurrency
-                // For n states, we can analyze n-1 transitions (between consecutive states)
+                // NEW APPROACH: Process transitions using the optimized batch processing
+                // The TransitionAnalysisPipeline now handles concurrency, batching, and order preservation
                 
                 // Map to track which states have been updated with analysis
                 const updatedStateIndices = new Set();
                 
-                // Process each pair of consecutive states (from index i to i+1)
-                for (let i = 0; i < updatedRecording.length - 1; i++) {
-                    try {
-                        const fromState = updatedRecording[i];
-                        const toState = updatedRecording[i+1];
-                        
-                        // Update progress
+                try {
+                    // Update progress indicator
+                    setAnalysisProgress(prev => ({
+                        ...prev,
+                        message: "Analyzing transitions with optimized batch processing...",
+                        percent: 5
+                    }));
+                    
+                    // Setup progress callback for the analysis process
+                    const onProgress = (current, total) => {
                         setAnalysisProgress(prev => ({
                             ...prev,
-                            current: i + 1,
-                            percent: 5 + Math.round(((i + 1) / (updatedRecording.length - 1)) * 90),
-                            message: `Analyzing transition ${i+1} of ${updatedRecording.length - 1}`
+                            current: current,
+                            percent: 5 + Math.round((current / total) * 90),
+                            message: `Analyzing transition ${current} of ${total}`
                         }));
+                    };
+                    
+                    console.log(`Starting optimized transition analysis for ${updatedRecording.length - 1} transitions`);
+                    
+                    // Call the pipeline to analyze all transitions at once
+                    // The pipeline now handles batching and concurrency internally
+                    const transitions = await TransitionAnalysisPipeline.analyzeTransitions(
+                        updatedRecording,
+                        { 
+                            // Let the pipeline determine the batch size and concurrency
+                            // based on the configuration in config.js
+                            batch: updatedRecording.length <= 20, // Use batch mode for smaller sets
+                            onProgress: onProgress // Pass the progress callback
+                        }
+                    );
+                    
+                    console.log(`Received ${transitions.length} transition results`);
+                    
+                    // Process each transition result
+                    for (let i = 0; i < transitions.length; i++) {
+                        const transition = transitions[i];
                         
-                        console.log(`Processing transition from state ${i} to state ${i+1}`);
+                        // The transition describes the change TO state i+1
+                        // So we associate it with the TO state (i+1)
+                        const stateIndex = i + 1;
                         
-                        // Call the pipeline with just these two states
-                        // Explicitly set batch: false to ensure sequential processing
-                        const transitions = await TransitionAnalysisPipeline.analyzeTransitions(
-                            [fromState, toState], 
-                            { batch: false }
-                        );
-                        
-                        // We should get exactly one transition result
-                        if (transitions && transitions.length === 1) {
-                            const transition = transitions[0];
-                            
-                            // The transition describes the change TO state i+1
-                            // So we associate it with the TO state (i+1)
-                            const stateIndex = i + 1; // The TO state index
-                            
-                            console.log(`Successfully analyzed transition from state ${i} to state ${i+1}`);
-                            console.log(`Assigning analysis to state ${stateIndex}`);
-                            
+                        if (stateIndex < updatedRecording.length) {
                             // Get the state to update
                             const realState = updatedRecording[stateIndex];
                             
@@ -554,12 +562,11 @@ const RecordingView = ({
                                 aiAnalysis: formatTransitionToMarkdown(transition, realState, actionType, elementTarget, stateIndex, updatedRecording.length),
                                 aiAnalysisRaw: transition
                             };
-                        } else {
-                            console.error(`Expected 1 transition for state pair ${i}-${i+1}, but got ${transitions ? transitions.length : 0}`);
                         }
-                    } catch (error) {
-                        console.error(`Error processing transition ${i} to ${i+1}:`, error);
                     }
+                } catch (error) {
+                    console.error("Error during transition analysis batch process:", error);
+                    message.error("Error analyzing transitions. Some transitions may be incomplete.");
                 }
                 
                 // Special handling for the first state
