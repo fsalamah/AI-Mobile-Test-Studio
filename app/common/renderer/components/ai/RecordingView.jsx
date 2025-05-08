@@ -57,16 +57,26 @@ const customScrollbarStyle = `
 .recording-tabs .ant-tabs-nav {
   margin-bottom: 0 !important;
 }
-.recording-tabs .ant-tabs-content-holder {
+.recording-tabs .ant-tabs-content-holder, .analysis-tabs .ant-tabs-content-holder {
   flex: 1 !important;
   display: flex !important;
   flex-direction: column !important;
+  overflow: hidden !important;
 }
-.recording-tabs {
+.recording-tabs, .analysis-tabs {
   flex: 1 !important;
   display: flex !important;
   flex-direction: column !important;
   margin-bottom: 0 !important;
+}
+
+.analysis-tabs .ant-tabs-content {
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+.analysis-tabs .ant-tabs-tabpane {
+  height: 100% !important;
 }
 /* Ensure content fits properly */
 .recording-view-container {
@@ -88,6 +98,21 @@ const customScrollbarStyle = `
 }
 .playback-active {
   animation: playback-pulse 1.5s infinite ease-in-out;
+}
+
+/* Flow steps timeline customizations */
+.flow-steps-timeline .ant-timeline-item {
+  padding-bottom: 20px !important;
+}
+
+.flow-steps-timeline .ant-timeline-item-tail {
+  height: calc(100% - 10px) !important;
+}
+
+.flow-steps-timeline .ant-timeline-item-content {
+  margin-left: 20px !important;
+  width: calc(100% - 140px) !important;
+  margin-top: -4px !important;
 }
 `;
 
@@ -2051,7 +2076,12 @@ public void verifyFinalState() {
                                                         <Tabs 
                                                             defaultActiveKey="analysis" 
                                                             type="card"
-                                                            style={{ marginBottom: '16px' }}
+                                                            style={{ 
+                                                                height: '100%',
+                                                                display: 'flex',
+                                                                flexDirection: 'column'
+                                                            }}
+                                                            className="analysis-tabs"
                                                             items={[
                                                                 {
                                                                     key: 'analysis',
@@ -2195,9 +2225,21 @@ public void verifyFinalState() {
                                                                     ),
                                                                     children: (
                                                                         <Card 
-                                                                            style={{ marginBottom: '16px' }}
-                                                                            headStyle={{ backgroundColor: '#e6f7ff', borderBottom: '1px solid #91d5ff' }}
-                                                                            bodyStyle={{ padding: '16px' }}
+                                                                            style={{ 
+                                                                                height: '100%',
+                                                                                display: 'flex',
+                                                                                flexDirection: 'column'
+                                                                            }}
+                                                                            headStyle={{ 
+                                                                                backgroundColor: '#e6f7ff', 
+                                                                                borderBottom: '1px solid #91d5ff',
+                                                                                flex: '0 0 auto'
+                                                                            }}
+                                                                            bodyStyle={{ 
+                                                                                padding: 0,
+                                                                                flex: '1 1 auto',
+                                                                                overflow: 'hidden'
+                                                                            }}
                                                                             bordered={false}
                                                                             title={
                                                                                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -2206,8 +2248,18 @@ public void verifyFinalState() {
                                                                                 </div>
                                                                             }
                                                                         >
-                                                                            <div className="custom-scrollbar" style={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto', padding: '16px', width: '100%' }}>
-                                                                                <Timeline mode="left" style={{ width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+                                                                            <div style={{ height: '100%', overflow: 'hidden', width: '100%' }}>
+                                                                                <Timeline 
+                                                                                    mode="left" 
+                                                                                    style={{ 
+                                                                                        width: '100%', 
+                                                                                        padding: '16px 16px 100px 0', 
+                                                                                        height: '100%', 
+                                                                                        overflow: 'auto',
+                                                                                        alignItems: 'flex-start'
+                                                                                    }}
+                                                                                    className="flow-steps-timeline"
+                                                                                >
                                                                                     {detailedRecording.length > 1 && 
                                                                                         Array.from({ length: detailedRecording.length - 1 }, (_, i) => {
                                                                                             const toState = detailedRecording[i + 1];
