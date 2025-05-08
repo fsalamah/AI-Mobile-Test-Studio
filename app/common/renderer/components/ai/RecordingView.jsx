@@ -107,12 +107,28 @@ const customScrollbarStyle = `
 
 .flow-steps-timeline .ant-timeline-item-tail {
   height: calc(100% - 10px) !important;
+  left: 88px !important; /* Keep connector line aligned with dots */
+}
+
+.flow-steps-timeline .ant-timeline-item-label {
+  width: 80px !important;
+  text-align: left !important;
+  padding-right: 8px !important;
+  position: absolute !important;
+  left: 0 !important; /* Ensure label starts at the far left */
+}
+
+.flow-steps-timeline .ant-timeline-item-head {
+  left: 88px !important; /* Position dots consistently */
 }
 
 .flow-steps-timeline .ant-timeline-item-content {
-  margin-left: 20px !important;
-  width: calc(100% - 140px) !important;
+  left: 100px !important;
+  margin-left: 8px !important;
+  width: calc(100% - 120px) !important;
   margin-top: -4px !important;
+  text-align: left !important;
+  position: relative !important; /* Ensure proper positioning relative to timeline */
 }
 `;
 
@@ -686,6 +702,143 @@ const RecordingView = ({
                 console.log(`- States with placeholders: ${missingStateIndices.length}`);
             }
             
+            // Now run page disambiguation to standardize page names
+            setAnalysisProgress(prev => ({
+                ...prev,
+                message: "Standardizing page names...",
+                percent: 90
+            }));
+            
+            try {
+                // Import the RecordedStatesDisambiguationPipeline
+                const { RecordedStatesDisambiguationPipeline } = await import('../../lib/ai/statesDisambiguationPipeline.js');
+                
+                // Extract transition results - this is the AI analysis raw data
+                const transitions = updatedRecording
+                    .filter(state => state.aiAnalysisRaw)
+                    .map(state => state.aiAnalysisRaw);
+                
+                // Run the disambiguation pipeline
+                console.log(`Running page disambiguation on ${transitions.length} transitions`);
+                
+                // Only run if we have enough transitions with page names
+                if (transitions.length > 1) {
+                    const disambiguationResults = await RecordedStatesDisambiguationPipeline.disambiguatePageNames(transitions);
+                    
+                    // Log the results
+                    console.log("Page Disambiguation Results:", disambiguationResults);
+                    const renamedCount = disambiguationResults.statistics?.renamedPageCount || 0;
+                    console.log(`Standardized page names: ${renamedCount} pages were renamed`);
+                    
+                    // Log detailed information about renamed pages
+                    console.log("\n========== DISAMBIGUATED PAGE NAMES ==========");
+                    
+                    // Create a mapping of original to standardized names for renamed pages
+                    const renamedPages = {};
+                    
+                    // Group all unique pages that were renamed
+                    disambiguationResults.standardizedFlow.forEach(step => {
+                        if (step.wasRenamed) {
+                            if (!renamedPages[step.standardizedPageName]) {
+                                renamedPages[step.standardizedPageName] = new Set();
+                            }
+                            renamedPages[step.standardizedPageName].add(step.originalPageName);
+                        }
+                    });
+                    
+                    // Log each set of renamed pages
+                    Object.entries(renamedPages).forEach(([standardizedName, originalNames]) => {
+                        const originalNamesArray = Array.from(originalNames);
+                        console.log(`standardized: "${standardizedName}"`);
+                        console.log(`  original names: ${originalNamesArray.map(name => `"${name}"`).join(', ')}`);
+                        
+                        // Find a step with this standardized name to get the reason
+                        const exampleStep = disambiguationResults.standardizedFlow.find(
+                            step => step.wasRenamed && step.standardizedPageName === standardizedName
+                        );
+                        
+                        if (exampleStep?.reason) {
+                            console.log(`  reason: ${exampleStep.reason}`);
+                        }
+                        console.log('');
+                    });
+                    
+                    // Log pages that weren't renamed (unique non-renamed pages)
+                    const unchangedPages = new Set();
+                    disambiguationResults.standardizedFlow.forEach(step => {
+                        if (!step.wasRenamed) {
+                            unchangedPages.add(step.standardizedPageName);
+                        }
+                    });
+                    
+                    if (unchangedPages.size > 0) {
+                        console.log("\n--- Unchanged Page Names ---");
+                        Array.from(unchangedPages).forEach(pageName => {
+                            console.log(`"${pageName}"`);
+                        });
+                    }
+                    
+                    console.log("==============================================\n");
+                    
+                    // Update the recording with standardized page names from the updated transitions
+                    updatedRecording = updatedRecording.map(state => {
+                        if (!state.aiAnalysisRaw) return state;
+                        
+                        // Find the corresponding transition in the updated transitions
+                        const matchingTransition = disambiguationResults.updatedTransitions.find(t => 
+                            t.fromActionTime === state.aiAnalysisRaw.fromActionTime && 
+                            t.toActionTime === state.aiAnalysisRaw.toActionTime
+                        );
+                        
+                        if (!matchingTransition) return state;
+                        
+                        // Update the state's raw analysis with standardized page info
+                        const updatedAnalysisRaw = {
+                            ...state.aiAnalysisRaw,
+                            originalPageName: matchingTransition.originalPageName,
+                            currentPageName: matchingTransition.currentPageName,
+                            standardizedPageDescription: matchingTransition.standardizedPageDescription,
+                            standardizedPageComponents: matchingTransition.standardizedPageComponents,
+                            standardizedPageFunction: matchingTransition.standardizedPageFunction,
+                            wasRenamed: matchingTransition.wasRenamed || false
+                        };
+                        
+                        // Regenerate the markdown with updated page info
+                        const actionType = state.action?.action || 'State Change';
+                        const elementTarget = state.action?.element?.text || 
+                                           state.action?.element?.resourceId || 
+                                           updatedAnalysisRaw.actionTarget || 
+                                           'Unknown Element';
+                        
+                        // Return updated state
+                        return {
+                            ...state,
+                            aiAnalysisRaw: updatedAnalysisRaw,
+                            aiAnalysis: formatTransitionToMarkdown(updatedAnalysisRaw, state, actionType, elementTarget, 
+                                updatedRecording.indexOf(state), updatedRecording.length)
+                        };
+                    });
+                    
+                    setAnalysisProgress(prev => ({
+                        ...prev,
+                        message: "Page names standardized",
+                        percent: 95
+                    }));
+                    
+                    // Show success message about page standardization
+                    if (renamedCount > 0) {
+                        message.success(`Standardized page names: ${renamedCount} pages were renamed for consistency`);
+                    } else {
+                        message.info("All page names were already consistent - no changes needed");
+                    }
+                } else {
+                    console.log("Not enough transitions with page names for disambiguation");
+                }
+            } catch (disambiguationError) {
+                console.error("Error during page disambiguation:", disambiguationError);
+                message.warning("Page name standardization failed, but analysis results are still available");
+            }
+            
             // Update the recording with AI analysis
             setDetailedRecording(updatedRecording);
             
@@ -764,14 +917,15 @@ const RecordingView = ({
 - **Page Change:** ${pageChangeStatus}
 
 ### Page Information
-- **Current Page:** ${transition.currentPageName || 'Unknown page'}
-- **Page Description:** ${transition.currentPageDescription || 'No description available'}
+- **Current Page:** ${transition.currentPageName || 'Unknown page'}${transition.wasRenamed ? ` (renamed from "${transition.originalPageName}")` : ''}
+- **Page Description:** ${transition.standardizedPageDescription || transition.currentPageDescription || 'No description available'}
+- **Page Function:** ${transition.standardizedPageFunction || 'Not specified'}
 - **User Activity:** ${transition.inferredUserActivity || 'Unknown activity'}
 
 ### Test Code Recommendation
 \`\`\`java
 // Generated test code for ${actionType} action on ${transition.currentPageName} (${transition.stateName})
-public void test${actionType.replace(/\s+/g, '')}On${transition.currentPageName?.replace(/\s+/g, '')}() {
+public void test${actionType.replace(/\s+/g, '')}On${(transition.currentPageName || 'UnknownPage').replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}() {
     // Find element using optimized selector
     WebElement element = driver.findElement(By.xpath("${state.action?.element?.xpath || '//android.view.View'}"));
     
@@ -1011,6 +1165,39 @@ public void verifyFinalState() {
                         
                         // Always apply detectCondensed=true to ensure proper condensed state flags
                         ActionRecorder.loadRecording(jsonData, { detectCondensed: true });
+                        
+                        // Make sure we preserve AI analysis data if present
+                        const loadedRecording = ActionRecorder.getRecording();
+                        
+                        // Check if the loaded recording has AI analysis data
+                        const hasAiAnalysis = loadedRecording.some(entry => entry.aiAnalysis || entry.aiAnalysisRaw);
+                        
+                        // If AI analysis data is present, ensure it's properly preserved
+                        if (hasAiAnalysis) {
+                            console.log("AI Analysis data detected in loaded recording");
+                            
+                            // Make sure all entries have the proper AI analysis structure
+                            const processedRecording = loadedRecording.map(entry => {
+                                // If this entry has AI analysis data
+                                if (entry.aiAnalysis || entry.aiAnalysisRaw) {
+                                    return {
+                                        ...entry,
+                                        // Ensure aiAnalysisRaw is an object, not a string
+                                        aiAnalysisRaw: typeof entry.aiAnalysisRaw === 'string' 
+                                            ? JSON.parse(entry.aiAnalysisRaw) 
+                                            : entry.aiAnalysisRaw
+                                    };
+                                }
+                                return entry;
+                            });
+                            
+                            // Replace the recording with the processed version
+                            ActionRecorder.loadRecording(processedRecording);
+                            
+                            // Log success message for AI analysis
+                            console.log("AI Analysis data successfully restored");
+                        }
+                        
                         setDetailedRecording(ActionRecorder.getRecording());
                         setActiveTab('detailed');
                         
@@ -1034,10 +1221,33 @@ public void verifyFinalState() {
                         
                         message.success(`Recording loaded: ${totalRecordings} total entries (${condensed} condensed, ${condensedPercentage}%)`);
                     } else {
-                        // Load into standard recording - we need to dispatch to Redux
-                        // This would require specific Redux actions for standard recording
-                        // which we don't have direct control over here
-                        message.info('Standard recording format detected, but loading is not fully supported');
+                        // Try to convert standard recording to detailed format
+                        try {
+                            const convertedRecording = jsonData.map((action, index) => {
+                                // Create a basic detailed recording entry from standard action
+                                return {
+                                    actionTime: Date.now() + (index * 1000), // Generate sequential timestamps
+                                    action: action, // Store the original action data
+                                    deviceArtifacts: {
+                                        sessionDetails: {},
+                                        screenshotBase64: null,
+                                        pageSource: null,
+                                        currentContext: null
+                                    },
+                                    isCondensed: false // Mark as not condensed by default
+                                };
+                            });
+                            
+                            // Load the converted recording
+                            ActionRecorder.loadRecording(convertedRecording);
+                            setDetailedRecording(ActionRecorder.getRecording());
+                            setActiveTab('detailed');
+                            
+                            message.success(`Standard recording converted and loaded: ${jsonData.length} actions imported`);
+                        } catch (conversionError) {
+                            console.error('Error converting standard recording:', conversionError);
+                            message.warning('Standard recording format detected, but loading encountered errors. Some features may not work properly.');
+                        }
                     }
                 } catch (err) {
                     message.error(`Error parsing recording file: ${err.message}`);
@@ -2253,7 +2463,7 @@ public void verifyFinalState() {
                                                                                     mode="left" 
                                                                                     style={{ 
                                                                                         width: '100%', 
-                                                                                        padding: '16px 16px 100px 0', 
+                                                                                        padding: '16px 0 100px 16px', 
                                                                                         height: '100%', 
                                                                                         overflow: 'auto',
                                                                                         alignItems: 'flex-start'
@@ -2312,7 +2522,7 @@ public void verifyFinalState() {
                                                                                                         border: isCurrentStep ? '2px solid #fff' : 'none',
                                                                                                         boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
                                                                                                     }} />}
-                                                                                                    label={<div style={{ minWidth: '120px', textAlign: 'right' }}><Text type="secondary">{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</Text></div>}
+                                                                                                    label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text></div>}
                                                                                                     position="left"
                                                                                                 >
                                                                                                     <Card
@@ -3155,7 +3365,7 @@ public void verifyFinalState() {
                                                                                         Formatted
                                                                                     </Radio.Button>
                                                                                     <Radio.Button value="raw">
-                                                                                        <span role="img" aria-label="json" style={{ marginRight: '4px' }}>{ }</span>
+                                                                                        <span style={{ marginRight: '4px', fontFamily: 'monospace' }}>{"{}"}</span>
                                                                                         Raw JSON
                                                                                     </Radio.Button>
                                                                                 </Radio.Group>

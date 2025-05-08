@@ -37,6 +37,18 @@ export const CONFIG = {
   TRANSITION_ANALYSIS: {
     maxParallelRequests: 10,    // Maximum number of parallel AI requests
     batchThreshold: 20,         // Number of transitions above which to use batching
-    processingChunkSize: 5      // Number of transitions to process in each chunk
+    processingChunkSize: 5,      // Number of transitions to process in each chunk
+    enableParallelProcessing: true, // Enable/disable parallel processing of transitions
+    includeHistoricalContext: true, // Include previous transitions as context
+    historyDepth: 5             // Number of previous transitions to include as context (0 = no history)
+  },
+  PAGE_DISAMBIGUATION: {
+    includeScreenshots: true,  // Include page screenshots in disambiguation prompt
+    includeXml: false,          // Include page XML source in disambiguation prompt
+    maxScreenshotsPerPage: 1,   // Maximum number of screenshots to include per page
+    maxXmlSourcesPerPage: 1,    // Maximum number of XML sources to include per page
+    screenshotQuality: 0.7,     // Image quality for screenshots (0.0-1.0)
+    maxXmlLength: 1000000,        // Maximum characters of XML to include per source
+    embedMediaInline: true      // Whether to embed media inline or provide URLs
   }
 };

@@ -13,7 +13,10 @@ const aiService = new AIService();
 const TRANSITION_CONFIG = CONFIG.TRANSITION_ANALYSIS || {
   maxParallelRequests: 10,    // Default max parallel requests if not defined in config
   batchThreshold: 20,         // Default batch threshold
-  processingChunkSize: 5      // Default chunk size
+  processingChunkSize: 5,     // Default chunk size
+  enableParallelProcessing: true, // Default to enable parallel processing
+  includeHistoricalContext: true, // Default to include historical context
+  historyDepth: 2             // Default history depth
 };
 
 /**
@@ -61,14 +64,25 @@ export class TransitionAnalysisPipeline {
       const maxParallelRequests = options.maxParallelRequests || TRANSITION_CONFIG.maxParallelRequests;
       const batchThreshold = options.batchThreshold || TRANSITION_CONFIG.batchThreshold;
       const chunkSize = options.chunkSize || TRANSITION_CONFIG.processingChunkSize;
+      const enableParallelProcessing = options.enableParallelProcessing !== undefined ? 
+        options.enableParallelProcessing : TRANSITION_CONFIG.enableParallelProcessing;
+      const includeHistoricalContext = options.includeHistoricalContext !== undefined ? 
+        options.includeHistoricalContext : TRANSITION_CONFIG.includeHistoricalContext;
+      const historyDepth = options.historyDepth !== undefined ? 
+        options.historyDepth : TRANSITION_CONFIG.historyDepth;
       
       // Progress callback for reporting analysis progress
       const progressCallback = options.onProgress || ((current, total) => {});
       
-      // Determine the processing mode based on the number of states
-      // 1. Small batches (< batchThreshold) - process all at once with maxParallelRequests concurrency
-      // 2. Large batches (>= batchThreshold) - process in chunks with maxParallelRequests concurrency per chunk
-      const isSmallBatch = options.batch === true || recordedStates.length <= batchThreshold;
+      // Store historical transition results to provide context for subsequent analyses
+      const transitionHistory = [];
+      
+      // Determine the processing mode based on parallel processing config and number of states
+      // 1. If parallel processing disabled - process transitions sequentially
+      // 2. Small batches (< batchThreshold) - process all at once with maxParallelRequests concurrency
+      // 3. Large batches (>= batchThreshold) - process in chunks with maxParallelRequests concurrency per chunk
+      const isParallelDisabled = !enableParallelProcessing;
+      const isSmallBatch = !isParallelDisabled && (options.batch === true || recordedStates.length <= batchThreshold);
       
       Logger.log(`Processing ${recordedStates.length - 1} transitions with max ${maxParallelRequests} parallel requests`, "info");
       
@@ -83,8 +97,23 @@ export class TransitionAnalysisPipeline {
         try {
           Logger.log(`Starting analysis for transition ${fromIdx + 1} (${fromState.actionTime} to ${toState.actionTime})`, "info");
           
+          // Get historical context if enabled and available
+          let historicalContext = [];
+          if (includeHistoricalContext && historyDepth > 0) {
+            // Determine how many previous transitions we can include based on the history depth and current index
+            const availableHistory = Math.min(historyDepth, fromIdx);
+            
+            if (availableHistory > 0) {
+              // Get the relevant history based on the available transitions and the configured depth
+              historicalContext = transitionHistory.slice(-availableHistory);
+              Logger.log(`Including ${historicalContext.length} historical transitions as context for transition ${fromIdx + 1}`, "info");
+            } else {
+              Logger.log(`No historical context available for transition ${fromIdx + 1} (first state)`, "info");
+            }
+          }
+          
           // Create prompt for the transition analysis
-          const transitionPrompt = this._createTransitionPrompt(fromState, toState);
+          const transitionPrompt = this._createTransitionPrompt(fromState, toState, historicalContext);
           
           // Call AI service to analyze transition
           const transitionResult = await aiService.analyzeTransition(null, transitionPrompt);
@@ -96,6 +125,21 @@ export class TransitionAnalysisPipeline {
           
           // Log each transition result individually
           await FileUtils.writeOutputToFile(transitionDescription, `transition_${fromIdx+1}_result`);
+          
+          // If we're including historical context, add this transition to the history
+          if (includeHistoricalContext) {
+            // Maintain history up to the configured depth plus a buffer
+            // (we add some buffer to avoid frequent array manipulations)
+            const maxHistorySize = historyDepth * 2;
+            
+            // Add new transition to history
+            transitionHistory.push(transitionDescription);
+            
+            // Trim history if it exceeds the maximum size
+            if (transitionHistory.length > maxHistorySize) {
+              transitionHistory.splice(0, transitionHistory.length - maxHistorySize);
+            }
+          }
           
           // Return the result with its position index
           return {
@@ -121,6 +165,9 @@ export class TransitionAnalysisPipeline {
               isSamePageDifferentState: false,
               currentPageName: "Unknown page",
               currentPageDescription: "No page description available",
+              pageDescription: "No functional description available",
+              pageMainComponents: [],
+              pagePrimaryFunction: "Unknown functionality",
               inferredUserActivity: "Unknown activity",
               error: transitionError.message
             }
@@ -128,7 +175,34 @@ export class TransitionAnalysisPipeline {
         }
       };
       
-      if (isSmallBatch) {
+      if (isParallelDisabled) {
+        // For sequential processing (parallel disabled), process one transition at a time
+        Logger.log(`Sequential processing of ${recordedStates.length - 1} transitions (parallel processing disabled)`, "info");
+        
+        // Create an array of transition indices
+        const transitionIndices = Array.from({ length: recordedStates.length - 1 }, (_, i) => i);
+        const totalTransitions = transitionIndices.length;
+        let completedCount = 0;
+        
+        // Process transitions sequentially
+        for (const idx of transitionIndices) {
+          Logger.log(`Sequentially processing transition ${idx + 1}/${totalTransitions}`, "info");
+          
+          // Process this transition
+          const result = await analyzeTransition(idx);
+          
+          // Place result in the transitions array
+          transitions[result.index] = result.transition;
+          
+          // Update progress
+          completedCount++;
+          progressCallback(completedCount, totalTransitions);
+          
+          Logger.log(`Completed ${completedCount}/${totalTransitions} transitions sequentially`, "info");
+        }
+        
+        Logger.log(`Sequential processing completed for all ${totalTransitions} transitions`, "info");
+      } else if (isSmallBatch) {
         // For small batches, process all transitions with controlled concurrency
         Logger.log(`Processing small batch of ${recordedStates.length - 1} transitions`, "info");
         
@@ -254,14 +328,15 @@ export class TransitionAnalysisPipeline {
    * Create a prompt for transition analysis
    * @param {Object} fromState - Starting state
    * @param {Object} toState - Ending state
+   * @param {Array} historicalContext - Optional array of previous transition results for context
    * @returns {Array} Prompt for the AI service
    * @private
    */
-  static _createTransitionPrompt(fromState, toState) {
+  static _createTransitionPrompt(fromState, toState, historicalContext = []) {
     // Create a system prompt that instructs the AI on how to analyze transitions with optimized instructions
     const systemInstruction = `# Mobile App Transition Analyzer (Optimized)
 
-You are a specialized mobile UI transition analyzer with expertise in mobile app testing and automation. Your task is to systematically analyze the differences between two sequential UI states and provide deterministic, standardized results.
+You are a specialized mobile UI transition analyzer with expertise in mobile app testing and automation. Your task is to systematically analyze the differences between two sequential UI states and provide deterministic, standardized results with detailed, consistent page descriptions.
 
 ## Input Analysis Guidelines
 
@@ -269,6 +344,7 @@ You will receive:
 1. **Before state**: The UI state before a user action (with screenshot and XML source)
 2. **After state**: The UI state after a user action (with screenshot and XML source)
 3. **Action metadata**: Information about what action was performed (if available)
+4. **Historical context**: Previous transitions in the sequence (may not be present for the first state)
 
 ## Analysis Strategy
 
@@ -276,7 +352,16 @@ Follow this fixed, systematic process for every analysis:
 1. First, examine both screenshots carefully to identify visual changes
 2. Second, compare the XML structures to detect element additions, removals, or modifications
 3. Third, analyze the action metadata to understand what operation was performed
-4. Finally, synthesize all information to determine the exact nature of the transition
+4. Fourth, if available, review historical context to understand the flow and ensure consistency in page naming
+5. Finally, synthesize all information to determine the exact nature of the transition
+
+## Using Historical Context (When Available)
+
+When historical context is provided, use it to:
+1. Maintain consistent page naming across the entire flow - a page that appears in both history and current analysis should have the same name
+2. Use previous transitions to understand the user's journey through the application
+3. Leverage previous page descriptions to ensure consistency in your current analysis
+4. For pages that previously appeared in the history, use the exact same pageDescription, pageMainComponents, and pagePrimaryFunction values
 
 ## Page Naming Conventions
 
@@ -296,6 +381,30 @@ Follow these guidelines for the new 'stateName' attribute:
 4. For scrolled/swiped states: Direction + extent (e.g., "Scrolled To Bottom", "Swiped To Card 3")
 5. For interactive elements: Interaction state (e.g., "Keyboard Active", "Search Results Visible")
 6. Maximum 5 words, use camel case for multi-word states
+
+## Page Description Requirements (NEW)
+
+Provide these REQUIRED detailed page description components for disambiguation purposes:
+
+1. **pageDescription**: A detailed, technical description of the page's functionality and purpose
+   - Must be precisely 1-2 sentences (30-100 words)
+   - Must focus on the page's primary functionality, not its visual appearance
+   - Must be sufficiently distinctive to differentiate similar pages
+   - Must avoid using transient data (e.g., specific user values, timestamps)
+   - Format: "This page [primary function] allowing users to [main user actions possible]. It contains [key UI components] and serves as [role in workflow]."
+
+2. **pageMainComponents**: An array of 3-7 PRIMARY UI components on the page 
+   - Include only the most important components that define the page's core functionality
+   - Each component must include its type and purpose (e.g., "Username input field", "Submit button")
+   - Must be listed in order of importance or visual hierarchy
+   - Must be consistently named across different states of the same page
+
+3. **pagePrimaryFunction**: A single phrase (3-7 words) that identifies the page's main purpose
+   - Must be a verb phrase that captures the primary user intent (e.g., "Authenticate User Credentials", "Display Product Details", "Configure Account Settings")
+   - Must be at the correct abstraction level (not too generic, not too specific)
+   - Must avoid references to specific data values or UI styles
+
+These descriptions MUST be deterministic - the same page at different points should receive identical descriptions regardless of state changes or user data.
 
 ## Output Requirements
 
@@ -339,7 +448,13 @@ Provide a detailed analysis with these REQUIRED components:
 10. **currentPageDescription**: Detailed purpose of the current page (1-2 sentences)
     - Must include main function, key elements, and user goals
 
-11. **inferredUserActivity**: What the user is likely trying to accomplish
+11. **pageDescription**: NEW FIELD - Detailed functional description as specified above
+
+12. **pageMainComponents**: NEW FIELD - Array of key UI components as specified above  
+
+13. **pagePrimaryFunction**: NEW FIELD - Core function phrase as specified above
+
+14. **inferredUserActivity**: What the user is likely trying to accomplish
     - Must be tied to a concrete user workflow or task
     - Format: "User is [action verb]-ing [specific task]"
 
@@ -359,6 +474,9 @@ Your response MUST follow this exact JSON schema:
   "isSamePageDifferentState": true or false,
   "currentPageName": "Complete Standardized Page Name",
   "currentPageDescription": "Detailed explanation of page purpose",
+  "pageDescription": "Detailed functional description for disambiguation",
+  "pageMainComponents": ["Component 1", "Component 2", "Component 3"],
+  "pagePrimaryFunction": "Core Function Of Page",
   "inferredUserActivity": "User is performing specific task"
 }
 \`\`\`
@@ -381,6 +499,90 @@ Args: ${JSON.stringify(toState.action?.args || {})}` : "No explicit action recor
 Device name: ${fromState.deviceArtifacts?.sessionDetails?.deviceName || 'Unknown'}
 Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unknown'}`;
 
+    // Create the user message content array
+    const userContent = [
+      {
+        type: "text",
+        text: `Please analyze this transition between two UI states.\n\nSession info:\n${sessionInfo}\n\nTransition timestamps: From ${new Date(fromState.actionTime).toISOString()} to ${new Date(toState.actionTime).toISOString()}\n\n${actionInfo}`
+      }
+    ];
+    
+    // Add historical context if available
+    if (historicalContext.length > 0) {
+      // Add a section header for historical context
+      userContent.push({
+        type: "text",
+        text: `\n\nHISTORICAL CONTEXT (${historicalContext.length} previous transitions):\n`
+      });
+      
+      // Add each historical transition as context, with the most recent first
+      historicalContext.forEach((history, idx) => {
+        const historySection = `
+PREVIOUS TRANSITION ${historicalContext.length - idx}:
+- From: ${new Date(history.fromActionTime).toISOString()}
+- To: ${new Date(history.toActionTime).toISOString()}
+- Page Name: ${history.currentPageName}
+- Action: ${history.transitionDescription}
+- Technical: ${history.technicalActionDescription}
+- State: ${history.stateName}
+- Target: ${history.actionTarget || 'None'}
+- Page changed: ${history.isPageChanged ? 'Yes' : 'No'}
+`;
+        userContent.push({
+          type: "text",
+          text: historySection
+        });
+      });
+      
+      // Add a separator after the history
+      userContent.push({
+        type: "text",
+        text: "\n\nCURRENT TRANSITION TO ANALYZE:\n"
+      });
+    }
+    
+    // Add the current states to analyze
+    userContent.push(
+      {
+        type: "text",
+        text: "BEFORE STATE SCREENSHOT:"
+      },
+      {
+        type: "image_url",
+        image_url: {
+          url: beforeScreenshot ? `data:image/png;base64,${beforeScreenshot}` : "No screenshot available"
+        }
+      },
+      {
+        type: "text",
+        text: "AFTER STATE SCREENSHOT:"
+      },
+      {
+        type: "image_url",
+        image_url: {
+          url: afterScreenshot ? `data:image/png;base64,${afterScreenshot}` : "No screenshot available"
+        }
+      },
+      {
+        type: "text",
+        text: `BEFORE STATE XML SOURCE:\n\n${beforeXML.length > 10000 ? beforeXML.substring(0, 10000) + "... (truncated)" : beforeXML}`
+      },
+      {
+        type: "text",
+        text: `AFTER STATE XML SOURCE:\n\n${afterXML.length > 10000 ? afterXML.substring(0, 10000) + "... (truncated)" : afterXML}`
+      }
+    );
+    
+    // Add instructions for the AI
+    const analysisInstructions = historicalContext.length > 0 
+      ? "Analyze the transition and provide your assessment in the required JSON format. Be specific about what changed visually and structurally. Use the historical context to provide more accurate and consistent page naming and state descriptions."
+      : "Analyze the transition and provide your assessment in the required JSON format. Be specific about what changed visually and structurally.";
+    
+    userContent.push({
+      type: "text",
+      text: analysisInstructions
+    });
+    
     // Create messages array for the AI service
     return [
       {
@@ -389,44 +591,7 @@ Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unkn
       },
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Please analyze this transition between two UI states.\n\nSession info:\n${sessionInfo}\n\nTransition timestamps: From ${new Date(fromState.actionTime).toISOString()} to ${new Date(toState.actionTime).toISOString()}\n\n${actionInfo}`
-          },
-          {
-            type: "text",
-            text: "BEFORE STATE SCREENSHOT:"
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: beforeScreenshot ? `data:image/png;base64,${beforeScreenshot}` : "No screenshot available"
-            }
-          },
-          {
-            type: "text",
-            text: "AFTER STATE SCREENSHOT:"
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: afterScreenshot ? `data:image/png;base64,${afterScreenshot}` : "No screenshot available"
-            }
-          },
-          {
-            type: "text",
-            text: `BEFORE STATE XML SOURCE:\n\n${beforeXML.length > 10000 ? beforeXML.substring(0, 10000) + "... (truncated)" : beforeXML}`
-          },
-          {
-            type: "text",
-            text: `AFTER STATE XML SOURCE:\n\n${afterXML.length > 10000 ? afterXML.substring(0, 10000) + "... (truncated)" : afterXML}`
-          },
-          {
-            type: "text",
-            text: "Analyze the transition and provide your assessment in the required JSON format. Be specific about what changed visually and structurally."
-          }
-        ]
+        content: userContent
       }
     ];
   }
@@ -460,7 +625,7 @@ Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unkn
         }
       }
       
-      // Construct the final transition description with required fields including the new stateName
+      // Construct the final transition description with required fields including the new stateName and pageDescription
       return {
         fromActionTime: fromState.actionTime,
         toActionTime: toState.actionTime,
@@ -474,6 +639,9 @@ Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unkn
         isSamePageDifferentState: parsedContent.isSamePageDifferentState || false,
         currentPageName: parsedContent.currentPageName || "Unknown page",
         currentPageDescription: parsedContent.currentPageDescription || "No page description available",
+        pageDescription: parsedContent.pageDescription || "No functional description available",
+        pageMainComponents: parsedContent.pageMainComponents || [],
+        pagePrimaryFunction: parsedContent.pagePrimaryFunction || "Unknown functionality",
         inferredUserActivity: parsedContent.inferredUserActivity || "Unknown activity"
       };
       
@@ -494,6 +662,9 @@ Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unkn
         isSamePageDifferentState: false,
         currentPageName: "Unknown page",
         currentPageDescription: "No page description available",
+        pageDescription: "No functional description available",
+        pageMainComponents: [],
+        pagePrimaryFunction: "Unknown functionality",
         inferredUserActivity: "Unknown activity",
         parsingError: error.message
       };
