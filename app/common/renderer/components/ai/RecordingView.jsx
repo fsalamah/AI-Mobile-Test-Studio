@@ -80,6 +80,15 @@ const customScrollbarStyle = `
   left: 0 !important;
   right: 0 !important;
 }
+/* Pulse animation for playback */
+@keyframes playback-pulse {
+  0% { background-color: #e6f7ff; }
+  50% { background-color: #bae7ff; }
+  100% { background-color: #e6f7ff; }
+}
+.playback-active {
+  animation: playback-pulse 1.5s infinite ease-in-out;
+}
 `;
 
 import {
@@ -99,7 +108,9 @@ import {
     Layout,
     Badge,
     Tooltip,
-    Radio
+    Radio,
+    Timeline,
+    Collapse
 } from "antd";
 import {
     ArrowLeftOutlined,
@@ -120,7 +131,8 @@ import {
     RobotOutlined,
     ThunderboltOutlined,
     CodeOutlined,
-    ExperimentOutlined
+    ExperimentOutlined,
+    OrderedListOutlined
 } from "@ant-design/icons";
 import ActionRecorder from "../../lib/ai/actionRecorder";
 import { TransitionAnalysisPipeline } from "../../lib/ai/transitionAnalysisPipeline";
@@ -187,9 +199,29 @@ const RecordingView = ({
     const [selectedEntryIndex, setSelectedEntryIndex] = useState(null);
     const [activeTab, setActiveTab] = useState("recording");
     const [showCondensed, setShowCondensed] = useState(true); // State to control condensed states visibility
+    const [hideNonTransitions, setHideNonTransitions] = useState(false); // State to control visibility of non-transition states
     const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
     const [processingAI, setProcessingAI] = useState(false);
     const [aiViewMode, setAiViewMode] = useState('raw');
+    const [analysisProgress, setAnalysisProgress] = useState({
+        isProcessing: false,
+        current: 0,
+        total: 0,
+        percent: 0,
+        message: ''
+    });
+    // Column width state for resizable panels
+    const [columnWidths, setColumnWidths] = useState({
+        list: '25%',      // Left sidebar with state list
+        screenshot: '35%', // Middle panel with screenshot
+        details: '40%'     // Right panel with tabs
+    });
+    const [isResizing, setIsResizing] = useState(null); // Tracks which divider is being resized
+    
+    // Playback related states
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1000); // milliseconds between state changes
+    const [playbackIntervalId, setPlaybackIntervalId] = useState(null);
 
     // Add custom scrollbar styles on component mount
     useEffect(() => {
@@ -241,6 +273,124 @@ const RecordingView = ({
         setScreenshotDimensions({ width: 'auto', height: 'auto' });
         setAiViewMode('raw'); // Reset to raw JSON view as preferred
     }, [selectedEntryIndex]);
+    
+    // Playback control functions
+    const startPlayback = () => {
+        if (detailedRecording.length === 0 || isPlaying) return;
+        
+        // If we're at the end or no state is selected, start from the beginning
+        if (selectedEntryIndex === null || selectedEntryIndex >= detailedRecording.length - 1) {
+            setSelectedEntryIndex(0);
+        }
+        
+        setIsPlaying(true);
+        
+        // Create interval to advance through states
+        const intervalId = setInterval(() => {
+            setSelectedEntryIndex(prevIndex => {
+                // If we're at the end, stop playback
+                if (prevIndex === null || prevIndex >= detailedRecording.length - 1) {
+                    clearInterval(intervalId);
+                    setIsPlaying(false);
+                    setPlaybackIntervalId(null);
+                    return prevIndex; // Keep the last index
+                }
+                
+                // Otherwise, advance to the next state
+                return prevIndex + 1;
+            });
+        }, playbackSpeed);
+        
+        setPlaybackIntervalId(intervalId);
+    };
+    
+    const pausePlayback = () => {
+        if (playbackIntervalId) {
+            clearInterval(playbackIntervalId);
+            setPlaybackIntervalId(null);
+        }
+        setIsPlaying(false);
+    };
+    
+    const stopPlayback = () => {
+        pausePlayback();
+        setSelectedEntryIndex(0); // Return to first state
+    };
+    
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (playbackIntervalId) {
+                clearInterval(playbackIntervalId);
+            }
+        };
+    }, [playbackIntervalId]);
+    
+    // Handle mouse events for resizing panels
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizing) return;
+            
+            // Get container bounds
+            const container = document.querySelector('.recording-view-detailed-container');
+            if (!container) return;
+            
+            const containerRect = container.getBoundingClientRect();
+            const containerWidth = containerRect.width;
+            const mouseX = e.clientX - containerRect.left;
+            
+            // Calculate percentage position
+            const positionPercent = (mouseX / containerWidth) * 100;
+            
+            // Apply limits to prevent panels from becoming too small
+            if (isResizing === 'list-screenshot') {
+                // Limit list width between 15% and 40%
+                if (positionPercent < 15 || positionPercent > 40) return;
+                
+                // Update list and screenshot widths
+                setColumnWidths(prev => ({
+                    ...prev,
+                    list: `${positionPercent}%`,
+                    screenshot: `${parseFloat(prev.screenshot) + (parseFloat(prev.list) - positionPercent)}%`
+                }));
+            } else if (isResizing === 'screenshot-details') {
+                // Calculate combined width of list and screenshot
+                const combinedWidth = parseFloat(columnWidths.list) + parseFloat(columnWidths.screenshot);
+                
+                // Limit screenshot width (combined with list) between 30% and 75%
+                if (positionPercent < 30 || positionPercent > 75) return;
+                
+                // Update screenshot and details widths
+                setColumnWidths(prev => ({
+                    ...prev,
+                    screenshot: `${positionPercent - parseFloat(prev.list)}%`,
+                    details: `${100 - positionPercent}%`
+                }));
+            }
+        };
+        
+        const handleMouseUp = () => {
+            if (isResizing) {
+                setIsResizing(null);
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+            }
+        };
+        
+        if (isResizing) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            
+            // Set cursor and prevent text selection during resize
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+        
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing, columnWidths]);
 
     const handleStartRecording = async () => {
         try {
@@ -317,90 +467,212 @@ const RecordingView = ({
         
         try {
             setProcessingAI(true);
-            message.info("Processing recording with AI...");
+            
+            // Initialize progress state
+            setAnalysisProgress({
+                isProcessing: true,
+                current: 0,
+                total: detailedRecording.length,
+                percent: 0,
+                message: "Preparing data..."
+            });
             
             // Create a copy of the recording to update
             let updatedRecording = [...detailedRecording];
             
-            // Use the actual TransitionAnalysisPipeline to analyze transitions
-            message.info(`Starting transition analysis for ${updatedRecording.length} states...`);
-            
-            // Create a copy of recording with dummy states to ensure all real states get AI analysis
-            // We'll add a copy of first state before first state and a copy of last state after last state
-            // This is necessary because the TransitionAnalysisPipeline needs pairs of states to analyze transitions
-            
             if (updatedRecording.length > 0) {
-                message.info("Preparing recording data with dummy states for complete analysis...");
-                
-                // First, make sure all states have the aiAnalysis attribute but set to null
+                // Make all states have the aiAnalysis attribute but set to null
                 updatedRecording = updatedRecording.map(state => ({
                     ...state,
                     aiAnalysis: null,
                     aiAnalysisRaw: null
                 }));
                 
-                // Create dummy states for analysis (won't be added to actual recording)
-                const firstState = { ...updatedRecording[0] };
-                const lastState = { ...updatedRecording[updatedRecording.length - 1] };
+                setAnalysisProgress(prev => ({
+                    ...prev,
+                    message: "Analyzing transitions...",
+                    percent: 5
+                }));
                 
-                // Create an extended array with dummy states for analysis
-                const extendedRecording = [
-                    firstState,                    // Dummy state before first (copy of first)
-                    ...updatedRecording,           // All real states
-                    lastState                      // Dummy state after last (copy of last)
-                ];
+                // COMPLETELY NEW APPROACH: Process each pair of consecutive states
+                // We'll analyze each pair separately, without batching or concurrency
+                // For n states, we can analyze n-1 transitions (between consecutive states)
                 
-                message.info(`Analyzing ${extendedRecording.length} states (including 2 dummy states)...`);
+                // Map to track which states have been updated with analysis
+                const updatedStateIndices = new Set();
                 
-                // Call the pipeline with the extended recording that includes dummy states
-                const transitions = await TransitionAnalysisPipeline.analyzeTransitions(extendedRecording);
-                
-                // Process the transition results for the REAL states
-                // Important: transition[0] is about dummy->first, transition[n] is about last->dummy
-                // We need to adjust indices accordingly
-                for (let i = 0; i < transitions.length; i++) {
-                    // Calculate the indices for the real recording:
-                    // - transition[0] applies to real state 0 (the first dummy->first transition)
-                    // - transition[length-1] applies to the last real state (last->dummy transition)
-                    // - all others apply to states i
-                    
-                    // In the transitions array:
-                    // - Transition 0 is dummy->first (applied to real state 0)
-                    // - Transition 1 is first->second (applied to real state 1)
-                    // - ...and so on
-                    const transition = transitions[i];
-                    
-                    // Calculate real state index to update (i-1 since transition indices are shifted)
-                    const realStateIndex = i;
-                    
-                    // Skip transitions that refer to dummy states
-                    if (realStateIndex < 0 || realStateIndex >= updatedRecording.length) {
-                        continue;
+                // Process each pair of consecutive states (from index i to i+1)
+                for (let i = 0; i < updatedRecording.length - 1; i++) {
+                    try {
+                        const fromState = updatedRecording[i];
+                        const toState = updatedRecording[i+1];
+                        
+                        // Update progress
+                        setAnalysisProgress(prev => ({
+                            ...prev,
+                            current: i + 1,
+                            percent: 5 + Math.round(((i + 1) / (updatedRecording.length - 1)) * 90),
+                            message: `Analyzing transition ${i+1} of ${updatedRecording.length - 1}`
+                        }));
+                        
+                        console.log(`Processing transition from state ${i} to state ${i+1}`);
+                        
+                        // Call the pipeline with just these two states
+                        // Explicitly set batch: false to ensure sequential processing
+                        const transitions = await TransitionAnalysisPipeline.analyzeTransitions(
+                            [fromState, toState], 
+                            { batch: false }
+                        );
+                        
+                        // We should get exactly one transition result
+                        if (transitions && transitions.length === 1) {
+                            const transition = transitions[0];
+                            
+                            // The transition describes the change TO state i+1
+                            // So we associate it with the TO state (i+1)
+                            const stateIndex = i + 1; // The TO state index
+                            
+                            console.log(`Successfully analyzed transition from state ${i} to state ${i+1}`);
+                            console.log(`Assigning analysis to state ${stateIndex}`);
+                            
+                            // Get the state to update
+                            const realState = updatedRecording[stateIndex];
+                            
+                            // Mark this state as updated
+                            updatedStateIndices.add(stateIndex);
+                            
+                            // Format analysis info for the state
+                            const actionType = realState.action?.action || 'State Change';
+                            const elementTarget = realState.action?.element?.text || 
+                                               realState.action?.element?.resourceId || 
+                                               transition.actionTarget || 
+                                               'Unknown Element';
+                            
+                            // Update the state with the transition analysis
+                            updatedRecording[stateIndex] = {
+                                ...realState,
+                                aiAnalysis: formatTransitionToMarkdown(transition, realState, actionType, elementTarget, stateIndex, updatedRecording.length),
+                                aiAnalysisRaw: transition
+                            };
+                        } else {
+                            console.error(`Expected 1 transition for state pair ${i}-${i+1}, but got ${transitions ? transitions.length : 0}`);
+                        }
+                    } catch (error) {
+                        console.error(`Error processing transition ${i} to ${i+1}:`, error);
                     }
+                }
+                
+                // Special handling for the first state
+                // First state has no "from" state, so use a simplified analysis
+                if (!updatedStateIndices.has(0) && updatedRecording.length > 0) {
+                    const firstState = updatedRecording[0];
                     
-                    // Get the real state to update
-                    const realState = updatedRecording[realStateIndex];
-                    
-                    // Format analysis info
-                    const actionType = realState.action?.action || 'State Change';
-                    const elementTarget = realState.action?.element?.text || 
-                                         realState.action?.element?.resourceId || 
-                                         transition.actionTarget || 
-                                         'Unknown Element';
-                    
-                    // Update the real state with AI analysis
-                    updatedRecording[realStateIndex] = {
-                        ...realState,
-                        aiAnalysis: formatTransitionToMarkdown(transition, realState, actionType, elementTarget, realStateIndex, updatedRecording.length),
-                        aiAnalysisRaw: transition // Store the raw JSON data
+                    // Create a simplified transition for the first state
+                    const initialTransition = {
+                        fromActionTime: firstState.actionTime,
+                        toActionTime: firstState.actionTime,
+                        hasTransition: false, // No actual transition for first state
+                        transitionDescription: "Initial application state",
+                        technicalActionDescription: "Application startup",
+                        actionTarget: "Application",
+                        actionValue: null,
+                        stateName: "InitialState",
+                        isPageChanged: false,
+                        isSamePageDifferentState: false,
+                        currentPageName: "Initial Page",
+                        currentPageDescription: "The initial state of the application at the start of the recording session",
+                        inferredUserActivity: "Starting application session"
                     };
                     
-                    message.info(`Processed analysis for state ${realStateIndex + 1} of ${updatedRecording.length}`);
+                    // Format analysis for first state
+                    const actionType = firstState.action?.action || 'Application Start';
+                    const elementTarget = firstState.action?.element?.text || 
+                                      firstState.action?.element?.resourceId || 
+                                      'Application';
+                    
+                    // Update the first state
+                    updatedRecording[0] = {
+                        ...firstState,
+                        aiAnalysis: formatTransitionToMarkdown(initialTransition, firstState, actionType, elementTarget, 0, updatedRecording.length),
+                        aiAnalysisRaw: initialTransition
+                    };
+                    
+                    updatedStateIndices.add(0);
                 }
+                
+                // Check if any states were not updated and log them
+                const missingStateIndices = [];
+                for (let i = 0; i < updatedRecording.length; i++) {
+                    if (!updatedStateIndices.has(i)) {
+                        missingStateIndices.push(i);
+                        
+                        console.log(`Creating placeholder analysis for state ${i} (not updated by any transition)`);
+                        
+                        // Create a placeholder analysis for states that didn't get analyzed
+                        const state = updatedRecording[i];
+                        const actionType = state.action?.action || 'State Change';
+                        const elementTarget = state.action?.element?.text || 
+                                            state.action?.element?.resourceId || 
+                                            'Unknown Element';
+                        
+                        // Create placeholder transition data
+                        const placeholderTransition = {
+                            fromActionTime: state.actionTime,
+                            toActionTime: state.actionTime,
+                            hasTransition: false,
+                            transitionDescription: "Missing transition analysis - please reprocess",
+                            technicalActionDescription: "No analysis data available",
+                            actionTarget: elementTarget,
+                            actionValue: null,
+                            stateName: "MissingAnalysis",
+                            isPageChanged: false,
+                            isSamePageDifferentState: false,
+                            currentPageName: "Unknown page",
+                            currentPageDescription: "No analysis was generated for this state",
+                            inferredUserActivity: "Unknown activity"
+                        };
+                        
+                        // Update the state with placeholder data
+                        updatedRecording[i] = {
+                            ...state,
+                            aiAnalysis: formatTransitionToMarkdown(placeholderTransition, state, actionType, elementTarget, i, updatedRecording.length),
+                            aiAnalysisRaw: placeholderTransition
+                        };
+                    }
+                }
+                
+                // Log missing states
+                if (missingStateIndices.length > 0) {
+                    console.warn(`Added placeholder analysis for ${missingStateIndices.length} states: ${missingStateIndices.join(', ')}`);
+                    message.warning(`Some states (${missingStateIndices.length}) did not receive analysis. Added placeholders.`);
+                }
+                
+                // Generate final report
+                console.log("AI Analysis Processing Report:");
+                console.log(`- Total states: ${updatedRecording.length}`);
+                console.log(`- States with analysis: ${updatedRecording.length - missingStateIndices.length}`);
+                console.log(`- States with placeholders: ${missingStateIndices.length}`);
             }
             
             // Update the recording with AI analysis
             setDetailedRecording(updatedRecording);
+            
+            // Complete the progress
+            setAnalysisProgress(prev => ({
+                ...prev,
+                message: "Analysis complete",
+                percent: 100,
+                current: updatedRecording.length
+            }));
+            
+            // Show success message and after 2 seconds remove the progress indicator
+            message.success("AI analysis completed successfully");
+            setTimeout(() => {
+                setAnalysisProgress(prev => ({
+                    ...prev,
+                    isProcessing: false
+                }));
+            }, 2000);
             
             // If we have a selected entry, make sure we force a re-render
             if (selectedEntryIndex !== null) {
@@ -409,11 +681,17 @@ const RecordingView = ({
                 setSelectedEntryIndex(null);
                 setTimeout(() => setSelectedEntryIndex(currentIndex), 10);
             }
-            
-            message.success("Recording processed successfully with AI");
         } catch (error) {
-            message.error(`Failed to process recording with AI: ${error.message}`);
             console.error("Error processing with AI:", error);
+            
+            // Set progress as error
+            setAnalysisProgress(prev => ({
+                ...prev,
+                message: "Processing failed",
+                isProcessing: false
+            }));
+            
+            message.error(`Failed to process recording with AI: ${error.message}`);
         } finally {
             setProcessingAI(false);
         }
@@ -1013,13 +1291,13 @@ public void verifyFinalState() {
                 
                 {/* AI Processing Group */}
                 <Col>
-                    <Tooltip title="Process recording with AI to generate test code">
+                    <Tooltip title="Process recording with AI using parallel batches">
                         <Button
                             type="primary"
                             icon={<ThunderboltOutlined />}
                             onClick={handleProcessWithAI}
                             loading={processingAI}
-                            disabled={!hasRecordings}
+                            disabled={!hasRecordings || analysisProgress.isProcessing}
                             style={{ background: '#722ED1', borderColor: '#722ED1' }}
                         >
                             Process with AI
@@ -1048,6 +1326,22 @@ public void verifyFinalState() {
                         </Text>
                     </Space>
                 </Col>
+                <Col>
+                    <Space align="center" style={{ marginLeft: '16px' }}>
+                        <Tooltip title={hideNonTransitions ? "Show all states" : "Hide non-transition states"}>
+                            <Switch 
+                                checked={hideNonTransitions}
+                                onChange={setHideNonTransitions}
+                                checkedChildren={<FilterOutlined />}
+                                unCheckedChildren={<FilterOutlined />}
+                                disabled={!hasRecordings}
+                            />
+                        </Tooltip>
+                        <Text type="secondary">
+                            Hide Non-Transitions
+                        </Text>
+                    </Space>
+                </Col>
                 
                 {/* Stats Section */}
                 <Col flex="auto" style={{ textAlign: 'right' }}>
@@ -1061,6 +1355,70 @@ public void verifyFinalState() {
                                     <Divider type="vertical" />
                                     <Badge count={condensedCount} style={{ backgroundColor: '#faad14' }} />
                                     <Text type="secondary">Condensed</Text>
+                                </>
+                            )}
+                            
+                            {detailedRecording.some(state => state.aiAnalysisRaw) && (
+                                <>
+                                    <Divider type="vertical" />
+                                    <Badge 
+                                        count={detailedRecording.filter(state => state.aiAnalysisRaw?.hasTransition).length} 
+                                        style={{ backgroundColor: '#1890ff' }} 
+                                    />
+                                    <Text type="secondary">Transitions</Text>
+                                </>
+                            )}
+                            
+                            {/* AI Analysis Progress */}
+                            {analysisProgress.isProcessing && (
+                                <>
+                                    <Divider type="vertical" />
+                                    <div style={{ display: 'flex', alignItems: 'center', marginLeft: '8px' }}>
+                                        {/* Use the explicitly imported Progress component */}
+                                        <div style={{ 
+                                            width: 30, 
+                                            height: 30, 
+                                            borderRadius: '50%', 
+                                            background: '#f0f0f0',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            position: 'relative',
+                                            marginRight: '8px'
+                                        }}>
+                                            {/* Simple circular progress indicator */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                width: '100%',
+                                                height: '100%',
+                                                borderRadius: '50%',
+                                                background: `conic-gradient(#722ED1 ${analysisProgress.percent}%, transparent 0%)`,
+                                                transform: 'rotate(-90deg)'
+                                            }} />
+                                            <div style={{
+                                                position: 'absolute',
+                                                width: '80%',
+                                                height: '80%',
+                                                borderRadius: '50%',
+                                                background: '#fff',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                {analysisProgress.percent}%
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+                                                {analysisProgress.message || 'Processing...'}
+                                            </Text>
+                                            <Text strong style={{ fontSize: '12px' }}>
+                                                {analysisProgress.current} of {analysisProgress.total}
+                                            </Text>
+                                        </div>
+                                    </div>
                                 </>
                             )}
                         </Space>
@@ -1139,6 +1497,1075 @@ public void verifyFinalState() {
                     }}
                     items={[
                     {
+                        key: 'transitions',
+                        label: 'Transitions',
+                        children: loading ? (
+                            <div style={{ textAlign: 'center', padding: '40px' }}>
+                                <Spin />
+                                <div style={{ marginTop: '16px' }}>
+                                    <Text type="secondary">Processing transitions...</Text>
+                                </div>
+                            </div>
+                        ) : detailedRecording.length > 0 ? (
+                            <div className="recording-view-detailed-container" style={{ 
+                                display: 'flex', 
+                                height: 'calc(100% - 8px)', 
+                                overflow: 'hidden',
+                                minHeight: '500px',
+                                flex: 1,
+                                margin: 0,
+                                position: 'relative'
+                            }}>
+                                {/* Column 1 - Transitions list */}
+                                <div style={{ 
+                                    width: columnWidths.list, 
+                                    borderRight: '1px solid #f0f0f0', 
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden'
+                                }}>
+                                    <div style={{ 
+                                        padding: '12px 16px',
+                                        borderBottom: '1px solid #f0f0f0',
+                                        backgroundColor: '#fafafa',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        height: 'auto'
+                                    }}>
+                                        <div style={{ 
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <Space>
+                                                <Badge 
+                                                    count={detailedRecording.length > 1 ? detailedRecording.length - 1 : 0} 
+                                                    style={{ backgroundColor: '#1890ff' }}
+                                                />
+                                                <Text strong>State Transitions</Text>
+                                            </Space>
+                                            <Space>
+                                                <Tooltip title={showCondensed ? "Hide condensed states" : "Show condensed states"}>
+                                                    <Switch 
+                                                        checked={showCondensed}
+                                                        onChange={setShowCondensed}
+                                                        checkedChildren={<EyeOutlined />}
+                                                        unCheckedChildren={<EyeInvisibleOutlined />}
+                                                        size="small"
+                                                    />
+                                                </Tooltip>
+                                                <Tooltip title={hideNonTransitions ? "Show all states" : "Hide non-transition states"}>
+                                                    <Switch 
+                                                        checked={hideNonTransitions}
+                                                        onChange={setHideNonTransitions}
+                                                        checkedChildren={<FilterOutlined />}
+                                                        unCheckedChildren={<FilterOutlined />}
+                                                        size="small"
+                                                    />
+                                                </Tooltip>
+                                            </Space>
+                                        </div>
+                                        
+                                        {/* Playback controls */}
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            backgroundColor: '#f5f5f5',
+                                            padding: '6px 8px',
+                                            borderRadius: '4px'
+                                        }}>
+                                            <Space>
+                                                <Tooltip title={isPlaying ? "Pause playback" : "Start playback"}>
+                                                    <Button
+                                                        type="primary"
+                                                        size="small"
+                                                        icon={isPlaying ? <PauseCircleOutlined /> : <VideoCameraOutlined />}
+                                                        onClick={isPlaying ? pausePlayback : startPlayback}
+                                                        disabled={detailedRecording.length <= 1}
+                                                    >
+                                                        {isPlaying ? "Pause" : "Play"}
+                                                    </Button>
+                                                </Tooltip>
+                                                <Tooltip title="Stop playback and return to first state">
+                                                    <Button
+                                                        size="small"
+                                                        icon={<ClearOutlined />}
+                                                        onClick={stopPlayback}
+                                                        disabled={detailedRecording.length <= 1 || (!isPlaying && selectedEntryIndex === 0)}
+                                                    >
+                                                        Stop
+                                                    </Button>
+                                                </Tooltip>
+                                            </Space>
+                                            
+                                            <Space>
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>Speed:</Text>
+                                                <Select
+                                                    size="small"
+                                                    value={playbackSpeed}
+                                                    onChange={(value) => setPlaybackSpeed(value)}
+                                                    style={{ width: '100px' }}
+                                                    disabled={isPlaying}
+                                                >
+                                                    <Option value={2000}>Slow</Option>
+                                                    <Option value={1000}>Normal</Option>
+                                                    <Option value={500}>Fast</Option>
+                                                    <Option value={250}>Very Fast</Option>
+                                                </Select>
+                                            </Space>
+                                        </div>
+                                    </div>
+                                    <div 
+                                        className="custom-scrollbar force-scrollbar"
+                                        style={{ 
+                                            height: 'calc(100% - 95px)', // Subtract header height including playback controls
+                                            padding: '0 2px',
+                                            background: '#fafafa'
+                                        }}
+                                    >
+                                        {/* Generate transition items - for each consecutive pair of states */}
+                                        {detailedRecording.length > 1 && 
+                                            Array.from({ length: detailedRecording.length - 1 }, (_, i) => {
+                                                // For each index i, we're showing the transition from state i to i+1
+                                                const fromState = detailedRecording[i];
+                                                const toState = detailedRecording[i + 1];
+                                                
+                                                // Skip if either state is condensed and we're not showing condensed states
+                                                if (!showCondensed && (fromState.isCondensed || toState.isCondensed)) {
+                                                    return null;
+                                                }
+                                                
+                                                // Skip if hiding non-transitions and this state doesn't have a significant transition
+                                                if (hideNonTransitions && toState.aiAnalysisRaw && !toState.aiAnalysisRaw.hasTransition) {
+                                                    return null;
+                                                }
+                                                
+                                                // Check if this transition is selected (if either from or to state is selected)
+                                                // Check if this transition is selected or is currently being played back
+                                                const isSelected = selectedEntryIndex === i || selectedEntryIndex === i + 1;
+                                                const isPlayingCurrent = isPlaying && selectedEntryIndex === i + 1;
+                                                
+                                                // Get transition info from the TO state's AI analysis
+                                                const hasAiAnalysis = !!toState.aiAnalysisRaw;
+                                                
+                                                // Determine if this is a significant transition
+                                                const hasTransition = toState.aiAnalysisRaw?.hasTransition || false;
+                                                const isPageChanged = toState.aiAnalysisRaw?.isPageChanged || false;
+                                                const isStateChanged = toState.aiAnalysisRaw?.isSamePageDifferentState || false;
+                                                
+                                                // Get action info
+                                                const actionType = toState.action?.action || fromState.action?.action || 'State Change';
+                                                const elementTarget = toState.action?.element?.text || 
+                                                                    toState.action?.element?.resourceId || 
+                                                                    (toState.aiAnalysisRaw?.actionTarget || 'Unknown Element');
+                                                
+                                                // Transition description
+                                                let transitionDescription = toState.aiAnalysisRaw?.transitionDescription || 
+                                                                        `${actionType} on ${elementTarget}`;
+                                                                        
+                                                // Format state names
+                                                const fromStateName = fromState.aiAnalysisRaw?.stateName || 'State';
+                                                const toStateName = toState.aiAnalysisRaw?.stateName || 'State';
+                                                
+                                                // Determine transition item color based on transition type
+                                                let statusColor = '#1890ff'; // Default blue
+                                                if (hasAiAnalysis) {
+                                                    if (isPageChanged) statusColor = '#52c41a'; // Green for page changes
+                                                    else if (isStateChanged) statusColor = '#722ED1'; // Purple for state changes
+                                                    else if (hasTransition) statusColor = '#faad14'; // Orange for other transitions
+                                                }
+                                                
+                                                return (
+                                                    <div 
+                                                        key={`transition-${i}`}
+                                                        onClick={() => setSelectedEntryIndex(i + 1)} // Select the TO state when clicking on a transition
+                                                        className={isPlayingCurrent ? 'playback-active' : ''}
+                                                        style={{
+                                                            padding: '10px 12px',
+                                                            borderLeft: isSelected ? `3px solid ${statusColor}` : '3px solid transparent',
+                                                            borderBottom: '1px solid #f0f0f0',
+                                                            backgroundColor: isSelected ? '#f9f9f9' : 'transparent',
+                                                            cursor: 'pointer',
+                                                            opacity: (fromState.isCondensed || toState.isCondensed) ? 0.8 : 1,
+                                                            transition: 'all 0.2s ease',
+                                                            minHeight: '60px',
+                                                            display: 'flex',
+                                                            position: 'relative',
+                                                            overflow: 'hidden'
+                                                        }}
+                                                    >
+                                                        <div style={{ 
+                                                            width: '24px', 
+                                                            height: '24px', 
+                                                            borderRadius: '50%', 
+                                                            backgroundColor: isSelected ? statusColor : '#f0f0f0',
+                                                            color: isSelected ? '#fff' : '#595959',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '12px',
+                                                            fontWeight: 'bold',
+                                                            marginRight: '8px',
+                                                            flexShrink: 0,
+                                                            marginTop: '2px'
+                                                        }}>
+                                                            {i + 1}
+                                                        </div>
+                                                        
+                                                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                                                            {/* Transition description */}
+                                                            <div style={{ 
+                                                                whiteSpace: 'nowrap',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                fontWeight: 500,
+                                                                color: statusColor,
+                                                                fontSize: '12px',
+                                                                lineHeight: '1.4',
+                                                                marginBottom: '4px'
+                                                            }}>
+                                                                {transitionDescription}
+                                                            </div>
+                                                            
+                                                            {/* From/To state names */}
+                                                            {hasAiAnalysis && (
+                                                                <div style={{ 
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    marginBottom: '4px',
+                                                                    fontSize: '11px',
+                                                                }}>
+                                                                    <span style={{ color: '#8c8c8c' }}>
+                                                                        <strong>{fromStateName}</strong>
+                                                                    </span>
+                                                                    <span style={{ 
+                                                                        margin: '0 4px', 
+                                                                        color: statusColor,
+                                                                        fontSize: '14px' 
+                                                                    }}>
+                                                                        →
+                                                                    </span>
+                                                                    <span style={{ color: statusColor, fontWeight: 500 }}>
+                                                                        <strong>{toStateName}</strong>
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {/* Timestamp */}
+                                                            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                                                                {new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '4px', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {/* Playback indicator */}
+                                                            {isPlayingCurrent && (
+                                                                <Badge 
+                                                                    status="processing" 
+                                                                    text={<Text style={{ fontSize: '11px', color: '#1890ff' }}>Playing</Text>} 
+                                                                    style={{ marginBottom: '2px' }}
+                                                                />
+                                                            )}
+                                                            
+                                                            {/* Transition type indicators */}
+                                                            {hasAiAnalysis && (
+                                                                <>
+                                                                    {isPageChanged && (
+                                                                        <Badge 
+                                                                            status="success" 
+                                                                            text={<Text style={{ fontSize: '11px' }}>Page Change</Text>} 
+                                                                            style={{ marginBottom: '2px' }}
+                                                                        />
+                                                                    )}
+                                                                    {isStateChanged && (
+                                                                        <Badge 
+                                                                            status="processing" 
+                                                                            text={<Text style={{ fontSize: '11px' }}>State Change</Text>} 
+                                                                            style={{ marginBottom: '2px' }}
+                                                                        />
+                                                                    )}
+                                                                    {hasTransition && !isPageChanged && !isStateChanged && (
+                                                                        <Badge 
+                                                                            status="warning" 
+                                                                            text={<Text style={{ fontSize: '11px' }}>UI Change</Text>} 
+                                                                            style={{ marginBottom: '2px' }}
+                                                                        />
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                            
+                                                            {/* Condensed indicator */}
+                                                            {(fromState.isCondensed || toState.isCondensed) && (
+                                                                <Badge 
+                                                                    status="default" 
+                                                                    text={<Text style={{ fontSize: '11px', color: '#d9d9d9' }}>Condensed</Text>} 
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }).filter(Boolean) // Remove null entries (filtered condensed states)
+                                        }
+                                    </div>
+                                </div>
+                                
+                                {/* Resizable divider between list and screenshot */}
+                                <div 
+                                    className="resize-handle resize-handle-list"
+                                    style={{
+                                        width: '5px',
+                                        cursor: 'col-resize',
+                                        background: '#f0f0f0',
+                                        position: 'relative',
+                                        zIndex: 1,
+                                        transition: 'background-color 0.2s',
+                                        boxShadow: isResizing === 'list-screenshot' ? '0 0 5px rgba(24, 144, 255, 0.5)' : 'none'
+                                    }}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setIsResizing('list-screenshot');
+                                    }}
+                                >
+                                    <div 
+                                        style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '1px',
+                                            height: '20px',
+                                            background: '#d9d9d9'
+                                        }}
+                                    />
+                                </div>
+                                
+                                {selectedEntryIndex !== null && detailedRecording[selectedEntryIndex] ? (
+                                    <>
+                                        {/* Column 2 - Screenshot */}
+                                        <div style={{ 
+                                            width: columnWidths.screenshot,
+                                            borderRight: '1px solid #f0f0f0',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                padding: '12px 16px',
+                                                borderBottom: '1px solid #f0f0f0',
+                                                backgroundColor: '#fafafa',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                height: '48px'
+                                            }}>
+                                                <Space>
+                                                    <Badge 
+                                                        count={selectedEntryIndex + 1} 
+                                                        style={{ backgroundColor: '#1890ff' }}
+                                                    />
+                                                    <Text strong>Screenshot</Text>
+                                                    {detailedRecording[selectedEntryIndex].isCondensed && (
+                                                        <Badge 
+                                                            count="CONDENSED" 
+                                                            style={{ backgroundColor: '#faad14', fontSize: '12px' }}
+                                                        />
+                                                    )}
+                                                </Space>
+                                                
+                                                <Space>
+                                                    <Tooltip title="Previous entry">
+                                                        <Button 
+                                                            type="text" 
+                                                            icon={<ArrowLeftOutlined />}
+                                                            disabled={selectedEntryIndex === 0}
+                                                            onClick={() => setSelectedEntryIndex(selectedEntryIndex - 1)}
+                                                            size="small"
+                                                        />
+                                                    </Tooltip>
+                                                    <Tooltip title="Next entry">
+                                                        <Button 
+                                                            type="text" 
+                                                            icon={<ArrowLeftOutlined style={{ transform: 'rotate(180deg)' }} />}
+                                                            disabled={selectedEntryIndex === detailedRecording.length - 1}
+                                                            onClick={() => setSelectedEntryIndex(selectedEntryIndex + 1)}
+                                                            size="small"
+                                                        />
+                                                    </Tooltip>
+                                                    
+                                                    {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 && (
+                                                        <Tooltip title="Download screenshot">
+                                                            <Button 
+                                                                type="text" 
+                                                                icon={<DownloadOutlined />}
+                                                                size="small"
+                                                                onClick={() => {
+                                                                    const entry = detailedRecording[selectedEntryIndex];
+                                                                    const screenshot = entry.deviceArtifacts?.screenshotBase64;
+                                                                    const link = document.createElement('a');
+                                                                    link.href = `data:image/png;base64,${screenshot}`;
+                                                                    link.download = `screenshot-${selectedEntryIndex + 1}-${new Date(entry.actionTime).getTime()}.png`;
+                                                                    link.click();
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                </Space>
+                                            </div>
+                                            
+                                            <div style={{ 
+                                                padding: '0', 
+                                                height: 'calc(100% - 48px)', // Subtract header height
+                                                minHeight: '300px', // Ensure minimum height for container
+                                                textAlign: 'center',
+                                                background: '#ffffff',
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                overflow: 'hidden'
+                                            }}>
+                                                {detailedRecording[selectedEntryIndex].deviceArtifacts?.screenshotBase64 ? (
+                                                    <img 
+                                                        src={`data:image/png;base64,${detailedRecording[selectedEntryIndex].deviceArtifacts.screenshotBase64}`} 
+                                                        alt={`Screenshot at ${new Date(detailedRecording[selectedEntryIndex].actionTime).toLocaleString()}`}
+                                                        style={{ 
+                                                            maxWidth: '100%',
+                                                            height: '100%', 
+                                                            objectFit: 'contain',
+                                                            border: '1px solid #d9d9d9',
+                                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        flexDirection: 'column', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        height: '100%',
+                                                        color: '#bfbfbf'
+                                                    }}>
+                                                        <FileImageOutlined style={{ fontSize: '64px', marginBottom: '16px' }} />
+                                                        <Text type="secondary">No screenshot available</Text>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Resizable divider between screenshot and details */}
+                                        <div 
+                                            className="resize-handle resize-handle-details"
+                                            style={{
+                                                width: '5px',
+                                                cursor: 'col-resize',
+                                                background: '#f0f0f0',
+                                                position: 'relative',
+                                                zIndex: 1,
+                                                transition: 'background-color 0.2s',
+                                                boxShadow: isResizing === 'screenshot-details' ? '0 0 5px rgba(24, 144, 255, 0.5)' : 'none'
+                                            }}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                setIsResizing('screenshot-details');
+                                            }}
+                                        >
+                                            <div 
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '50%',
+                                                    left: '50%',
+                                                    transform: 'translate(-50%, -50%)',
+                                                    width: '1px',
+                                                    height: '20px',
+                                                    background: '#d9d9d9'
+                                                }}
+                                            />
+                                        </div>
+                                        
+                                        {/* Column 3 - Transition Details */}
+                                        <div style={{ 
+                                            width: columnWidths.details,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                padding: '12px 16px',
+                                                borderBottom: '1px solid #f0f0f0',
+                                                backgroundColor: '#fafafa',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                height: '48px',
+                                                flexShrink: 0
+                                            }}>
+                                                <Space>
+                                                    <Badge 
+                                                        count={selectedEntryIndex} 
+                                                        style={{ backgroundColor: '#1890ff' }}
+                                                    />
+                                                    <Text strong>Transition Details</Text>
+                                                </Space>
+                                                
+                                                {selectedEntryIndex > 0 && detailedRecording[selectedEntryIndex]?.aiAnalysisRaw && (
+                                                    <div>
+                                                        {detailedRecording[selectedEntryIndex].aiAnalysisRaw.isPageChanged && (
+                                                            <Badge 
+                                                                status="success" 
+                                                                text={<Text strong style={{ color: '#52c41a' }}>Page Change</Text>}
+                                                            />
+                                                        )}
+                                                        {detailedRecording[selectedEntryIndex].aiAnalysisRaw.isSamePageDifferentState && !detailedRecording[selectedEntryIndex].aiAnalysisRaw.isPageChanged && (
+                                                            <Badge 
+                                                                status="processing" 
+                                                                text={<Text strong style={{ color: '#1890ff' }}>State Change</Text>}
+                                                            />
+                                                        )}
+                                                        {detailedRecording[selectedEntryIndex].aiAnalysisRaw.hasTransition && 
+                                                         !detailedRecording[selectedEntryIndex].aiAnalysisRaw.isPageChanged && 
+                                                         !detailedRecording[selectedEntryIndex].aiAnalysisRaw.isSamePageDifferentState && (
+                                                            <Badge 
+                                                                status="warning" 
+                                                                text={<Text strong style={{ color: '#faad14' }}>UI Change</Text>}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div style={{ flex: 1, overflow: 'hidden', maxHeight: 'calc(100% - 48px)' }}>
+                                                {detailedRecording[selectedEntryIndex].aiAnalysisRaw ? (
+                                                    <div className="custom-scrollbar force-scrollbar" style={{ 
+                                                        padding: '16px', 
+                                                        height: 'calc(100% - 32px)',
+                                                        background: '#ffffff'
+                                                    }}>
+                                                        <Tabs 
+                                                            defaultActiveKey="analysis" 
+                                                            type="card"
+                                                            style={{ marginBottom: '16px' }}
+                                                            items={[
+                                                                {
+                                                                    key: 'analysis',
+                                                                    label: (
+                                                                        <span>
+                                                                            <ExperimentOutlined style={{ marginRight: '4px' }} />
+                                                                            Transition Analysis
+                                                                        </span>
+                                                                    ),
+                                                                    children: (
+                                                                        <Card 
+                                                                            style={{ marginBottom: '16px' }}
+                                                                            headStyle={{ backgroundColor: '#f9f0ff', borderBottom: '1px solid #d3adf7' }}
+                                                                            bodyStyle={{ padding: '16px' }}
+                                                                            bordered={false}
+                                                                        >
+                                                            <Space direction="vertical" style={{ width: '100%' }}>
+                                                                <div>
+                                                                    <Text strong>Transition Description:</Text>
+                                                                    <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                        <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.transitionDescription}</Text>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <Text strong>Technical Action:</Text>
+                                                                    <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                        <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.technicalActionDescription}</Text>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <Row gutter={16}>
+                                                                    <Col span={12}>
+                                                                        <Text strong>Element Target:</Text>
+                                                                        <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                            <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.actionTarget || 'None'}</Text>
+                                                                        </div>
+                                                                    </Col>
+                                                                    <Col span={12}>
+                                                                        <Text strong>Input Value:</Text>
+                                                                        <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                            <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.actionValue || 'None'}</Text>
+                                                                        </div>
+                                                                    </Col>
+                                                                </Row>
+                                                                
+                                                                <Divider style={{ margin: '12px 0' }} />
+                                                                
+                                                                <div>
+                                                                    <Text strong>State Information:</Text>
+                                                                    <Row gutter={16} style={{ marginTop: '8px' }}>
+                                                                        <Col span={12}>
+                                                                            <Space>
+                                                                                <Badge status="processing" />
+                                                                                <Text>State Name:</Text>
+                                                                            </Space>
+                                                                            <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                                <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.stateName || 'Unknown'}</Text>
+                                                                            </div>
+                                                                        </Col>
+                                                                        <Col span={12}>
+                                                                            <Space>
+                                                                                <Badge status="processing" />
+                                                                                <Text>Page Name:</Text>
+                                                                            </Space>
+                                                                            <div style={{ marginTop: '4px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
+                                                                                <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.currentPageName || 'Unknown'}</Text>
+                                                                            </div>
+                                                                        </Col>
+                                                                    </Row>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <Text strong>Transition Type:</Text>
+                                                                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                                                                        <Badge 
+                                                                            status={detailedRecording[selectedEntryIndex].aiAnalysisRaw.isPageChanged ? "success" : "default"} 
+                                                                            text={
+                                                                                <Text 
+                                                                                    style={{ 
+                                                                                        color: detailedRecording[selectedEntryIndex].aiAnalysisRaw.isPageChanged ? '#52c41a' : 'rgba(0, 0, 0, 0.45)' 
+                                                                                    }}
+                                                                                >
+                                                                                    Page Change
+                                                                                </Text>
+                                                                            } 
+                                                                        />
+                                                                        <Badge 
+                                                                            status={detailedRecording[selectedEntryIndex].aiAnalysisRaw.isSamePageDifferentState ? "processing" : "default"} 
+                                                                            text={
+                                                                                <Text 
+                                                                                    style={{ 
+                                                                                        color: detailedRecording[selectedEntryIndex].aiAnalysisRaw.isSamePageDifferentState ? '#1890ff' : 'rgba(0, 0, 0, 0.45)' 
+                                                                                    }}
+                                                                                >
+                                                                                    State Change
+                                                                                </Text>
+                                                                            } 
+                                                                        />
+                                                                        <Badge 
+                                                                            status={detailedRecording[selectedEntryIndex].aiAnalysisRaw.hasTransition ? "warning" : "default"} 
+                                                                            text={
+                                                                                <Text 
+                                                                                    style={{ 
+                                                                                        color: detailedRecording[selectedEntryIndex].aiAnalysisRaw.hasTransition ? '#faad14' : 'rgba(0, 0, 0, 0.45)' 
+                                                                                    }}
+                                                                                >
+                                                                                    Has Transition
+                                                                                </Text>
+                                                                            } 
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <Divider style={{ margin: '12px 0' }} />
+                                                                
+                                                                <div>
+                                                                    <Text strong>User Activity:</Text>
+                                                                    <div style={{ marginTop: '4px', padding: '12px', background: '#f9f0ff', borderRadius: '4px', border: '1px solid #d3adf7' }}>
+                                                                        <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.inferredUserActivity || 'Unknown activity'}</Text>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <Text strong>Page Description:</Text>
+                                                                    <div style={{ marginTop: '4px', padding: '12px', background: '#f9f0ff', borderRadius: '4px', border: '1px solid #d3adf7' }}>
+                                                                        <Text>{detailedRecording[selectedEntryIndex].aiAnalysisRaw.currentPageDescription || 'No description available'}</Text>
+                                                                    </div>
+                                                                </div>
+                                                            </Space>
+                                                        </Card>
+                                                                    )
+                                                                },
+                                                                {
+                                                                    key: 'flow',
+                                                                    label: (
+                                                                        <span>
+                                                                            <OrderedListOutlined style={{ marginRight: '4px' }} />
+                                                                            Flow Steps
+                                                                        </span>
+                                                                    ),
+                                                                    children: (
+                                                                        <Card 
+                                                                            style={{ marginBottom: '16px' }}
+                                                                            headStyle={{ backgroundColor: '#e6f7ff', borderBottom: '1px solid #91d5ff' }}
+                                                                            bodyStyle={{ padding: '16px' }}
+                                                                            bordered={false}
+                                                                            title={
+                                                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                                                    <OrderedListOutlined style={{ color: '#1890ff', marginRight: '8px' }} />
+                                                                                    <span style={{ color: '#1890ff' }}>Complete User Flow</span>
+                                                                                </div>
+                                                                            }
+                                                                        >
+                                                                            <div className="custom-scrollbar" style={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto', padding: '16px', width: '100%' }}>
+                                                                                <Timeline mode="left" style={{ width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+                                                                                    {detailedRecording.length > 1 && 
+                                                                                        Array.from({ length: detailedRecording.length - 1 }, (_, i) => {
+                                                                                            const toState = detailedRecording[i + 1];
+                                                                                            
+                                                                                            // Skip if condensed and we're not showing condensed states
+                                                                                            if (!showCondensed && toState.isCondensed) {
+                                                                                                return null;
+                                                                                            }
+                                                                                            
+                                                                                            // Skip if hiding non-transitions and this state doesn't have a significant transition
+                                                                                            if (hideNonTransitions && toState.aiAnalysisRaw && !toState.aiAnalysisRaw.hasTransition) {
+                                                                                                return null;
+                                                                                            }
+                                                                                            
+                                                                                            // Get transition info from the TO state's AI analysis
+                                                                                            const hasAiAnalysis = !!toState.aiAnalysisRaw;
+                                                                                            
+                                                                                            // Get action info
+                                                                                            const actionType = toState.action?.action || 'State Change';
+                                                                                            const elementTarget = toState.action?.element?.text || 
+                                                                                                                toState.action?.element?.resourceId || 
+                                                                                                                (toState.aiAnalysisRaw?.actionTarget || 'Unknown Element');
+                                                                                            
+                                                                                            // Transition description
+                                                                                            let transitionDescription = toState.aiAnalysisRaw?.transitionDescription || 
+                                                                                                                     `${actionType} on ${elementTarget}`;
+                                                                                            
+                                                                                            // Determine color based on transition type
+                                                                                            let dotColor = '#1890ff'; // Default blue
+                                                                                            if (hasAiAnalysis) {
+                                                                                                if (toState.aiAnalysisRaw.isPageChanged) dotColor = '#52c41a'; // Green for page changes
+                                                                                                else if (toState.aiAnalysisRaw.isSamePageDifferentState) dotColor = '#722ED1'; // Purple for state changes
+                                                                                                else if (toState.aiAnalysisRaw.hasTransition) dotColor = '#faad14'; // Orange for other transitions
+                                                                                            }
+                                                                                            
+                                                                                            // Is this the current step?
+                                                                                            const isCurrentStep = selectedEntryIndex === i + 1;
+                                                                                            // Is this step currently being played back?
+                                                                                            const isPlayingCurrent = isPlaying && selectedEntryIndex === i + 1;
+                                                                                            
+                                                                                            return (
+                                                                                                <Timeline.Item 
+                                                                                                    key={`step-${i}`}
+                                                                                                    color={dotColor}
+                                                                                                    dot={<div style={{ 
+                                                                                                        width: '16px', 
+                                                                                                        height: '16px', 
+                                                                                                        borderRadius: '50%', 
+                                                                                                        background: dotColor,
+                                                                                                        border: isCurrentStep ? '2px solid #fff' : 'none',
+                                                                                                        boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
+                                                                                                    }} />}
+                                                                                                    label={<div style={{ minWidth: '120px', textAlign: 'right' }}><Text type="secondary">{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</Text></div>}
+                                                                                                    position="left"
+                                                                                                >
+                                                                                                    <Card
+                                                                                                        style={{ 
+                                                                                                            marginBottom: '12px',
+                                                                                                            borderColor: isCurrentStep ? '#adc6ff' : '#f0f0f0',
+                                                                                                            backgroundColor: isCurrentStep ? '#f0f5ff' : '#fff',
+                                                                                                            boxShadow: isCurrentStep ? '0 2px 8px rgba(24, 144, 255, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                                                                                                            transition: 'all 0.3s ease',
+                                                                                                            width: '100%',
+                                                                                                            maxWidth: '750px'
+                                                                                                        }}
+                                                                                                        hoverable
+                                                                                                        size="small"
+                                                                                                        onClick={() => setSelectedEntryIndex(i + 1)}
+                                                                                                        title={
+                                                                                                            <div style={{ 
+                                                                                                                display: 'flex', 
+                                                                                                                justifyContent: 'space-between', 
+                                                                                                                alignItems: 'center'
+                                                                                                            }}>
+                                                                                                                <Text strong style={{ fontSize: '14px', color: dotColor }}>
+                                                                                                                    {i+1}. {transitionDescription}
+                                                                                                                </Text>
+                                                                                                                
+                                                                                                                <div>
+                                                                                                                    {isPlayingCurrent && (
+                                                                                                                        <Badge 
+                                                                                                                            status="processing" 
+                                                                                                                            text={<Text style={{ fontSize: '12px', color: '#1890ff' }}>Playing</Text>} 
+                                                                                                                            style={{ marginRight: '8px' }}
+                                                                                                                        />
+                                                                                                                    )}
+                                                                                                                    {toState.isCondensed && (
+                                                                                                                        <Badge 
+                                                                                                                            status="default" 
+                                                                                                                            text={<Text style={{ fontSize: '12px', color: '#d9d9d9' }}>Condensed</Text>} 
+                                                                                                                        />
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        }
+                                                                                                    >
+                                                                                                        <Collapse 
+                                                                                                            ghost
+                                                                                                            bordered={false}
+                                                                                                            defaultActiveKey={[]}
+                                                                                                            style={{ marginTop: '-12px', marginLeft: '-12px', marginRight: '-12px' }}
+                                                                                                        >
+                                                                                                            <Collapse.Panel 
+                                                                                                                key="details" 
+                                                                                                                header={
+                                                                                                                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                                                                        Show details
+                                                                                                                    </Text>
+                                                                                                                }
+                                                                                                                style={{ borderBottom: 'none' }}
+                                                                                                            >
+                                                                                                                <div style={{ padding: '8px 0' }}>
+                                                                                                                    {/* Technical description */}
+                                                                                                                    {hasAiAnalysis && toState.aiAnalysisRaw.technicalActionDescription && (
+                                                                                                                        <div style={{ 
+                                                                                                                            padding: '8px', 
+                                                                                                                            backgroundColor: '#f9f9f9', 
+                                                                                                                            borderRadius: '4px',
+                                                                                                                            marginBottom: '12px',
+                                                                                                                            fontSize: '13px'
+                                                                                                                        }}>
+                                                                                                                            <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                Technical Action:
+                                                                                                                            </Text>
+                                                                                                                            <Text type="secondary">{toState.aiAnalysisRaw.technicalActionDescription}</Text>
+                                                                                                                        </div>
+                                                                                                                    )}
+                                                                                                                    
+                                                                                                                    {/* Element Information */}
+                                                                                                                    {hasAiAnalysis && toState.aiAnalysisRaw.actionTarget && (
+                                                                                                                        <div style={{ marginBottom: '12px' }}>
+                                                                                                                            <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                Element Target:
+                                                                                                                            </Text>
+                                                                                                                            <div style={{ 
+                                                                                                                                padding: '6px 8px', 
+                                                                                                                                backgroundColor: '#f9f9f9', 
+                                                                                                                                borderRadius: '4px',
+                                                                                                                                fontSize: '13px'
+                                                                                                                            }}>
+                                                                                                                                <Text code>{toState.aiAnalysisRaw.actionTarget}</Text>
+                                                                                                                            </div>
+                                                                                                                        </div>
+                                                                                                                    )}
+                                                                                                                    
+                                                                                                                    {/* Input Value */}
+                                                                                                                    {hasAiAnalysis && toState.aiAnalysisRaw.actionValue && (
+                                                                                                                        <div style={{ marginBottom: '12px' }}>
+                                                                                                                            <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                Input Value:
+                                                                                                                            </Text>
+                                                                                                                            <div style={{ 
+                                                                                                                                padding: '6px 8px', 
+                                                                                                                                backgroundColor: '#f9f9f9', 
+                                                                                                                                borderRadius: '4px',
+                                                                                                                                fontSize: '13px'
+                                                                                                                            }}>
+                                                                                                                                <Text code>{toState.aiAnalysisRaw.actionValue}</Text>
+                                                                                                                            </div>
+                                                                                                                        </div>
+                                                                                                                    )}
+                                                                                                                    
+                                                                                                                    {/* XPath information if available */}
+                                                                                                                    {toState.action?.element?.xpath && (
+                                                                                                                        <div style={{ marginBottom: '12px' }}>
+                                                                                                                            <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                Element XPath:
+                                                                                                                            </Text>
+                                                                                                                            <div style={{ 
+                                                                                                                                padding: '6px 8px', 
+                                                                                                                                backgroundColor: '#f9f9f9', 
+                                                                                                                                borderRadius: '4px',
+                                                                                                                                fontSize: '13px',
+                                                                                                                                maxWidth: '100%',
+                                                                                                                                overflow: 'auto'
+                                                                                                                            }}>
+                                                                                                                                <Text code copyable ellipsis>{toState.action.element.xpath}</Text>
+                                                                                                                            </div>
+                                                                                                                        </div>
+                                                                                                                    )}
+                                                                                                                    
+                                                                                                                    {/* State and Page information */}
+                                                                                                                    <Row gutter={16}>
+                                                                                                                        {hasAiAnalysis && toState.aiAnalysisRaw.stateName && (
+                                                                                                                            <Col span={12}>
+                                                                                                                                <div style={{ marginBottom: '12px' }}>
+                                                                                                                                    <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                        State:
+                                                                                                                                    </Text>
+                                                                                                                                    <div style={{ 
+                                                                                                                                        padding: '6px 8px', 
+                                                                                                                                        backgroundColor: '#f0f5ff', 
+                                                                                                                                        borderRadius: '4px',
+                                                                                                                                        borderLeft: '3px solid #1890ff',
+                                                                                                                                        fontSize: '13px'
+                                                                                                                                    }}>
+                                                                                                                                        <Text>{toState.aiAnalysisRaw.stateName}</Text>
+                                                                                                                                    </div>
+                                                                                                                                </div>
+                                                                                                                            </Col>
+                                                                                                                        )}
+                                                                                                                        
+                                                                                                                        {hasAiAnalysis && toState.aiAnalysisRaw.currentPageName && (
+                                                                                                                            <Col span={12}>
+                                                                                                                                <div style={{ marginBottom: '12px' }}>
+                                                                                                                                    <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                                        Page:
+                                                                                                                                    </Text>
+                                                                                                                                    <div style={{ 
+                                                                                                                                        padding: '6px 8px', 
+                                                                                                                                        backgroundColor: '#f6ffed', 
+                                                                                                                                        borderRadius: '4px',
+                                                                                                                                        borderLeft: '3px solid #52c41a',
+                                                                                                                                        fontSize: '13px'
+                                                                                                                                    }}>
+                                                                                                                                        <Text>{toState.aiAnalysisRaw.currentPageName}</Text>
+                                                                                                                                    </div>
+                                                                                                                                </div>
+                                                                                                                            </Col>
+                                                                                                                        )}
+                                                                                                                    </Row>
+                                                                                                                    
+                                                                                                                    {/* Transition type indicators */}
+                                                                                                                    <div style={{ marginBottom: '12px' }}>
+                                                                                                                        <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                            Transition Type:
+                                                                                                                        </Text>
+                                                                                                                        <Space>
+                                                                                                                            <Badge 
+                                                                                                                                status={toState.aiAnalysisRaw?.isPageChanged ? "success" : "default"} 
+                                                                                                                                text={<Text style={{ fontSize: '12px', color: toState.aiAnalysisRaw?.isPageChanged ? '#52c41a' : '#00000073' }}>Page Change</Text>} 
+                                                                                                                            />
+                                                                                                                            <Badge 
+                                                                                                                                status={toState.aiAnalysisRaw?.isSamePageDifferentState ? "processing" : "default"} 
+                                                                                                                                text={<Text style={{ fontSize: '12px', color: toState.aiAnalysisRaw?.isSamePageDifferentState ? '#1890ff' : '#00000073' }}>State Change</Text>} 
+                                                                                                                            />
+                                                                                                                            <Badge 
+                                                                                                                                status={toState.aiAnalysisRaw?.hasTransition && !toState.aiAnalysisRaw?.isPageChanged && !toState.aiAnalysisRaw?.isSamePageDifferentState ? "warning" : "default"} 
+                                                                                                                                text={<Text style={{ fontSize: '12px', color: toState.aiAnalysisRaw?.hasTransition && !toState.aiAnalysisRaw?.isPageChanged && !toState.aiAnalysisRaw?.isSamePageDifferentState ? '#faad14' : '#00000073' }}>UI Change</Text>} 
+                                                                                                                            />
+                                                                                                                        </Space>
+                                                                                                                    </div>
+                                                                                                                    
+                                                                                                                    {/* Timestamp */}
+                                                                                                                    <div>
+                                                                                                                        <Text type="secondary" strong style={{ display: 'block', marginBottom: '4px' }}>
+                                                                                                                            Timestamp:
+                                                                                                                        </Text>
+                                                                                                                        <Text type="secondary">{new Date(toState.actionTime).toLocaleString()}</Text>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            </Collapse.Panel>
+                                                                                                        </Collapse>
+                                                                                                    </Card>
+                                                                                                </Timeline.Item>
+                                                                                            );
+                                                                                        }).filter(Boolean)}
+                                                                                </Timeline>
+                                                                            </div>
+                                                                        </Card>
+                                                                    )
+                                                                }
+                                                            ]}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        flexDirection: 'column', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        height: '100%',
+                                                        color: '#722ED1',
+                                                        padding: '30px'
+                                                    }}>
+                                                        <div style={{
+                                                            backgroundColor: '#f9f0ff',
+                                                            borderRadius: '8px',
+                                                            padding: '30px',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            maxWidth: '500px',
+                                                            border: '1px dashed #d3adf7'
+                                                        }}>
+                                                            <ExperimentOutlined style={{ fontSize: '64px', marginBottom: '16px', color: '#722ED1' }} />
+                                                            <Text strong style={{ fontSize: '18px', color: '#722ED1', marginBottom: '10px' }}>
+                                                                No Transition Analysis Available
+                                                            </Text>
+                                                            <Text style={{ fontSize: '14px', textAlign: 'center', marginBottom: '20px', color: '#333' }}>
+                                                                This state hasn't been processed with AI yet.
+                                                            </Text>
+                                                            <Button
+                                                                type="primary"
+                                                                icon={<ThunderboltOutlined />}
+                                                                onClick={handleProcessWithAI}
+                                                                loading={processingAI}
+                                                                style={{ background: '#722ED1', borderColor: '#722ED1' }}
+                                                            >
+                                                                Process with AI Now
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <div style={{ 
+                                            padding: '40px 20px', 
+                                            textAlign: 'center', 
+                                            background: '#f9f9f9', 
+                                            border: '1px dashed #1890ff', 
+                                            borderRadius: '4px',
+                                            maxWidth: '400px',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
+                                        }}>
+                                            <InfoCircleOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
+                                            <div style={{ marginBottom: '8px' }}>
+                                                <Text strong style={{ fontSize: '16px' }}>No Entry Selected</Text>
+                                            </div>
+                                            <Text type="secondary">Select an entry from the list on the left to view transitions</Text>
+                                            <div style={{ marginTop: '16px' }}>
+                                                <Button 
+                                                    type="primary" 
+                                                    size="small"
+                                                    onClick={() => detailedRecording.length > 0 && setSelectedEntryIndex(0)}
+                                                    disabled={detailedRecording.length === 0}
+                                                >
+                                                    Select First Entry
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ 
+                                textAlign: 'center', 
+                                padding: '60px 40px', 
+                                background: '#f9f9f9', 
+                                border: '1px dashed #1890ff', 
+                                borderRadius: '8px',
+                                margin: '40px auto',
+                                maxWidth: '500px'
+                            }}>
+                                <VideoCameraOutlined style={{ fontSize: '64px', color: '#1890ff', marginBottom: '24px' }} />
+                                <div style={{ marginBottom: '16px' }}>
+                                    <Title level={4}>No Transitions Recorded</Title>
+                                    <Text type="secondary">Start recording to capture actions and transitions</Text>
+                                </div>
+                                <Button
+                                    type="primary"
+                                    icon={<VideoCameraOutlined />}
+                                    onClick={handleStartRecording}
+                                    size="large"
+                                    disabled={!inspectorState?.driver || standardIsRecording}
+                                >
+                                    Start Recording
+                                </Button>
+                            </div>
+                        )
+                    },
+                    {
                         key: 'detailed',
                         label: 'Detailed Recording',
                         children: loading ? (
@@ -1149,17 +2576,18 @@ public void verifyFinalState() {
                                 </div>
                             </div>
                         ) : detailedRecording.length > 0 ? (
-                            <div style={{ 
+                            <div className="recording-view-detailed-container" style={{ 
                                 display: 'flex', 
                                 height: 'calc(100% - 8px)', 
                                 overflow: 'hidden',
                                 minHeight: '500px',
                                 flex: 1,
-                                margin: 0
+                                margin: 0,
+                                position: 'relative'
                             }}>
                                 {/* Column 1 - Entries list */}
                                 <div style={{ 
-                                    width: '25%', 
+                                    width: columnWidths.list, 
                                     borderRight: '1px solid #f0f0f0', 
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -1196,9 +2624,8 @@ public void verifyFinalState() {
                                     <div 
                                         className="custom-scrollbar force-scrollbar"
                                         style={{ 
-                                            height: 'calc(100% - 48px)', // Subtract header height
+                                            height: 'calc(100% - 95px)', // Subtract header height including playback controls
                                             padding: '0 2px',
-                                            borderRight: '1px solid #f0f0f0',
                                             background: '#fafafa'
                                         }}
                                     >
@@ -1285,19 +2712,45 @@ public void verifyFinalState() {
                                     </div>
                                 </div>
                                 
+                                {/* Resizable divider between list and screenshot */}
+                                <div 
+                                    className="resize-handle resize-handle-list"
+                                    style={{
+                                        width: '5px',
+                                        cursor: 'col-resize',
+                                        background: '#f0f0f0',
+                                        position: 'relative',
+                                        zIndex: 1,
+                                        transition: 'background-color 0.2s',
+                                        boxShadow: isResizing === 'list-screenshot' ? '0 0 5px rgba(24, 144, 255, 0.5)' : 'none'
+                                    }}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setIsResizing('list-screenshot');
+                                    }}
+                                >
+                                    <div 
+                                        style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '1px',
+                                            height: '20px',
+                                            background: '#d9d9d9'
+                                        }}
+                                    />
+                                </div>
+                                
                                 {selectedEntryIndex !== null && detailedRecording[selectedEntryIndex] ? (
                                     <>
                                         {/* Column 2 - Screenshot */}
                                         <div style={{ 
-                                            width: screenshotDimensions.width, 
-                                            minWidth: '300px', // Provide a reasonable minimum width
-                                            maxWidth: '45%',  // Ensure it doesn't take up too much space
+                                            width: columnWidths.screenshot,
                                             borderRight: '1px solid #f0f0f0',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            overflow: 'hidden',
-                                            flexShrink: 0,
-                                            transition: 'width 0.3s ease-in-out' // Smooth transition when width changes
+                                            overflow: 'hidden'
                                         }}>
                                             <div style={{ 
                                                 padding: '12px 16px',
@@ -1385,14 +2838,14 @@ public void verifyFinalState() {
                                                             const aspectRatio = e.target.naturalWidth / e.target.naturalHeight;
                                                             const scaledWidth = containerHeight * aspectRatio;
                                                             
-                                                            // Update the dimensions
+                                                            // Update the dimensions (but don't change column widths)
                                                             setScreenshotDimensions({
-                                                                width: `${scaledWidth}px`,
+                                                                width: 'auto',
                                                                 height: `${containerHeight}px`
                                                             });
                                                         }}
                                                         style={{ 
-                                                            width: 'auto',
+                                                            maxWidth: '100%',
                                                             height: '100%', 
                                                             objectFit: 'contain',
                                                             border: '1px solid #d9d9d9',
@@ -1415,9 +2868,39 @@ public void verifyFinalState() {
                                             </div>
                                         </div>
                                         
+                                        {/* Resizable divider between screenshot and details */}
+                                        <div 
+                                            className="resize-handle resize-handle-details"
+                                            style={{
+                                                width: '5px',
+                                                cursor: 'col-resize',
+                                                background: '#f0f0f0',
+                                                position: 'relative',
+                                                zIndex: 1,
+                                                transition: 'background-color 0.2s',
+                                                boxShadow: isResizing === 'screenshot-details' ? '0 0 5px rgba(24, 144, 255, 0.5)' : 'none'
+                                            }}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                setIsResizing('screenshot-details');
+                                            }}
+                                        >
+                                            <div 
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '50%',
+                                                    left: '50%',
+                                                    transform: 'translate(-50%, -50%)',
+                                                    width: '1px',
+                                                    height: '20px',
+                                                    background: '#d9d9d9'
+                                                }}
+                                            />
+                                        </div>
+                                        
                                         {/* Column 3 - Details with tabs */}
                                         <div style={{ 
-                                            flex: 1,
+                                            width: columnWidths.details,
                                             display: 'flex',
                                             flexDirection: 'column',
                                             overflow: 'hidden'
@@ -1479,7 +2962,9 @@ public void verifyFinalState() {
                                                                         borderRadius: '4px', 
                                                                         overflow: 'auto',
                                                                         height: '100%',
-                                                                        margin: 0
+                                                                        margin: 0,
+                                                                        whiteSpace: 'pre-wrap',
+                                                                        wordWrap: 'break-word'
                                                                     }}>
                                                                         {JSON.stringify(detailedRecording[selectedEntryIndex].action, null, 2) || "No action data"}
                                                                     </pre>
@@ -1507,7 +2992,9 @@ public void verifyFinalState() {
                                                                         overflow: 'auto',
                                                                         height: '100%',
                                                                         margin: 0,
-                                                                        fontSize: '12px'
+                                                                        fontSize: '12px',
+                                                                        whiteSpace: 'pre-wrap',
+                                                                        wordWrap: 'break-word'
                                                                     }}>
                                                                         {detailedRecording[selectedEntryIndex].deviceArtifacts?.pageSource || "No page source available"}
                                                                     </pre>
@@ -1534,7 +3021,9 @@ public void verifyFinalState() {
                                                                         borderRadius: '4px', 
                                                                         overflow: 'auto',
                                                                         height: '100%',
-                                                                        margin: 0
+                                                                        margin: 0,
+                                                                        whiteSpace: 'pre-wrap',
+                                                                        wordWrap: 'break-word'
                                                                     }}>
                                                                         {JSON.stringify(detailedRecording[selectedEntryIndex].deviceArtifacts?.sessionDetails, null, 2) || "No session details available"}
                                                                     </pre>
@@ -1688,7 +3177,9 @@ public void verifyFinalState() {
                                                                                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                                                                                             fontSize: '13px',
                                                                                             lineHeight: '1.5',
-                                                                                            color: '#d4d4d4'
+                                                                                            color: '#d4d4d4',
+                                                                                            whiteSpace: 'pre-wrap',
+                                                                                            wordWrap: 'break-word'
                                                                                         }}>
                                                                                             {detailedRecording[selectedEntryIndex].aiAnalysisRaw ? (
                                                                                                 <div dangerouslySetInnerHTML={{
