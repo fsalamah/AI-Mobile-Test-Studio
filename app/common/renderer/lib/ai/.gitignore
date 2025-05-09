@@ -1,2 +1,25 @@
 node_modules
 output
+
+# Ignore test outputs except for README and .gitkeep
+/test-output/*
+!/test-output/README.md
+!/test-output/.gitkeep
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore log files
+*.log
+
+# Ignore generated POM files
+/pom_output/*
+!/pom_output/.gitkeep
+
+# Ignore generated XPath fix files
+/xpath_fix_output/*
+!/xpath_fix_output/.gitkeep
+
+# Ignore local configuration overrides
+config.local.js
