@@ -2533,7 +2533,8 @@ public void verifyFinalState() {
                                                                                                 // Is this step currently being played back?
                                                                                                 const isPlayingCurrent = isPlaying && selectedEntryIndex === i + 1;
                                                                                                 
-                                                                                                return {
+                                                                                                // Create and return an object with item details
+                                                                                                const itemObject = {
                                                                                                     index: i,
                                                                                                     pageName,
                                                                                                     isPageChange: hasAiAnalysis && toState.aiAnalysisRaw.isPageChanged,
@@ -2541,22 +2542,25 @@ public void verifyFinalState() {
                                                                                                     isCurrentStep,
                                                                                                     isPlayingCurrent,
                                                                                                     actionTime: toState.actionTime,
-                                                                                                    transitionDescription,
-                                                                                                    timelineItem: (
-                                                                                                        <Timeline.Item 
-                                                                                                            key={`step-${i}`}
-                                                                                                            color={dotColor}
-                                                                                                            dot={<div style={{ 
-                                                                                                                width: '16px', 
-                                                                                                                height: '16px', 
-                                                                                                                borderRadius: '50%', 
-                                                                                                                background: dotColor,
-                                                                                                                border: isCurrentStep ? '2px solid #fff' : 'none',
-                                                                                                                boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
-                                                                                                            }} />}
-                                                                                                            label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text></div>}
-                                                                                                            position="left"
-                                                                                                        >
+                                                                                                    transitionDescription
+                                                                                                };
+                                                                                                
+                                                                                                // Add the timeline item component to the object
+                                                                                                itemObject.timelineItem = (
+                                                                                                    <Timeline.Item 
+                                                                                                        key={`step-${i}`}
+                                                                                                        color={dotColor}
+                                                                                                        dot={<div style={{ 
+                                                                                                            width: '16px', 
+                                                                                                            height: '16px', 
+                                                                                                            borderRadius: '50%', 
+                                                                                                            background: dotColor,
+                                                                                                            border: isCurrentStep ? '2px solid #fff' : 'none',
+                                                                                                            boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
+                                                                                                        }} />}
+                                                                                                        label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text></div>}
+                                                                                                        position="left"
+                                                                                                    >
                                                                                                     <Card
                                                                                                         style={{ 
                                                                                                             marginBottom: '12px',
@@ -2758,6 +2762,8 @@ public void verifyFinalState() {
                                                                                                     </Card>
                                                                                                 </Timeline.Item>
                                                                                             );
+                                                                                            
+                                                                                            return itemObject;
                                                                                         }).filter(Boolean);
                                                                                             
                                                                                             // Filter out null items
