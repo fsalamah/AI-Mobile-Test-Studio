@@ -17,7 +17,9 @@ export const PIPELINE_TYPES = {
   VISUAL_ANALYSIS: 'visual_analysis',
   XPATH_GENERATION: 'xpath_generation',
   XPATH_REPAIR: 'xpath_repair',
-  POM_GENERATION: 'pom_generation'
+  POM_GENERATION: 'pom_generation',
+  TRANSITION_ANALYSIS: 'transition_analysis',
+  PAGE_DISAMBIGUATION: 'page_disambiguation'
 };
 
 // Default model configurations (global)
@@ -29,6 +31,14 @@ const DEFAULT_MODELS = {
     defaultModel: 'gpt-4',
     availableModels: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
     active: true
+  },
+  'google': {
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    apiKey: '',
+    defaultModel: 'gemini-2.5-flash-preview-04-17',
+    availableModels: ['gemini-2.0-flash', 'gemini-2.5-flash-preview-04-17'],
+    active: false
   },
   'anthropic': {
     name: 'Anthropic',
@@ -73,6 +83,16 @@ const DEFAULT_MODEL_ASSIGNMENTS = {
   [PIPELINE_TYPES.POM_GENERATION]: {
     providerId: 'openai',
     modelName: 'gpt-4'
+  },
+  // For this pipeline, we'll use CONFIG.MODEL directly in the AIService and modelConfigProvider
+  [PIPELINE_TYPES.TRANSITION_ANALYSIS]: {
+    providerId: 'auto',
+    modelName: null  // This will trigger fallback to CONFIG.MODEL
+  },
+  // Page disambiguation pipeline uses the same model as transition analysis
+  [PIPELINE_TYPES.PAGE_DISAMBIGUATION]: {
+    providerId: 'auto',
+    modelName: null  // This will trigger fallback to CONFIG.MODEL
   }
 };
 

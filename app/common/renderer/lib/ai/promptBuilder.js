@@ -1,4 +1,134 @@
 export class PromptBuilder {
+  /**
+   * Creates a prompt for analyzing transitions between UI states
+   * @param {Object} fromState - The starting state
+   * @param {Object} toState - The ending state
+   * @returns {Array} - Messages array for the AI service
+   */
+  static createTransitionAnalysisPrompt(fromState, toState) {
+    // Create a system prompt that instructs the AI on how to analyze transitions
+    const systemInstruction = `# Mobile App Transition Analyzer
+
+You are a specialized mobile UI transition analyst. Your task is to analyze the differences between two UI states and describe what changed from one state to another.
+
+## Input Analysis Guidelines
+
+1. You will receive two complete mobile app states:
+   - **Before state**: The UI state before a user action
+   - **After state**: The UI state after a user action
+
+2. For each state, you will have:
+   - Screenshot (visual representation)
+   - XML source (structural representation)
+   - Action metadata (what the user did, if available)
+
+## Output Requirements
+
+Provide a detailed analysis of the transition with these components:
+
+1. **Transition Description**: A clear, concise description of what changed between states
+   - Focus on visible UI changes from the user's perspective
+   - Describe new elements that appeared or disappeared
+   - Note content changes (text, values, selections)
+   - Mention visual state changes (enabled/disabled, expanded/collapsed)
+
+2. **Technical Changes**: Identify structural XML differences
+   - New nodes added
+   - Nodes removed
+   - Attribute changes
+   - Hierarchy modifications
+
+3. **Inferred User Journey**: Based on the changes, what was the user trying to accomplish?
+   - What goal was the user pursuing?
+   - What workflow or feature were they engaging with?
+
+4. **Quality Assessment**:
+   - Did the app respond as expected to the action?
+   - Were there any apparent errors or unexpected behaviors?
+   - Was the transition smooth and logical?
+
+## Response Format
+
+Provide your analysis in this JSON format:
+\`\`\`json
+{
+  "transitionDescription": "Concise description of the transition from the user's perspective",
+  "technicalChanges": [
+    "List of specific technical changes identified in the UI structure"
+  ],
+  "inferredUserIntent": "What the user was trying to accomplish",
+  "qualityAssessment": "Assessment of the transition quality and responsiveness"
+}
+\`\`\`
+
+Focus on being specific, accurate, and insightful in your analysis. Look beyond the obvious to identify subtle but important interaction patterns.`;
+
+    // Extract and prepare the UI data for the before and after states
+    const beforeScreenshot = fromState.deviceArtifacts?.screenshotBase64 || null;
+    const afterScreenshot = toState.deviceArtifacts?.screenshotBase64 || null;
+    const beforeXML = fromState.deviceArtifacts?.pageSource || "XML source not available";
+    const afterXML = toState.deviceArtifacts?.pageSource || "XML source not available";
+    
+    // Add action metadata
+    const actionInfo = toState.action ? `User action: ${toState.action.action || 'Unknown'} 
+Target element: ${toState.action?.element?.elementId || 'Unknown'}
+Args: ${JSON.stringify(toState.action?.args || {})}` : "No explicit action recorded";
+    
+    // Create session info
+    const sessionInfo = `Device: ${fromState.deviceArtifacts?.sessionDetails?.platformName || 'Unknown'} ${fromState.deviceArtifacts?.sessionDetails?.platformVersion || 'Unknown'}
+Device name: ${fromState.deviceArtifacts?.sessionDetails?.deviceName || 'Unknown'}
+Automation: ${fromState.deviceArtifacts?.sessionDetails?.automationName || 'Unknown'}`;
+
+    // Create messages array for the AI service
+    return [
+      {
+        role: "system",
+        content: systemInstruction
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Please analyze this transition between two UI states.\n\nSession info:\n${sessionInfo}\n\nTransition timestamps: From ${new Date(fromState.actionTime).toISOString()} to ${new Date(toState.actionTime).toISOString()}\n\n${actionInfo}`
+          },
+          {
+            type: "text",
+            text: "BEFORE STATE SCREENSHOT:"
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: beforeScreenshot ? `data:image/png;base64,${beforeScreenshot}` : "No screenshot available"
+            }
+          },
+          {
+            type: "text",
+            text: "AFTER STATE SCREENSHOT:"
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: afterScreenshot ? `data:image/png;base64,${afterScreenshot}` : "No screenshot available"
+            }
+          },
+          {
+            type: "text",
+            text: `BEFORE STATE XML SOURCE:\n\n${beforeXML.length > 10000 ? beforeXML.substring(0, 10000) + "... (truncated)" : beforeXML}`
+          },
+          {
+            type: "text",
+            text: `AFTER STATE XML SOURCE:\n\n${afterXML.length > 10000 ? afterXML.substring(0, 10000) + "... (truncated)" : afterXML}`
+          },
+          {
+            type: "text",
+            text: "Analyze the transition and provide your assessment in the required JSON format. Be specific about what changed visually and structurally."
+          }
+        ]
+      }
+    ];
+  }
+  
   static createXpathOnlyPrompt({ screenshotBase64, xmlText, elements, os, generationConfig }) {
     const systemInstruction=`# Mobile UI XPath Generator: Expert Precision System
 

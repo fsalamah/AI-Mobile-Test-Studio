@@ -8,9 +8,14 @@ import { createXpathRepairSchema } from "./xpathFixSchema.js";
 import modelConfigProvider from './modelConfigProvider.js';
 import { PIPELINE_TYPES } from './modelManager.js';
 
-// Define the transition analysis pipeline type if not already defined
+// Define the pipeline types if not already defined
 if (!PIPELINE_TYPES.TRANSITION_ANALYSIS) {
   PIPELINE_TYPES.TRANSITION_ANALYSIS = 'transition_analysis';
+}
+
+// Define page disambiguation pipeline type
+if (!PIPELINE_TYPES.PAGE_DISAMBIGUATION) {
+  PIPELINE_TYPES.PAGE_DISAMBIGUATION = 'page_disambiguation';
 }
 
 export class AIService {
@@ -436,6 +441,89 @@ export class AIService {
       }
     } catch (error) {
       Logger.error(`Error calling model (repairFailedXpaths):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Disambiguate page names from recorded states
+   * @param {string} model - The AI model to use (optional)
+   * @param {Object} prompt - The prompt containing page information for disambiguation
+   * @param {number} temperature - Temperature setting (0-1)
+   * @returns {Promise<Object>} - The AI service response with standardized page names
+   */
+  async disambiguatePages(model, prompt, temperature = 0) {
+    try {
+      // Default to using CONFIG values
+      let apiKey = CONFIG.API.KEY;
+      let baseURL = CONFIG.API.BASE_URL;
+      let modelName = CONFIG.MODEL;
+      
+      try {
+        // Try to get pipeline-specific configuration
+        const pipelineConfig = modelConfigProvider.getApiConfigForPipeline(PIPELINE_TYPES.PAGE_DISAMBIGUATION);
+        
+        // Only use pipeline config if it has a valid API key
+        if (pipelineConfig.apiKey && pipelineConfig.apiKey !== "YOUR_API_KEY") {
+          apiKey = pipelineConfig.apiKey;
+          baseURL = pipelineConfig.baseUrl || baseURL;
+          modelName = model || pipelineConfig.modelName || modelName;
+        }
+      } catch (configError) {
+        // Log the error but continue with default config
+        Logger.log(`Error getting pipeline config, using defaults: ${configError.message}`, "warn");
+      }
+      
+      // Explicit model from parameter takes precedence over everything
+      if (model) {
+        modelName = model;
+      }
+      
+      Logger.log(`Disambiguating pages with model ${modelName}`, "info");
+      
+      // Throw an error if no valid API key is found
+      if (!apiKey || apiKey === "YOUR_API_KEY") {
+        throw new Error("No valid API key found. Please configure a valid API key in config.js");
+      }
+      
+      // Track the original client settings to restore later
+      const originalApiKey = this.client.apiKey;
+      const originalBaseURL = this.client.baseURL;
+      
+      try {
+        // Temporarily update client if needed
+        if (this.client.apiKey !== apiKey || this.client.baseURL !== baseURL) {
+          this.client = new OpenAI({
+            apiKey: apiKey,
+            baseURL: baseURL,
+            dangerouslyAllowBrowser: true
+          });
+        }
+        
+        // Call the model with the prompt
+        const response = await this.client.chat.completions.create({
+          model: modelName,
+          messages: prompt,
+          temperature: temperature,
+          max_tokens: 100000, // Using a much larger max_tokens value as requested
+        });
+        
+        // Log success
+        Logger.log(`Page disambiguation completed with model ${modelName}`, "info");
+        
+        return response;
+      } finally {
+        // Restore original client settings
+        if (originalBaseURL !== this.client.baseURL || originalApiKey !== this.client.apiKey) {
+          this.client = new OpenAI({
+            apiKey: originalApiKey,
+            baseURL: originalBaseURL,
+            dangerouslyAllowBrowser: true
+          });
+        }
+      }
+    } catch (error) {
+      Logger.error(`Error calling model (disambiguatePages):`, error);
       throw error;
     }
   }

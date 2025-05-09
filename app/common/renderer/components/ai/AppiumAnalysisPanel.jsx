@@ -597,6 +597,28 @@ export default function AppiumAnalysisPanel({
         );
     }
     
+    // If recording view is active, render it in full screen mode
+    if (currentView === 'recordingView') {
+        return (
+            <RecordingView
+                navigateBack={() => {
+                    // Return to previous view or default to page list
+                    if (selectedPageId) {
+                        setCurrentView('pageDetail');
+                    } else {
+                        setCurrentView('pageList');
+                    }
+                }}
+                inspectorState={inspectorState}
+                startRecording={() => dispatch(startRecordingAction())}
+                pauseRecording={() => dispatch(pauseRecordingAction())}
+                clearRecording={() => dispatch(clearRecordingAction())}
+                isRecording={inspectorState?.isRecording || false}
+                recordedActions={inspectorState?.recordedActions || []}
+            />
+        );
+    }
+    
     // Otherwise render the normal layout
     return (
         <Layout style={{ height: '100vh', background: '#fff' }}>
@@ -672,25 +694,6 @@ export default function AppiumAnalysisPanel({
                         onBack={() => navigateFromCodeViewer()}
                         onSave={updatePage}
                         onRegenerate={() => handleOnProceedToPom(currentPageForCode)}
-                    />
-                )}
-                
-                {currentView === 'recordingView' && (
-                    <RecordingView
-                        navigateBack={() => {
-                            // Return to previous view or default to page list
-                            if (selectedPageId) {
-                                setCurrentView('pageDetail');
-                            } else {
-                                setCurrentView('pageList');
-                            }
-                        }}
-                        inspectorState={inspectorState}
-                        startRecording={() => dispatch(startRecordingAction())}
-                        pauseRecording={() => dispatch(pauseRecordingAction())}
-                        clearRecording={() => dispatch(clearRecordingAction())}
-                        isRecording={inspectorState?.isRecording || false}
-                        recordedActions={inspectorState?.recordedActions || []}
                     />
                 )}
             </Content>

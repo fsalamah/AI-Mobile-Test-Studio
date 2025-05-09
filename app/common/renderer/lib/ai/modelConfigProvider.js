@@ -84,6 +84,11 @@ export function getModelForPipeline(pipelineType, explicitModel = null) {
     return explicitModel;
   }
   
+  // For TRANSITION_ANALYSIS pipeline, prefer CONFIG.MODEL
+  if (pipelineType === 'transition_analysis') {
+    return CONFIG.MODEL;
+  }
+  
   // Otherwise get from configuration
   const config = getModelConfig(pipelineType);
   return config.modelName || CONFIG.MODEL;
