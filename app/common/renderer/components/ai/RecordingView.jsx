@@ -244,6 +244,7 @@ const RecordingView = ({
     const [screenshotDimensions, setScreenshotDimensions] = useState({ width: 'auto', height: 'auto' });
     const [processingAI, setProcessingAI] = useState(false);
     const [aiViewMode, setAiViewMode] = useState('raw');
+    const [groupByPage, setGroupByPage] = useState(true);
     const [analysisProgress, setAnalysisProgress] = useState({
         isProcessing: false,
         current: 0,
@@ -2459,72 +2460,103 @@ public void verifyFinalState() {
                                                                             }
                                                                         >
                                                                             <div style={{ height: '100%', overflow: 'hidden', width: '100%' }}>
+                                                                                <div style={{ 
+                                                                                        display: 'flex', 
+                                                                                        justifyContent: 'flex-end', 
+                                                                                        padding: '8px 16px',
+                                                                                        borderBottom: '1px solid #f0f0f0'
+                                                                                    }}>
+                                                                                        <Switch 
+                                                                                            checkedChildren="Group by Page" 
+                                                                                            unCheckedChildren="Flat View" 
+                                                                                            defaultChecked={true}
+                                                                                            onChange={(checked) => {
+                                                                                                // Store in state for the grouping option
+                                                                                                setGroupByPage(checked);
+                                                                                            }}
+                                                                                            size="small"
+                                                                                        />
+                                                                                    </div>
                                                                                 <Timeline 
                                                                                     mode="left" 
                                                                                     style={{ 
                                                                                         width: '100%', 
                                                                                         padding: '16px 0 100px 16px', 
-                                                                                        height: '100%', 
+                                                                                        height: 'calc(100% - 40px)', 
                                                                                         overflow: 'auto',
                                                                                         alignItems: 'flex-start'
                                                                                     }}
                                                                                     className="flow-steps-timeline"
                                                                                 >
                                                                                     {detailedRecording.length > 1 && 
-                                                                                        Array.from({ length: detailedRecording.length - 1 }, (_, i) => {
-                                                                                            const toState = detailedRecording[i + 1];
-                                                                                            
-                                                                                            // Skip if condensed and we're not showing condensed states
-                                                                                            if (!showCondensed && toState.isCondensed) {
-                                                                                                return null;
-                                                                                            }
-                                                                                            
-                                                                                            // Skip if hiding non-transitions and this state doesn't have a significant transition
-                                                                                            if (hideNonTransitions && toState.aiAnalysisRaw && !toState.aiAnalysisRaw.hasTransition) {
-                                                                                                return null;
-                                                                                            }
-                                                                                            
-                                                                                            // Get transition info from the TO state's AI analysis
-                                                                                            const hasAiAnalysis = !!toState.aiAnalysisRaw;
-                                                                                            
-                                                                                            // Get action info
-                                                                                            const actionType = toState.action?.action || 'State Change';
-                                                                                            const elementTarget = toState.action?.element?.text || 
-                                                                                                                toState.action?.element?.resourceId || 
-                                                                                                                (toState.aiAnalysisRaw?.actionTarget || 'Unknown Element');
-                                                                                            
-                                                                                            // Transition description
-                                                                                            let transitionDescription = toState.aiAnalysisRaw?.transitionDescription || 
-                                                                                                                     `${actionType} on ${elementTarget}`;
-                                                                                            
-                                                                                            // Determine color based on transition type
-                                                                                            let dotColor = '#1890ff'; // Default blue
-                                                                                            if (hasAiAnalysis) {
-                                                                                                if (toState.aiAnalysisRaw.isPageChanged) dotColor = '#52c41a'; // Green for page changes
-                                                                                                else if (toState.aiAnalysisRaw.isSamePageDifferentState) dotColor = '#722ED1'; // Purple for state changes
-                                                                                                else if (toState.aiAnalysisRaw.hasTransition) dotColor = '#faad14'; // Orange for other transitions
-                                                                                            }
-                                                                                            
-                                                                                            // Is this the current step?
-                                                                                            const isCurrentStep = selectedEntryIndex === i + 1;
-                                                                                            // Is this step currently being played back?
-                                                                                            const isPlayingCurrent = isPlaying && selectedEntryIndex === i + 1;
-                                                                                            
-                                                                                            return (
-                                                                                                <Timeline.Item 
-                                                                                                    key={`step-${i}`}
-                                                                                                    color={dotColor}
-                                                                                                    dot={<div style={{ 
-                                                                                                        width: '16px', 
-                                                                                                        height: '16px', 
-                                                                                                        borderRadius: '50%', 
-                                                                                                        background: dotColor,
-                                                                                                        border: isCurrentStep ? '2px solid #fff' : 'none',
-                                                                                                        boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
-                                                                                                    }} />}
-                                                                                                    label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text></div>}
-                                                                                                    position="left"
-                                                                                                >
+                                                                                        (() => {
+                                                                                            // First prepare all timeline items without page grouping
+                                                                                            const allTimelineItems = Array.from({ length: detailedRecording.length - 1 }, (_, i) => {
+                                                                                                const toState = detailedRecording[i + 1];
+                                                                                                
+                                                                                                // Skip if condensed and we're not showing condensed states
+                                                                                                if (!showCondensed && toState.isCondensed) {
+                                                                                                    return null;
+                                                                                                }
+                                                                                                
+                                                                                                // Skip if hiding non-transitions and this state doesn't have a significant transition
+                                                                                                if (hideNonTransitions && toState.aiAnalysisRaw && !toState.aiAnalysisRaw.hasTransition) {
+                                                                                                    return null;
+                                                                                                }
+                                                                                                
+                                                                                                // Get transition info from the TO state's AI analysis
+                                                                                                const hasAiAnalysis = !!toState.aiAnalysisRaw;
+                                                                                                
+                                                                                                // Get page name for grouping
+                                                                                                const pageName = toState.aiAnalysisRaw?.currentPageName || 'Unknown Page';
+                                                                                                
+                                                                                                // Get action info
+                                                                                                const actionType = toState.action?.action || 'State Change';
+                                                                                                const elementTarget = toState.action?.element?.text || 
+                                                                                                                    toState.action?.element?.resourceId || 
+                                                                                                                    (toState.aiAnalysisRaw?.actionTarget || 'Unknown Element');
+                                                                                                
+                                                                                                // Transition description
+                                                                                                let transitionDescription = toState.aiAnalysisRaw?.transitionDescription || 
+                                                                                                                         `${actionType} on ${elementTarget}`;
+                                                                                                
+                                                                                                // Determine color based on transition type
+                                                                                                let dotColor = '#1890ff'; // Default blue
+                                                                                                if (hasAiAnalysis) {
+                                                                                                    if (toState.aiAnalysisRaw.isPageChanged) dotColor = '#52c41a'; // Green for page changes
+                                                                                                    else if (toState.aiAnalysisRaw.isSamePageDifferentState) dotColor = '#722ED1'; // Purple for state changes
+                                                                                                    else if (toState.aiAnalysisRaw.hasTransition) dotColor = '#faad14'; // Orange for other transitions
+                                                                                                }
+                                                                                                
+                                                                                                // Is this the current step?
+                                                                                                const isCurrentStep = selectedEntryIndex === i + 1;
+                                                                                                // Is this step currently being played back?
+                                                                                                const isPlayingCurrent = isPlaying && selectedEntryIndex === i + 1;
+                                                                                                
+                                                                                                return {
+                                                                                                    index: i,
+                                                                                                    pageName,
+                                                                                                    isPageChange: hasAiAnalysis && toState.aiAnalysisRaw.isPageChanged,
+                                                                                                    dotColor,
+                                                                                                    isCurrentStep,
+                                                                                                    isPlayingCurrent,
+                                                                                                    actionTime: toState.actionTime,
+                                                                                                    transitionDescription,
+                                                                                                    timelineItem: (
+                                                                                                        <Timeline.Item 
+                                                                                                            key={`step-${i}`}
+                                                                                                            color={dotColor}
+                                                                                                            dot={<div style={{ 
+                                                                                                                width: '16px', 
+                                                                                                                height: '16px', 
+                                                                                                                borderRadius: '50%', 
+                                                                                                                background: dotColor,
+                                                                                                                border: isCurrentStep ? '2px solid #fff' : 'none',
+                                                                                                                boxShadow: isCurrentStep ? `0 0 0 2px ${dotColor}` : 'none'
+                                                                                                            }} />}
+                                                                                                            label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{new Date(toState.actionTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text></div>}
+                                                                                                            position="left"
+                                                                                                        >
                                                                                                     <Card
                                                                                                         style={{ 
                                                                                                             marginBottom: '12px',
@@ -2726,7 +2758,84 @@ public void verifyFinalState() {
                                                                                                     </Card>
                                                                                                 </Timeline.Item>
                                                                                             );
-                                                                                        }).filter(Boolean)}
+                                                                                        }).filter(Boolean);
+                                                                                            
+                                                                                            // Filter out null items
+                                                                                            const validTimelineItems = allTimelineItems.filter(item => item !== null);
+                                                                                            
+                                                                                            // If grouping is disabled, return the flat list of timeline items
+                                                                                            if (!groupByPage) {
+                                                                                                return validTimelineItems.map(item => item.timelineItem);
+                                                                                            }
+                                                                                            
+                                                                                            // Otherwise, group items by page
+                                                                                            const pages = {};
+                                                                                            
+                                                                                            // Group items by page name
+                                                                                            validTimelineItems.forEach(item => {
+                                                                                                if (!pages[item.pageName]) {
+                                                                                                    pages[item.pageName] = [];
+                                                                                                }
+                                                                                                pages[item.pageName].push(item);
+                                                                                            });
+                                                                                            
+                                                                                            // Create an array of components from the grouped data
+                                                                                            const groupedItems = [];
+                                                                                            
+                                                                                            // Process each page group
+                                                                                            Object.entries(pages).forEach(([pageName, items], pageIndex) => {
+                                                                                                // Add page header if there are multiple items on this page
+                                                                                                if (items.length > 1) {
+                                                                                                    // Find the first item where this page appears (usually a page change)
+                                                                                                    const firstItemWithPage = items[0];
+                                                                                                    
+                                                                                                    // Add the page header with appropriate styling
+                                                                                                    groupedItems.push(
+                                                                                                        <Timeline.Item 
+                                                                                                            key={`page-${pageIndex}`}
+                                                                                                            color="#52c41a"
+                                                                                                            dot={<div style={{ 
+                                                                                                                width: '24px', 
+                                                                                                                height: '24px', 
+                                                                                                                display: 'flex',
+                                                                                                                alignItems: 'center',
+                                                                                                                justifyContent: 'center',
+                                                                                                                background: '#f6ffed', 
+                                                                                                                border: '2px solid #52c41a',
+                                                                                                                borderRadius: '50%'
+                                                                                                            }}>
+                                                                                                                <FileImageOutlined style={{ fontSize: '14px', color: '#52c41a' }} />
+                                                                                                            </div>}
+                                                                                                            label={<div style={{ width: '80px', textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: '2px' }}></div>}
+                                                                                                        >
+                                                                                                            <Card
+                                                                                                                style={{ 
+                                                                                                                    marginBottom: '12px',
+                                                                                                                    backgroundColor: '#f6ffed',
+                                                                                                                    borderColor: '#b7eb8f',
+                                                                                                                    maxWidth: '750px'
+                                                                                                                }}
+                                                                                                                bodyStyle={{ padding: '12px 16px' }}
+                                                                                                            >
+                                                                                                                <Text strong style={{ fontSize: '16px', color: '#52c41a' }}>
+                                                                                                                    {pageName}
+                                                                                                                </Text>
+                                                                                                                <div style={{ fontSize: '13px', color: '#666' }}>
+                                                                                                                    {items.length} actions on this page
+                                                                                                                </div>
+                                                                                                            </Card>
+                                                                                                        </Timeline.Item>
+                                                                                                    );
+                                                                                                }
+                                                                                                
+                                                                                                // Add all items for this page
+                                                                                                items.forEach(item => {
+                                                                                                    groupedItems.push(item.timelineItem);
+                                                                                                });
+                                                                                            });
+                                                                                            
+                                                                                            return groupedItems;
+                                                                                        })()}
                                                                                 </Timeline>
                                                                             </div>
                                                                         </Card>
