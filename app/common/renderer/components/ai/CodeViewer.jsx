@@ -1,12 +1,16 @@
-// Fix for CodeViewer.jsx
-import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeftOutlined, 
-  DownloadOutlined, 
-  SaveOutlined, 
-  ReloadOutlined, 
-  FileOutlined 
+// Enhanced CodeViewer.jsx with syntax highlighting
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ArrowLeftOutlined,
+  DownloadOutlined,
+  SaveOutlined,
+  ReloadOutlined,
+  FileOutlined
 } from '@ant-design/icons';
+import CodeMirror from '@uiw/react-codemirror';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { xml } from '@codemirror/lang-xml';
+import { java } from '@codemirror/lang-java';
 
 /**
  * CodeViewer component that displays code with syntax highlighting
@@ -29,12 +33,32 @@ const CodeViewer = ({
   onRegenerate = null
 }) => {
   const [code, setCode] = useState("");
+  const [detectedLanguage, setDetectedLanguage] = useState(null);
 
   // Improved effect to handle code loading more reliably
   useEffect(() => {
     // Load code from page.aiAnalysis.code if available
     if (page && page.aiAnalysis && page.aiAnalysis.code) {
-      setCode(page.aiAnalysis.code);
+      const rawCode = page.aiAnalysis.code;
+
+      // Check if the code starts with a language identifier
+      // For example: ```groovy or ```java at the beginning
+      const languageMatch = rawCode.trim().match(/^```(\w+)\s*([\s\S]*)$/);
+
+      if (languageMatch) {
+        // Extract the language and actual code content
+        const detectedLanguage = languageMatch[1];
+        const actualCode = languageMatch[2].replace(/```$/, '').trim();
+
+        // Set the detected language
+        setDetectedLanguage(detectedLanguage);
+
+        // Set the actual code content
+        setCode(actualCode);
+      } else {
+        // No language identifier, use the raw code
+        setCode(rawCode);
+      }
     } else {
       // Reset code when page is invalid or has no code
       setCode("");
@@ -44,8 +68,10 @@ const CodeViewer = ({
   // Function to download the code as a file
   const downloadCode = () => {
     if (!code) return;
-    
-    const filename = `${title.toLowerCase().replace(/\s+/g, '-')}.${getFileExtension(language)}`;
+
+    // Use detected language for file extension if available
+    const langForExtension = detectedLanguage || language;
+    const filename = `${title.toLowerCase().replace(/\s+/g, '-')}.${getFileExtension(langForExtension)}`;
     const blob = new Blob([code], { type: 'text/plain' });
     downloadBlob(blob, filename);
   };
@@ -85,9 +111,35 @@ const CodeViewer = ({
       'go': 'go',
       'php': 'php',
       'html': 'html',
-      'css': 'css'
+      'css': 'css',
+      'xml': 'xml',
+      'groovy': 'groovy' // Add groovy extension
     };
-    return extensions[lang.toLowerCase()] || 'txt';
+    return extensions[lang ? lang.toLowerCase() : ''] || 'txt';
+  };
+
+  // Helper function to get the appropriate language extension for CodeMirror
+  const getLanguageExtension = (lang) => {
+    // Prioritize detected language over prop language
+    const langToUse = detectedLanguage || lang;
+
+    // Normalize the language name
+    const normalizedLang = langToUse.toLowerCase();
+
+    // Return the appropriate language extension
+    switch (normalizedLang) {
+      case 'java':
+        return java();
+      case 'groovy':
+        // Groovy is similar to Java, so we can use Java highlighting
+        return java();
+      case 'xml':
+        return xml();
+      // For other languages, we'll default to Java since we're primarily
+      // dealing with Java files for Appium Page Object Models
+      default:
+        return java();
+    }
   };
 
   // Handle saving the code
@@ -117,8 +169,8 @@ const CodeViewer = ({
   };
 
   return (
-    <div className="code-viewer-container" style={{ 
-      display: 'flex', 
+    <div className="code-viewer-container" style={{
+      display: 'flex',
       flexDirection: 'column',
       height: '100%',
       width: '100%',
@@ -244,28 +296,39 @@ const CodeViewer = ({
         </div>
       </div>
       
-      {/* Code content area with visual feedback when code is empty */}
-      <div className="code-content" style={{ 
+      {/* Code content area with CodeMirror for syntax highlighting */}
+      <div className="code-content" style={{
         flex: '1 1 auto',
-        overflow: 'auto',
+        overflow: 'auto', // Change to auto to enable scrolling
         padding: '0',
-        backgroundColor: '#282c34',
-        position: 'relative'
+        position: 'relative',
+        height: 'calc(100% - 48px)'
       }}>
         {code ? (
-          <pre style={{
-            margin: 0,
-            padding: '16px',
-            fontSize: '14px',
-            lineHeight: '1.5',
-            fontFamily: "Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace",
-            overflowX: 'auto',
-            color: '#abb2bf'
-          }}>
-            <code className={`language-${language}`}>
-              {code}
-            </code>
-          </pre>
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            <CodeMirror
+              value={code}
+              height="auto" // Change to auto to allow expanding
+              maxHeight="none" // Remove height restrictions
+              theme={oneDark}
+              extensions={[getLanguageExtension(language)]}
+              readOnly={true}
+              basicSetup={{
+                foldGutter: true,
+                dropCursor: true,
+                allowMultipleSelections: true,
+                indentOnInput: true,
+                lineNumbers: true,
+                highlightActiveLine: true,
+                highlightSelectionMatches: true,
+                syntaxHighlighting: true
+            }}
+            style={{
+              fontSize: '14px',
+              fontFamily: "Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace",
+            }}
+            />
+          </div>
         ) : (
           <div style={{
             display: 'flex',
@@ -273,7 +336,8 @@ const CodeViewer = ({
             justifyContent: 'center',
             height: '100%',
             color: '#6a737d',
-            fontSize: '16px'
+            fontSize: '16px',
+            backgroundColor: '#282c34'
           }}>
             No code available for this page
           </div>

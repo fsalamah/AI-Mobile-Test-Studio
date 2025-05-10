@@ -154,7 +154,7 @@ const appStateReducer = (state, action) => {
 };
 
 // XPath Fix Button Component
-const XPathFixButton = ({ onClick, failingCount = 0, loading = false }) => {
+const XPathFixButton = ({ onClick, failingCount = 0, loading = false, size = 'middle' }) => {
   return (
     <Tooltip title="Fix failing XPaths using AI">
       <Badge count={failingCount > 0 ? failingCount : 0} size="small">
@@ -163,8 +163,9 @@ const XPathFixButton = ({ onClick, failingCount = 0, loading = false }) => {
           onClick={onClick}
           loading={loading}
           disabled={failingCount === 0}
+          size={size}
         >
-          Fix XPaths
+          {size === 'small' ? 'Fix' : 'Fix XPaths'}
         </Button>
       </Badge>
     </Tooltip>
@@ -1163,7 +1164,8 @@ const FinalResizableTabsContainer = ({
         platform: currentPlatform, // Pass platform information
         debug: true, // Enable debug logging
         key: 'image-highlighter',
-        className: 'tab-screenshot' // Add special class for screenshot tab
+        className: 'tab-screenshot', // Add special class for screenshot tab
+        isViewMode: viewMode // Pass view mode info
       }
     },
     {
@@ -1223,7 +1225,13 @@ const FinalResizableTabsContainer = ({
       <Select
         value={`${currentStateId}-${currentPlatform}`}
         onChange={handleStateChange}
-        style={{ width: '100%', maxWidth: 240, flexShrink: 1 }}
+        style={{
+          width: '100%',
+          maxWidth: viewMode === 'tabbed-view' ? 180 : 240,
+          flexShrink: 1,
+          fontSize: viewMode === 'tabbed-view' ? '12px' : 'inherit'
+        }}
+        size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
         placeholder="Select a state"
         dropdownMatchSelectWidth={false}
       >
@@ -1239,12 +1247,13 @@ const FinalResizableTabsContainer = ({
       </Select>
     );
 
-    // Add XPath fix button
+    // Add XPath fix button (smaller in tabbed view)
     const xpathFixButton = (
       <XPathFixButton
         onClick={handleFixXPaths}
         failingCount={getFailingXPathCount()}
         loading={isFixingXPaths || isAnalyzing}
+        size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
       />
     );
 
@@ -1268,27 +1277,30 @@ const FinalResizableTabsContainer = ({
           }}>
             {stateSelector}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: viewMode === 'tabbed-view' ? '4px' : '8px' }}>
             {xpathFixButton}
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={handleRegenerate}
+              size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
             >
-              Regenerate Locators
+              {viewMode === 'tabbed-view' ? 'Regen' : 'Regenerate Locators'}
             </Button>
-            <Button 
-              icon={<CloseOutlined />} 
-              onClick={handleAbort} 
+            <Button
+              icon={<CloseOutlined />}
+              onClick={handleAbort}
               danger
+              size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
             >
-              Abort
+              {viewMode === 'tabbed-view' ? 'Cancel' : 'Abort'}
             </Button>
-            <Button 
-              icon={<RightOutlined />} 
-              onClick={handleProceed} 
+            <Button
+              icon={<RightOutlined />}
+              onClick={handleProceed}
               type="primary"
+              size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
             >
-              Proceed to POM
+              {viewMode === 'tabbed-view' ? 'To POM' : 'Proceed to POM'}
             </Button>
           </div>
         </div>
@@ -1297,9 +1309,9 @@ const FinalResizableTabsContainer = ({
     
     // Default header
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         padding: '8px',
         marginBottom: '8px',
@@ -1316,22 +1328,24 @@ const FinalResizableTabsContainer = ({
           <Button icon={<ArrowLeftOutlined />} onClick={handleBack} style={{ flexShrink: 0, marginRight: '12px' }} />
           {stateSelector}
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: viewMode === 'tabbed-view' ? '4px' : '8px' }}>
           {xpathFixButton}
-          <Button 
-            icon={<ReloadOutlined />} 
+          <Button
+            icon={<ReloadOutlined />}
             onClick={handleRegenerate}
+            size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
           >
-            Regenerate Locators
+            {viewMode === 'tabbed-view' ? 'Regen' : 'Regenerate Locators'}
           </Button>
-          <Button 
-            icon={<SaveOutlined />} 
-            onClick={handleApply} 
-            disabled={!hasChanges} 
-            type="primary" 
+          <Button
+            icon={<SaveOutlined />}
+            onClick={handleApply}
+            disabled={!hasChanges}
+            type="primary"
             style={{ flexShrink: 0 }}
+            size={viewMode === 'tabbed-view' ? 'small' : 'middle'}
           >
-            Apply Changes
+            {viewMode === 'tabbed-view' ? 'Apply' : 'Apply Changes'}
           </Button>
         </div>
       </div>
@@ -1355,27 +1369,93 @@ const FinalResizableTabsContainer = ({
     isAnalyzing
   ]);
 
-  return (
-    <div
-      id="resizable-tabs-container"
-      style={{ 
-        height: '100%', 
+  // Store viewMode in window for use by child components
+  if (typeof window !== 'undefined') {
+    window.viewMode = viewMode;
+  }
+
+  // Different style when in tabbed-view mode to ensure proper height constraints
+  const containerStyle = viewMode === 'tabbed-view'
+    ? {
+        height: '100%',
         width: '100%',
-        display: 'flex', 
+        display: 'flex',
+        padding: '0px',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        maxHeight: '100%' // Ensure it doesn't exceed its container
+      }
+    : {
+        height: '100%',
+        width: '100%',
+        display: 'flex',
         padding: '0px',
         flexDirection: 'column',
         overflow: 'hidden'
-      }}
+      };
+
+  // Adjust header style in tabbed-view mode
+  const headerStyle = viewMode === 'tabbed-view'
+    ? {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '2px 4px', // Minimal padding
+        marginBottom: '0px', // No margin
+        minHeight: '28px', // Very reduced height
+        maxHeight: '28px', // Constrained height
+        flexShrink: 0,
+        overflow: 'hidden',
+        borderBottom: '1px solid #f0f0f0',
+        fontSize: '12px' // Smaller font size
+      }
+    : {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px',
+        marginBottom: '8px',
+        minHeight: '48px',
+        flexShrink: 0,
+        overflow: 'hidden'
+      };
+
+  // Create a custom header renderer that uses our view-specific styles
+  const renderHeaderWithStyle = () => {
+    // Get the base header content from the original function
+    const header = renderHeader();
+
+    // If in tabbed view, apply our custom styling by wrapping the header
+    if (viewMode === 'tabbed-view') {
+      return (
+        <div style={headerStyle}>
+          {header.props.children}
+        </div>
+      );
+    }
+
+    // Otherwise return the original header
+    return header;
+  };
+
+  return (
+    <div
+      id="resizable-tabs-container"
+      style={containerStyle}
     >
-      {renderHeader()}
-      
-      <div style={{ 
-        flex: '1 1 auto', 
+      {renderHeaderWithStyle()}
+
+      <div style={{
+        flex: '1 1 auto',
         minHeight: 0,
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        maxHeight: viewMode === 'tabbed-view' ? 'calc(100% - 28px)' : 'auto' // Adjust for smaller header height
       }}>
-        <ResizableTabs tabs={tabsConfig} />
+        <ResizableTabs
+          tabs={tabsConfig}
+          nestedMode={viewMode === 'tabbed-view'}
+        />
       </div>
     </div>
   );

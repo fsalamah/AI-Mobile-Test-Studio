@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ResizableTabs.css'; // Import the CSS file
 
-const ResizableTabs = ({ tabs }) => {
-  // Set optimized default tab widths: 
-  // - Screenshot tab: 0.25 (25% for the image)
-  // - Element list: 0.4167 (approximately 42% to fill available space)
+const ResizableTabs = ({ tabs, nestedMode = false }) => {
+  // Set optimized default tab widths:
+  // - Screenshot tab: 0.25 (25% for the image) - or 0.33 in nested mode for more visibility
+  // - Element list: 0.4167 (approximately 42% to fill available space) or 0.33 in nested mode
   // - XML viewer: 0.3333 (33% as requested)
   const getOptimizedWidths = () => {
     if (tabs.length === 3) {
       // Check if first tab is Screenshot (typical Xray layout)
       if (tabs[0].label === 'Screenshot') {
-        return [0.25, 0.4167, 0.3333];
+        // In nested/tabbed mode, give more space to the screenshot
+        if (nestedMode) {
+          return [0.33, 0.33, 0.34]; // Equal distribution is better in smaller space
+        }
+        return [0.25, 0.4167, 0.3333]; // Standard distribution
       }
     }
     // Fall back to equal widths for any other configuration
@@ -72,22 +76,32 @@ const ResizableTabs = ({ tabs }) => {
     setStartWidths([...tabWidths]);
   };
 
+  // Adjust container classes based on nestedMode
+  const containerClassName = `resizable-tabs-container ${nestedMode ? 'nested-mode' : ''}`;
+
   return (
-    <div className="resizable-tabs-container" ref={containerRef}>
-      <div className="control-bar">
-        {/* Tab titles */}
-        {tabs.map((tab, index) => (
-          <span key={`control-${index}`} style={{ flexGrow: 1, textAlign: 'center' }}>
-            {tab.label || `Tab ${index + 1}`}
-          </span>
-        ))}
-      </div>
-      <div className="tabs-wrapper">
+    <div className={containerClassName} ref={containerRef} style={nestedMode ? { borderWidth: 0 } : {}}>
+      {/* Only show control bar if not in nested mode */}
+      {!nestedMode && (
+        <div className="control-bar">
+          {/* Tab titles */}
+          {tabs.map((tab, index) => (
+            <span key={`control-${index}`} style={{ flexGrow: 1, textAlign: 'center' }}>
+              {tab.label || `Tab ${index + 1}`}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="tabs-wrapper" style={nestedMode ? { height: '100%', maxHeight: '100%' } : {}}>
         {tabs.map((tab, index) => (
           <React.Fragment key={`tab-${index}`}>
             <div
               className={`tab tab-background ${tab.props.className || ''}`}
-              style={{ width: `${tabWidths[index] * 100}%`, height: '100%' }}
+              style={{
+                width: `${tabWidths[index] * 100}%`,
+                height: '100%',
+                overflow: 'auto'
+              }}
             >
               {/* Render the passed component with its arguments */}
               {React.createElement(tab.component, tab.props)}

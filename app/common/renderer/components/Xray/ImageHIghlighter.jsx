@@ -42,30 +42,51 @@ const ImageHighlighter = ({
   // Handle window resize and container size changes
   const updateDimensions = useCallback((imageWidth, imageHeight) => {
     if (!containerRef.current) return;
-    
+
     const containerWidth = containerRef.current.clientWidth;
     const containerHeight = containerRef.current.clientHeight;
-    
+
     log(`Container size: ${containerWidth}x${containerHeight}`);
-    
+
     const aspectRatio = imageWidth / imageHeight;
-    
-    // Always fit within the container height and width
+
+    // In tabbed view (when we're in XrayRootComponent), prioritize height
+    const isInTabbedView = window.viewMode === 'tabbed-view';
+
+    if (isInTabbedView) {
+      // First set to maximum height and calculate width
+      let newHeight = containerHeight;
+      let newWidth = containerHeight * aspectRatio;
+
+      // If width is too wide, scale down to fit width
+      if (newWidth > containerWidth) {
+        newWidth = containerWidth;
+        newHeight = containerWidth / aspectRatio;
+      }
+
+      // No scaling reduction - fill the container as much as possible
+      log(`Tabbed view dimensions: ${newWidth}x${newHeight}`);
+      setDimensions({ width: newWidth, height: newHeight });
+      setAspectRatioAfterResize(newWidth / imageWidth);
+      return;
+    }
+
+    // Standard view - regular sizing with margins
     // First check if fitting to width would exceed height
     let newWidth = containerWidth;
     let newHeight = containerWidth / aspectRatio;
-    
+
     // If the height exceeds container height, scale down to fit height
     if (newHeight > containerHeight) {
       newHeight = containerHeight;
       newWidth = containerHeight * aspectRatio;
     }
-    
+
     // Ensure the image takes up 90% of available container size at most
     // This leaves some margin to prevent touching the edges
     newWidth = Math.min(newWidth, containerWidth * 0.9);
     newHeight = Math.min(newHeight, containerHeight * 0.9);
-    
+
     log(`Calculated dimensions: ${newWidth}x${newHeight}`);
     setDimensions({ width: newWidth, height: newHeight });
     setAspectRatioAfterResize(newWidth / imageWidth);
@@ -623,17 +644,18 @@ const ImageHighlighter = ({
   };
 
   return (
-    <div 
-      ref={containerRef} 
-      style={{ 
-        width: '100%', 
-        height: '100%', 
-        overflow: 'hidden', 
+    <div
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
         position: 'relative',
         display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f0f2f5' // Match the app background color
+        justifyContent: window.viewMode === 'tabbed-view' ? 'center' : 'center',
+        alignItems: window.viewMode === 'tabbed-view' ? 'flex-start' : 'center',
+        backgroundColor: window.viewMode === 'tabbed-view' ? 'transparent' : '#f0f2f5',
+        padding: window.viewMode === 'tabbed-view' ? '0' : '10px'
       }}
     >
       {/* Inject CSS styles for animations */}
@@ -645,16 +667,16 @@ const ImageHighlighter = ({
         </div>
       )}
       {base64Png && (
-        <div style={{ 
-          position: 'relative', 
-          width: dimensions.width, 
+        <div style={{
+          position: 'relative',
+          width: dimensions.width,
           height: dimensions.height,
-          boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-          border: '1px solid #eee',
+          boxShadow: window.viewMode === 'tabbed-view' ? 'none' : '0 0 10px rgba(0,0,0,0.1)',
+          border: window.viewMode === 'tabbed-view' ? 'none' : '1px solid #eee',
           margin: 0,
           padding: 0
         }}>
-          <img 
+          <img
             ref={imgElementRef}
             src={`data:image/png;base64,${base64Png}`}
             alt="App screenshot"

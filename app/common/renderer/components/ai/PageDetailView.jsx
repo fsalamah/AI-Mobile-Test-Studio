@@ -15,7 +15,8 @@ import {
     Tooltip,
     Progress,
     Form,
-    Input
+    Input,
+    Tabs
 } from "antd";
 import {
     AimOutlined,
@@ -31,13 +32,17 @@ import {
     StarFilled,
     PlusCircleOutlined,
     DeleteOutlined,
-    RollbackOutlined
+    RollbackOutlined,
+    CopyOutlined
 } from "@ant-design/icons";
 import { FiAnchor} from "react-icons/fi";
 import { BiSolidGraduation } from "react-icons/bi";
 import { executeVisualPipeline, executeXpathPipeline } from "../../lib/ai/pipeline.js";
+import { executePOMClassPipeline } from "../../lib/ai/PomPipeline.js";
 import { Logger as PipelineLogger } from "../../lib/ai/logger.js";
-import DevNameEditor from "./DevNamesEditor.js";
+import DevNameEditor from "./DevNamesEditor.tsx";
+import CodeViewer from "./CodeViewer.jsx";
+import FinalResizableTabsContainer from "../Xray/XrayRootComponent.jsx";
 
 const { Text, Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -52,7 +57,8 @@ const PageDetailView = ({
     inspectorState,
     updatePage,
     // Updated to use AI progress modal functions
-    showAiProgressModal,onSetCodeViewerVisiblity,
+    showAiProgressModal,
+    onSetCodeViewerVisiblity,
     updateAiProgressMessage,
     hideAiProgressModal
 }) => {
@@ -71,6 +77,31 @@ const PageDetailView = ({
     const [aiVisualResult, setAiVisualResult] = useState(null);
     const [showDevNameEditor, setShowDevNameEditor] = useState(false);
 
+    // Tab-related state
+    const [activeTab, setActiveTab] = useState('states'); // 'states', 'elements', 'locators', 'code'
+
+    // Enhanced tab change handler
+    const handleTabChange = (tabKey) => {
+        // Set the active tab first to update UI
+        setActiveTab(tabKey);
+
+        // Load appropriate data for the selected tab
+        if (tabKey === 'elements') {
+            // Set loading state first
+            setAiVisualResult(null);
+
+            // Wait a short tick for UI to update, then load the data
+            setTimeout(() => {
+                if (selectedPage?.aiAnalysis?.visualElements) {
+                    setAiVisualResult(selectedPage.aiAnalysis.visualElements);
+                } else if (hasAiAnalysis) {
+                    // Try to run the pipeline if we have some analysis but no visual elements
+                    startAiPipeline();
+                }
+            }, 100);
+        }
+    }
+
     // Check if states exist for various button enables/disables
     const hasStates = selectedPage?.states?.length > 0;
     const hasAiAnalysis = !!selectedPage?.aiAnalysis;
@@ -79,41 +110,80 @@ const PageDetailView = ({
     const isIOSDriver = isDriverConnected && inspectorState.driver.client.isIOS;
     const isAndroidDriver = isDriverConnected && inspectorState.driver.client.isAndroid;
     
-    const setCodeViewerVisible = (isVisible)=>{
-        onSetCodeViewerVisiblity(isVisible)
+    // This function is no longer needed since we're using tabs
+    // but we keep it for compatibility
+    const setCodeViewerVisible = (isVisible) => {
+        if (isVisible) {
+            setActiveTab('code');
+        }
     }
-const handleViewExistingCode = () => {
-    if (!selectedPage || !selectedPage.aiAnalysis?.code) {
-        message.warn("No generated code available for this page.");
-        return;
-    }
-    
-    // Set current page for viewing code
-    setCurrentPageForCode(selectedPage);
-    
-    // Show the code viewer
-    setCodeViewerVisible(true);
-};    
-const handleRegenerateCode = async () => {
-    // Hide the code viewer
-    setCodeViewerVisible(false);
-    
-    // Show progress modal
-    showAiProgressModal("Regenerating code...");
-    
-    try {
-        // ... Regeneration logic
-        
-        // Show the code viewer again with updated code
-        setCurrentPageForCode(updatedPage);
-        setCodeViewerVisible(true);
-    } catch (error) {
-        // ... Error handling
-    } finally {
-        hideAiProgressModal();
-    }
-};
-// Function definitions for button actions
+
+    const handleViewExistingCode = () => {
+        if (!selectedPage || !selectedPage.aiAnalysis?.code) {
+            message.warn("No generated code available for this page.");
+            return;
+        }
+
+        // Set current page for viewing code
+        setCurrentPageForCode(selectedPage);
+
+        // Switch to the code tab
+        setActiveTab('code');
+    };    
+
+    // Handler for POM code generation
+    const handleOnProceedToPom = async (page) => {
+        PipelineLogger.subscribe(handlePipelineLogs);
+        showAiProgressModal("Initializing AI code generation...");
+
+        try {
+            const result = await executePOMClassPipeline(page);
+
+            if (result) {
+                const updatedPage = {
+                    ...page,
+                    aiAnalysis: {
+                        ...(page.aiAnalysis || {}),
+                        code: result
+                    }
+                };
+
+                updatePage(updatedPage);
+                setCurrentPageForCode(updatedPage);
+            }
+
+            message.success("Page Object Model generated successfully");
+            // Switch to code tab to show the new code
+            setActiveTab('code');
+
+        } catch (error) {
+            console.error("Error generating POM:", error);
+            message.error(`Failed to generate Page Object Model: ${error.message || 'Unknown error'}`);
+        } finally {
+            PipelineLogger.unsubscribe(handlePipelineLogs);
+            hideAiProgressModal();
+        }
+    };
+
+    const handleRegenerateCode = async () => {
+        // Show progress modal
+        showAiProgressModal("Regenerating code...");
+
+        try {
+            // Call the same pipeline function used for POM generation
+            await handleOnProceedToPom(selectedPage);
+
+            // Stay on the code tab - it will be automatically updated
+            message.success("Code regenerated successfully");
+        } catch (error) {
+            console.error("Error regenerating code:", error);
+            message.error(`Failed to regenerate code: ${error.message || 'Unknown error'}`);
+        } finally {
+            hideAiProgressModal();
+        }
+    };
+
+    // Function definitions for button actions
     const viewPageObjectModel = () => {
         if (!selectedPage) return;
         setCurrentPageForCode(selectedPage);
@@ -322,13 +392,27 @@ const handleRegenerateCode = async () => {
 
     const viewLocators = () => {
         if (!selectedPage || !selectedPage.aiAnalysis?.visualElements) return;
-        
-        // Set the AI visual result to the existing identified elements
-        setAiVisualResult(selectedPage.aiAnalysis.visualElements);
-        
-        // Show the DevNameEditor with the stored visualElements
-        setShowDevNameEditor(true);
-    };    
+
+        // Switch to the elements tab first
+        setActiveTab('elements');
+
+        // Clear visual elements to show loading state
+        setAiVisualResult(null);
+
+        // Wait a bit for UI to update, then set the visual elements
+        setTimeout(() => {
+            setAiVisualResult(selectedPage.aiAnalysis.visualElements);
+        }, 100);
+    };
+
+    // Function to view XPath analysis (used by toolbar button)
+    const viewXPathAnalysis = () => {
+        if (!selectedPage || !selectedPage.aiAnalysis?.locators) return;
+
+        // Switch to the locators tab
+        setActiveTab('locators');
+    };
+
     const handlePipelineLogs = (log) => {
         // Use the AI progress modal function
         updateAiProgressMessage(log.message);
@@ -368,13 +452,19 @@ const handleRegenerateCode = async () => {
         if (!updatedPage.aiAnalysis) {
             updatedPage.aiAnalysis = {};
         }
-        
+
         // Store the updated visual elements
         updatedPage.aiAnalysis.visualElements = updatedVisualElements;
         updatePage(updatedPage);
-        
-        // Close the DevNameEditor modal
-        setShowDevNameEditor(false);
+
+        // Close the DevNameEditor modal if it was shown in a modal
+        if (showDevNameEditor) {
+            setShowDevNameEditor(false);
+        }
+
+        // Also update the current visual result for the tab view
+        setAiVisualResult(updatedVisualElements);
+
         message.success("Element names saved successfully");
     };
     
@@ -384,22 +474,27 @@ const handleRegenerateCode = async () => {
             message.error("Invalid visual elements data");
             return;
         }
-        
+
         // Update the selected page with the new visualElements
         const updatedPage = { ...selectedPage };
         if (!updatedPage.aiAnalysis) {
             updatedPage.aiAnalysis = {};
         }
-        
+
         // Store the updated visual elements
         updatedPage.aiAnalysis.visualElements = updatedVisualElements;
-        
+
         // Explicitly save the page with updated visualElements before proceeding
         updatePage(updatedPage);
         message.info("Saving element names and proceeding to XPath generation...");
-        
-        // Close the DevNameEditor modal
-        setShowDevNameEditor(false);
+
+        // Close the DevNameEditor modal if it was shown in a modal
+        if (showDevNameEditor) {
+            setShowDevNameEditor(false);
+        }
+
+        // Also update the current visual result for the tab view
+        setAiVisualResult(updatedVisualElements);
         
         // Start the XPath detection process
         PipelineLogger.subscribe(handlePipelineLogs);
@@ -426,9 +521,9 @@ const handleRegenerateCode = async () => {
             updatePage(finalUpdatedPage);
             
 
-            // Navigate to the XPath analysis view
-            navigateToPageXray('pipeline-stage');
-            
+            // Navigate to the XPath analysis tab instead of separate view
+            setActiveTab('locators');
+
             message.success("XPath analysis completed successfully");
         } catch(e) {
             console.error("XPath pipeline error:", e);
@@ -440,14 +535,21 @@ const handleRegenerateCode = async () => {
         }
     };
     
-    const handleRegenerateDevNames = () => {
-        // Hide the DevNameEditor first
-        setShowDevNameEditor(false);
-        
-        // Then re-run the visual pipeline
-        setTimeout(() => {
+    const handleRegenerateDevNames = (fromTabView = false) => {
+        // Different behavior based on where it was called from
+        if (!fromTabView) {
+            // If called from the modal, hide the DevNameEditor first
+            setShowDevNameEditor(false);
+
+            // Then re-run the visual pipeline after a short delay
+            setTimeout(() => {
+                startAiPipeline();
+            }, 100); // Short delay to ensure modal is closed before starting new pipeline
+        } else {
+            // If called from the tab view, just clear the results and run the pipeline
+            setAiVisualResult(null);
             startAiPipeline();
-        }, 100); // Short delay to ensure modal is closed before starting new pipeline
+        }
     };
     
     const getOsBadges = (state) => {
@@ -489,26 +591,338 @@ public class ${pageName.replace(/\s+/g, '')}Page {
 
     const states = selectedPage.states || [];
 
+    // Create the tab items for the tab component
+    const tabItems = [
+        {
+            key: 'states',
+            label: 'States',
+            children: (
+                states.length === 0 && !isCapturing ? (
+                    <div style={{ textAlign: 'center', padding: '80px 20px', background: '#fff' }}>
+                        <div style={{
+                            maxWidth: '450px',
+                            margin: '0 auto',
+                            padding: '40px 20px',
+                            background: '#fafafa',
+                            border: '1px dashed #d9d9d9',
+                            borderRadius: '8px'
+                        }}>
+                            <Text type="secondary" style={{ fontSize: '16px' }}>No states captured for "{selectedPage.name}" yet.</Text>
+                            <div style={{ marginTop: '24px' }}>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    icon={<AimOutlined />}
+                                    onClick={() => startCapture()}
+                                    disabled={isCapturing || !isDriverConnected}
+                                    aria-label="Capture First State"
+                                >
+                                    Capture First State
+                                </Button>
+                                {!isDriverConnected && <Text type="warning" style={{ display: 'block', marginTop: 12 }}>(Connect driver to capture)</Text>}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
+                        <List
+                            grid={{ gutter: 20, xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 3 }}
+                            dataSource={[...states].sort((a, b) => new Date(b.timeStamp) - new Date(a.timeStamp))}
+                            renderItem={(state) => {
+                                const hasIOS = !!state.versions?.ios;
+                                const hasAndroid = !!state.versions?.android;
+
+                                return (
+                                    <List.Item key={state.id}>
+                                        <Card
+                                            className="state-card"
+                                            title={
+                                                <Space align="center">
+                                                    {state.isDefault && <Tooltip title="Default State"><StarFilled style={{ color: "#faad14", fontSize: '16px', verticalAlign: 'middle' }} /></Tooltip>}
+                                                    <Text ellipsis={{ tooltip: state.title }} style={{ maxWidth: 200 }}>{state.title}</Text>
+                                                    {getOsBadges(state)}
+                                                </Space>
+                                            }
+                                            extra={
+                                                <Dropdown
+                                                    overlay={
+                                                        <Menu>
+                                                            <Menu.Item key="edit" icon={<EditOutlined />} onClick={() => showEditStateModal(state)}>
+                                                                Edit Details
+                                                            </Menu.Item>
+                                                            {!state.isDefault && (
+                                                                <Menu.Item key="default" icon={<StarOutlined />} onClick={() => toggleDefaultState(state.id)}>
+                                                                    Set as Default
+                                                                </Menu.Item>
+                                                            )}
+                                                            <Menu.SubMenu
+                                                                key="captureVersion"
+                                                                icon={<PlusCircleOutlined />}
+                                                                title="Add/Recapture Version"
+                                                                disabled={!isDriverConnected || isCapturing}
+                                                            >
+                                                                <Menu.Item
+                                                                    key="captureiOS"
+                                                                    icon={<AppleOutlined />}
+                                                                    onClick={() => startCapture(state.id, 'ios')}
+                                                                    disabled={!isIOSDriver || isCapturing}
+                                                                >
+                                                                    {hasIOS ? "Recapture iOS" : "Add iOS"}
+                                                                </Menu.Item>
+                                                                <Menu.Item
+                                                                    key="captureAndroid"
+                                                                    icon={<AndroidOutlined />}
+                                                                    onClick={() => startCapture(state.id, 'android')}
+                                                                    disabled={!isAndroidDriver || isCapturing}
+                                                                >
+                                                                    {hasAndroid ? "Recapture Android" : "Add Android"}
+                                                                </Menu.Item>
+                                                            </Menu.SubMenu>
+                                                            <Menu.Divider />
+                                                            <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
+                                                                <Popconfirm
+                                                                    title="Delete this state?"
+                                                                    description="Are you sure? This cannot be undone."
+                                                                    onConfirm={() => deleteState(state.id)}
+                                                                    okText="Yes, Delete" cancelText="No" placement="left"
+                                                                >
+                                                                    <div style={{ width: '100%' }}>Delete State</div>
+                                                                </Popconfirm>
+                                                            </Menu.Item>
+                                                        </Menu>
+                                                    }
+                                                    trigger={['click']}
+                                                >
+                                                    <Button
+                                                        type="text"
+                                                        icon={<EllipsisOutlined />}
+                                                        aria-label="State Actions Menu"
+                                                        title="State Options"
+                                                    />
+                                                </Dropdown>
+                                            }
+                                            hoverable
+                                            style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+                                            bodyStyle={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
+                                        >
+                                            <div style={{
+                                                display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+                                                gap: '10px', marginBottom: '12px', padding: '10px 0', minHeight: '180px',
+                                                background: '#f9f9f9', borderRadius: '4px', border: '1px solid #f0f0f0'
+                                            }}>
+                                                {hasIOS ? (
+                                                    <div style={{ textAlign: 'center', maxWidth: '45%' }}>
+                                                        <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>iOS</Text>
+                                                        <img
+                                                            src={`data:image/png;base64,${state.versions.ios.screenShot}`}
+                                                            alt={`iOS Screenshot for ${state.title}`}
+                                                            style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                                                        />
+                                                    </div>
+                                                ) : <div style={{ width: '45%'}}></div>}
+
+                                                {hasAndroid ? (
+                                                    <div style={{ textAlign: 'center', maxWidth: '45%' }}>
+                                                        <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>Android</Text>
+                                                        <img
+                                                            src={`data:image/png;base64,${state.versions.android.screenShot}`}
+                                                            alt={`Android Screenshot for ${state.title}`}
+                                                            style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                                                        />
+                                                    </div>
+                                                ) : <div style={{ width: '45%'}}></div>}
+
+                                                {!hasIOS && !hasAndroid && (
+                                                    <div style={{ color: '#bfbfbf', textAlign: 'center', width: '100%' }}>No screenshots available</div>
+                                                )}
+                                            </div>
+
+                                            {state.description ? (
+                                                <Paragraph ellipsis={{ rows: 2, expandable: true, symbol: 'more' }} style={{ marginBottom: '8px', flexGrow: 1 }}>
+                                                    {state.description}
+                                                </Paragraph>
+                                            ) : (<div style={{flexGrow: 1}}></div>)}
+
+                                            <div style={{ marginTop: 'auto', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    Created: {new Date(state.timeStamp).toLocaleString()}
+                                                </Text>
+                                            </div>
+                                        </Card>
+                                    </List.Item>
+                                );
+                            }}
+                        />
+                    </div>
+                )
+            )
+        },
+        {
+            key: 'elements',
+            label: 'Visual Elements',
+            disabled: !hasAiAnalysis || !selectedPage?.aiAnalysis?.visualElements,
+            children: (
+                <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
+                    {aiVisualResult ? (
+                        <DevNameEditor
+                            originalData={aiVisualResult}
+                            onSave={handleDevNameSave}
+                            onRegenerate={() => handleRegenerateDevNames(true)}
+                            onProceedToXpath={proceedToAiXpath}
+                            inTabView={true}
+                        />
+                    ) : (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100% - 40px)', padding: '40px 20px' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <Spin size="large" />
+                                <Text style={{ display: 'block', marginTop: '16px', fontSize: '16px' }}>Loading visual elements...</Text>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )
+        },
+        {
+            key: 'locators',
+            label: 'XPath Analysis',
+            disabled: !hasAiAnalysis || !selectedPage?.aiAnalysis?.locators,
+            children: (
+                selectedPage?.aiAnalysis?.locators ? (
+                    <div style={{
+                        padding: '0',
+                        height: '100%',
+                        width: '100%',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        <FinalResizableTabsContainer
+                            page={selectedPage}
+                            pageChanged={updatePage}
+                            onExit={() => setActiveTab('states')}
+                            onRegenerateLocators={startAiPipeline}
+                            onProceedToPom={handleOnProceedToPom}
+                            viewMode="tabbed-view"
+                        />
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                        <div style={{
+                            textAlign: 'center',
+                            maxWidth: '450px',
+                            padding: '40px 20px',
+                            background: '#fafafa',
+                            border: '1px dashed #d9d9d9',
+                            borderRadius: '8px'
+                        }}>
+                            <Text type="secondary" style={{ fontSize: '16px' }}>No XPath locators have been generated for this page yet.</Text>
+                            <div style={{ marginTop: '24px' }}>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    onClick={startAiPipeline}
+                                >
+                                    Generate XPath Locators
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            )
+        },
+        {
+            key: 'code',
+            label: 'Generated Code',
+            disabled: !hasGeneratedCode,
+            children: (
+                selectedPage?.aiAnalysis?.code ? (
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+                        <CodeViewer
+                            page={selectedPage}
+                            language="java"
+                            title="Generated Page Object Model"
+                            onRegenerate={handleRegenerateCode}
+                            onBack={() => {}}
+                        />
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                        <div style={{
+                            textAlign: 'center',
+                            maxWidth: '450px',
+                            padding: '40px 20px',
+                            background: '#fafafa',
+                            border: '1px dashed #d9d9d9',
+                            borderRadius: '8px'
+                        }}>
+                            <Text type="secondary" style={{ fontSize: '16px' }}>No code has been generated for this page yet.</Text>
+                            <div style={{ marginTop: '24px' }}>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    onClick={startAiPipeline}
+                                >
+                                    Generate Code
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            )
+        }
+    ];
+
     return (
         <>
-            <div style={{ marginBottom: '20px', paddingBottom: '0px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                    <Space align="center">
-                        <Button 
-                            icon={<ArrowLeftOutlined />} 
-                            onClick={navigateToPageList} 
-                            type="text" 
-                            aria-label="Back to page list"
-                            title="Return to page list" 
-                        />
-                        <Title level={4} style={{ margin: 0 }} ellipsis={{ tooltip: selectedPage.name }}>
-                            {selectedPage.name}
-                            {selectedPage.module && <Text type="secondary" style={{ marginLeft: 8, fontSize: '14px' }}>({selectedPage.module})</Text>}
-                        </Title>
-                    </Space>
-                    {selectedPage.description && <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0, paddingLeft: '36px' }} ellipsis={{ rows: 2}}>{selectedPage.description}</Paragraph>}
+            {/* Header with Title and Back Button */}
+            <header style={{
+                height: 'auto',
+                padding: '8px 12px',
+                background: '#fff',
+                borderBottom: '1px solid #f0f0f0',
+                flexShrink: 0
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Button
+                        icon={<ArrowLeftOutlined />}
+                        onClick={navigateToPageList}
+                        type="text"
+                        aria-label="Back to page list"
+                        title="Go back"
+                        style={{ marginRight: '8px', padding: '4px 8px' }}
+                    />
+                    <Title level={4} style={{ margin: 0 }} ellipsis={{ tooltip: selectedPage.name }}>
+                        {selectedPage.name}
+                        {selectedPage.module && <Text type="secondary" style={{ marginLeft: 8, fontSize: '14px' }}>({selectedPage.module})</Text>}
+                    </Title>
                 </div>
-                <Space wrap>
+
+                {/* Description row - displayed below the title */}
+                {selectedPage.description && (
+                    <Paragraph
+                        type="secondary"
+                        style={{
+                            marginTop: 4,
+                            marginBottom: 0,
+                            paddingLeft: '36px'
+                        }}
+                        ellipsis={{ rows: 2 }}
+                    >
+                        {selectedPage.description}
+                    </Paragraph>
+                )}
+            </header>
+
+            {/* Toolbar - Separated from the header */}
+            <div style={{
+                padding: '16px',
+                background: '#fafafa',
+                borderBottom: '1px solid #f0f0f0',
+                zIndex: 10,
+                flexShrink: 0,
+                marginBottom: '16px'
+            }}>
+                <Space wrap style={{ width: '100%', justifyContent: 'flex-start' }}>
                     <Tooltip title={isDriverConnected ? "Capture New State for this Page" : "Connect a device to capture states"}>
                         <Button
                             type="primary"
@@ -521,19 +935,10 @@ public class ${pageName.replace(/\s+/g, '')}Page {
                             Capture State
                         </Button>
                     </Tooltip>
-                    <Tooltip title="View Page Object Model">
-                        {/* <Button 
-                            icon={<CodeSandboxOutlined />} 
-                            onClick={viewPageObjectModel}
-                            aria-label="View Page Object Model"
-                        >
-                            View POM
-                        </Button> */}
-                    </Tooltip>
-                    
+
                     <Tooltip title={!hasStates ? "Capture states before generating code" : "Execute AI code generation for this page"}>
-                        <Button 
-                            icon={<BiSolidGraduation />} 
+                        <Button
+                            icon={<BiSolidGraduation />}
                             onClick={startAiPipeline}
                             aria-label="Generate Code with AI"
                             disabled={!hasStates}
@@ -541,35 +946,38 @@ public class ${pageName.replace(/\s+/g, '')}Page {
                             Generate Code
                         </Button>
                     </Tooltip>
+
                     <Tooltip title={!hasAiAnalysis || !selectedPage.aiAnalysis?.visualElements ? "Generate code first to view elements" : "View AI-Generated Element Locators"}>
-    <Button 
-        icon={<FileSearchOutlined />} 
-        onClick={viewLocators}
-        aria-label="View Element Locators"
-        disabled={!hasAiAnalysis || !selectedPage.aiAnalysis?.visualElements}
-    >
-        Visual Analysis Elements
-    </Button>
-</Tooltip>
+                        <Button
+                            icon={<FileSearchOutlined />}
+                            onClick={viewLocators}
+                            aria-label="View Element Locators"
+                            disabled={!hasAiAnalysis || !selectedPage.aiAnalysis?.visualElements}
+                        >
+                            Visual Analysis
+                        </Button>
+                    </Tooltip>
+
                     <Tooltip title="View detailed page element analysis">
-                        <Button 
-                            icon={<FiAnchor />} 
-                            onClick={navigateToPageXray}
+                        <Button
+                            icon={<FiAnchor />}
+                            onClick={viewXPathAnalysis}
                             aria-label="View Page X-Ray Analysis"
                             disabled={!hasAiAnalysis}
                         >
-                            View XPath Locators
+                            XPath Analysis
                         </Button>
                     </Tooltip>
+
                     <Tooltip title={!hasGeneratedCode ? "Generate code first to view it" : "View Generated Test Code"}>
-                    <Button 
-    icon={<CodeOutlined />} 
-    onClick={handleViewExistingCode} // Use our new function here
-    disabled={!hasGeneratedCode}
-    aria-label="View Generated Code"
->
-    View Code
-</Button>
+                        <Button
+                            icon={<CodeOutlined />}
+                            onClick={handleViewExistingCode}
+                            disabled={!hasGeneratedCode}
+                            aria-label="View Generated Code"
+                        >
+                            View Code
+                        </Button>
                     </Tooltip>
                 </Space>
             </div>
@@ -582,187 +990,125 @@ public class ${pageName.replace(/\s+/g, '')}Page {
                 </div>
             )}
 
-            {states.length === 0 && !isCapturing ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', background: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
-                    <Text type="secondary">No states captured for "{selectedPage.name}" yet.</Text>
-                    <div style={{ marginTop: '16px' }}>
-                        <Button
-                            type="primary"
-                            icon={<AimOutlined />}
-                            onClick={() => startCapture()}
-                            disabled={isCapturing || !isDriverConnected}
-                            aria-label="Capture First State"
-                        >
-                            Capture First State
-                        </Button>
-                        {!isDriverConnected && <Text type="warning" style={{ marginLeft: 8 }}> (Connect driver to capture)</Text>}
-                    </div>
+            {/* Main Content - Tabbed Interface */}
+            <div className="page-details-content" style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100% - 130px)',
+                overflow: 'hidden',
+                marginTop: '8px',
+                border: '1px solid #f0f0f0',
+                borderRadius: '8px',
+                background: '#fff'
+            }}>
+                <div className="tab-header" style={{
+                    padding: '0 12px',
+                    borderBottom: '1px solid #f0f0f0',
+                    background: '#fafafa',
+                    maxHeight: '44px',
+                    minHeight: '44px',
+                    overflow: 'hidden'
+                }}>
+                    <Tabs
+                        activeKey={activeTab}
+                        onChange={handleTabChange}
+                        type="card"
+                        className="recording-tabs custom-tabs"
+                        tabBarStyle={{
+                            marginBottom: 0,
+                            marginTop: 3,
+                            height: '40px'
+                        }}
+                        items={tabItems}
+                    />
                 </div>
-            ) : (
-                <List
-                    grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 3 }}
-                    dataSource={[...states].sort((a, b) => new Date(b.timeStamp) - new Date(a.timeStamp))}
-                    renderItem={(state) => {
-                        const hasIOS = !!state.versions?.ios;
-                        const hasAndroid = !!state.versions?.android;
+                <div className="tab-content custom-scrollbar" style={{
+                    flex: 1,
+                    overflow: activeTab === 'locators' ? 'hidden' : 'auto',
+                    position: 'relative',
+                    height: 'calc(100% - 44px)'
+                }}>
+                    {tabItems.find(item => item.key === activeTab)?.children}
+                </div>
+            </div>
 
-                        return (
-                            <List.Item key={state.id}>
-                                <Card
-                                    className="state-card"
-                                    title={
-                                        <Space align="center">
-                                            {state.isDefault && <Tooltip title="Default State"><StarFilled style={{ color: "#faad14", fontSize: '16px', verticalAlign: 'middle' }} /></Tooltip>}
-                                            <Text ellipsis={{ tooltip: state.title }} style={{ maxWidth: 200 }}>{state.title}</Text>
-                                            {getOsBadges(state)}
-                                        </Space>
-                                    }
-                                    extra={
-                                        <Dropdown
-                                            overlay={
-                                                <Menu>
-                                                    <Menu.Item key="edit" icon={<EditOutlined />} onClick={() => showEditStateModal(state)}>
-                                                        Edit Details
-                                                    </Menu.Item>
-                                                    {!state.isDefault && (
-                                                        <Menu.Item key="default" icon={<StarOutlined />} onClick={() => toggleDefaultState(state.id)}>
-                                                            Set as Default
-                                                        </Menu.Item>
-                                                    )}
-                                                    <Menu.SubMenu
-                                                        key="captureVersion"
-                                                        icon={<PlusCircleOutlined />}
-                                                        title="Add/Recapture Version"
-                                                        disabled={!isDriverConnected || isCapturing}
-                                                    >
-                                                        <Menu.Item
-                                                            key="captureiOS"
-                                                            icon={<AppleOutlined />}
-                                                            onClick={() => startCapture(state.id, 'ios')}
-                                                            disabled={!isIOSDriver || isCapturing}
-                                                        >
-                                                            {hasIOS ? "Recapture iOS" : "Add iOS"}
-                                                        </Menu.Item>
-                                                        <Menu.Item
-                                                            key="captureAndroid"
-                                                            icon={<AndroidOutlined />}
-                                                            onClick={() => startCapture(state.id, 'android')}
-                                                            disabled={!isAndroidDriver || isCapturing}
-                                                        >
-                                                            {hasAndroid ? "Recapture Android" : "Add Android"}
-                                                        </Menu.Item>
-                                                    </Menu.SubMenu>
-                                                    <Menu.Divider />
-                                                    <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
-                                                        <Popconfirm
-                                                            title="Delete this state?"
-                                                            description="Are you sure? This cannot be undone."
-                                                            onConfirm={() => deleteState(state.id)}
-                                                            okText="Yes, Delete" cancelText="No" placement="left"
-                                                        >
-                                                            <div style={{ width: '100%' }}>Delete State</div>
-                                                        </Popconfirm>
-                                                    </Menu.Item>
-                                                </Menu>
-                                            }
-                                            trigger={['click']}
-                                        >
-                                            <Button 
-                                                type="text" 
-                                                icon={<EllipsisOutlined />} 
-                                                aria-label="State Actions Menu"
-                                                title="State Options"
-                                            />
-                                        </Dropdown>
-                                    }
-                                    hoverable
-                                    style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-                                    bodyStyle={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
-                                >
-                                    <div style={{
-                                        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-                                        gap: '10px', marginBottom: '12px', padding: '10px 0', minHeight: '180px',
-                                        background: '#f9f9f9', borderRadius: '4px', border: '1px solid #f0f0f0'
-                                    }}>
-                                        {hasIOS ? (
-                                            <div style={{ textAlign: 'center', maxWidth: '45%' }}>
-                                                <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>iOS</Text>
-                                                <img 
-                                                    src={`data:image/png;base64,${state.versions.ios.screenShot}`} 
-                                                    alt={`iOS Screenshot for ${state.title}`} 
-                                                    style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }} 
-                                                />
-                                            </div>
-                                        ) : <div style={{ width: '45%'}}></div>}
-                                        
-                                        {hasAndroid ? (
-                                            <div style={{ textAlign: 'center', maxWidth: '45%' }}>
-                                                <Text type="secondary" style={{ display: 'block', marginBottom: '5px', fontSize: '12px' }}>Android</Text>
-                                                <img 
-                                                    src={`data:image/png;base64,${state.versions.android.screenShot}`} 
-                                                    alt={`Android Screenshot for ${state.title}`} 
-                                                    style={{ maxWidth: "100%", maxHeight: "650px", objectFit: "contain", border: '1px solid #d9d9d9', borderRadius: '4px' }} 
-                                                />
-                                            </div>
-                                        ) : <div style={{ width: '45%'}}></div>}
-                                        
-                                        {!hasIOS && !hasAndroid && (
-                                            <div style={{ color: '#bfbfbf', textAlign: 'center', width: '100%' }}>No screenshots available</div>
-                                        )}
-                                    </div>
+            {/* Add custom scrollbar styles */}
+            <style>{`
+                /* Custom scrollbar styles */
+                /* WebKit browsers (Chrome, Safari) */
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 14px !important;
+                  height: 14px !important;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: #f0f0f0 !important;
+                  border-radius: 0 !important;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background-color: #c1c1c1 !important;
+                  border-radius: 7px !important;
+                  border: 3px solid #f0f0f0 !important;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background-color: #a0a0a0 !important;
+                }
+                .custom-scrollbar::-webkit-scrollbar-corner {
+                  background: #f0f0f0 !important;
+                }
 
-                                    {state.description ? (
-                                        <Paragraph ellipsis={{ rows: 2, expandable: true, symbol: 'more' }} style={{ marginBottom: '8px', flexGrow: 1 }}>
-                                            {state.description}
-                                        </Paragraph>
-                                    ) : (<div style={{flexGrow: 1}}></div>)}
+                /* Firefox and other browsers */
+                .custom-scrollbar {
+                  scrollbar-width: thin !important;
+                  scrollbar-color: #c1c1c1 #f0f0f0 !important;
+                }
 
-                                    <div style={{ marginTop: 'auto', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
-                                        <Text type="secondary" style={{ fontSize: '11px' }}>
-                                            Created: {new Date(state.timeStamp).toLocaleString()}
-                                        </Text>
-                                    </div>
-                                </Card>
-                            </List.Item>
-                        );
-                    }}
-                />
-            )}
-{/* CodeViewer Modal - This is the new modal for viewing code with the fixed CodeViewer component */}
-{/* {codeViewerVisible && selectedPage && (
-    <Modal
-        title={`Generated Code: ${selectedPage.name}`}
-        visible={codeViewerVisible}
-        onCancel={() => setCodeViewerVisible(false)}
-        width={800}
-        footer={null}
-        bodyStyle={{ padding: 0, height: '70vh' }}
-    >
-        <CodeViewer
-            page={currentPageForCode}
-            language="java"
-            title="Generated Test Code"
-            onBack={() => setCodeViewerVisible(false)}
-            onSave={updatePage}
-            onRegenerate={handleRegenerateCode}
-        />
-    </Modal>
-)} */}
+                /* Custom tabs styling to match recorder */
+                .custom-tabs .ant-tabs-nav::before {
+                  border-bottom: none !important;
+                }
+
+                .custom-tabs .ant-tabs-tab {
+                  border: none !important;
+                  background: transparent !important;
+                  padding: 8px 16px !important;
+                  margin: 0 !important;
+                  color: rgba(0, 0, 0, 0.65) !important;
+                }
+
+                .custom-tabs .ant-tabs-tab-active {
+                  background: #fff !important;
+                  border-top-left-radius: 8px !important;
+                  border-top-right-radius: 8px !important;
+                  border: 1px solid #f0f0f0 !important;
+                  border-bottom: none !important;
+                  font-weight: 500 !important;
+                }
+
+                .custom-tabs .ant-tabs-tab:hover {
+                  color: #0071E3 !important;
+                }
+
+                .custom-tabs .ant-tabs-ink-bar {
+                  display: none !important;
+                }
+            `}</style>
+
             {/* State Details Modal */}
-            <Modal 
-                title={editingState?.id ? `Edit State: ${stateTitle}` : "New State Details"} 
-                visible={stateDetailsModalVisible} 
-                onOk={saveStateDetails} 
-                onCancel={() => { setStateDetailsModalVisible(false); setEditingState(null); }} 
+            <Modal
+                title={editingState?.id ? `Edit State: ${stateTitle}` : "New State Details"}
+                open={stateDetailsModalVisible}
+                onOk={saveStateDetails}
+                onCancel={() => { setStateDetailsModalVisible(false); setEditingState(null); }}
                 okText="Save Details"
-                okButtonProps={{ 
+                okButtonProps={{
                     disabled: !stateTitle.trim(),
                     title: !stateTitle.trim() ? "Title is required" : "Save state details"
                 }}
                 cancelButtonProps={{
                     title: "Cancel editing"
                 }}
-                width={600} 
+                width={600}
                 destroyOnClose
             >
                 <Form layout="vertical">
@@ -784,7 +1130,7 @@ public class ${pageName.replace(/\s+/g, '')}Page {
             {/* Code/POM View Modal */}
             <Modal
                 title={`Page Object Model: ${currentPageForCode?.name || 'Page'}`}
-                visible={viewCodeModalVisible}
+                open={viewCodeModalVisible}
                 onCancel={() => setViewCodeModalVisible(false)}
                 width={800}
                 footer={null}
@@ -797,7 +1143,7 @@ public class ${pageName.replace(/\s+/g, '')}Page {
             {/* Locators View Modal */}
             <Modal
                 title={`Element Locators: ${currentPageForCode?.name || 'Page'}`}
-                visible={viewLocatorsModalVisible}
+                open={viewLocatorsModalVisible}
                 onCancel={() => setViewLocatorsModalVisible(false)}
                 width={800}
                 footer={null}
@@ -810,7 +1156,7 @@ public class ${pageName.replace(/\s+/g, '')}Page {
             {/* DevNameEditor Modal */}
             <Modal
                 title={`Edit Element Names for ${selectedPage?.name || 'Page'}`}
-                visible={showDevNameEditor}
+                open={showDevNameEditor}
                 onCancel={() => setShowDevNameEditor(false)}
                 width={900}
                 footer={null}
@@ -818,11 +1164,16 @@ public class ${pageName.replace(/\s+/g, '')}Page {
                 destroyOnClose
             >
                 {aiVisualResult && (
-                    <DevNameEditor 
-                        originalData={aiVisualResult} 
+                    <DevNameEditor
+                        originalData={aiVisualResult}
                         onSave={handleDevNameSave}
                         onRegenerate={handleRegenerateDevNames}
-                        onProceedToXpath={proceedToAiXpath} // This will receive updated visual elements directly
+                        onProceedToXpath={(updatedElements) => {
+                            // We're in a modal, so we need to close it before proceeding
+                            setShowDevNameEditor(false);
+                            proceedToAiXpath(updatedElements);
+                        }}
+                        inTabView={false}
                     />
                 )}
             </Modal>
