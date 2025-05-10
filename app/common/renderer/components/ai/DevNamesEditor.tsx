@@ -4,7 +4,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, ArrowRightOutlined, ReloadO
 
 const { Option } = Select;
 
-const DevNameEditor = ({ originalData, onSave, onRegenerate, onProceedToXpath }) => {
+const DevNameEditor = ({ originalData, onSave, onRegenerate, onProceedToXpath, inTabView = false }) => {
   // Simple flat representation of element names and their mappings
   const [elementNames, setElementNames] = useState([]);
   const [stateOsPairs, setStateOsPairs] = useState([]);
@@ -400,26 +400,26 @@ const DevNameEditor = ({ originalData, onSave, onRegenerate, onProceedToXpath })
   const groupedStates = getGroupedStates();
 
   return (
-    <div>
+    <div style={{ height: inTabView ? 'calc(100% - 16px)' : 'auto' }}>
       {/* Element Detection Summary */}
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={16}>
           <Col span={8}>
-            <Statistic 
-              title="Total Elements" 
-              value={elementCounts.totalElements} 
+            <Statistic
+              title="Total Elements"
+              value={elementCounts.totalElements}
             />
           </Col>
           <Col span={8}>
-            <Statistic 
-              title="Unique Element Names" 
-              value={elementCounts.uniqueDevNames} 
+            <Statistic
+              title="Unique Element Names"
+              value={elementCounts.uniqueDevNames}
             />
           </Col>
           <Col span={8}>
-            <Statistic 
-              title="State/OS Combinations" 
-              value={elementCounts.stateOsPairs} 
+            <Statistic
+              title="State/OS Combinations"
+              value={elementCounts.stateOsPairs}
             />
           </Col>
         </Row>
@@ -465,12 +465,14 @@ const DevNameEditor = ({ originalData, onSave, onRegenerate, onProceedToXpath })
         </div>
       </div>
       
-      <Table 
-        rowKey="id" 
-        dataSource={elementNames} 
-        columns={columns} 
+      <Table
+        rowKey="id"
+        dataSource={elementNames}
+        columns={columns}
         pagination={false}
+        scroll={inTabView ? { y: 'calc(100vh - 500px)' } : undefined}
         rowClassName={record => editingKey === record.id ? 'editing-row' : ''}
+        style={{ height: inTabView ? 'calc(100% - 200px)' : 'auto' }}
       />
       
       <Modal

@@ -172,9 +172,19 @@ export default function AppiumAnalysisPanel({
             setShowModelConfig(true);
         };
         
-        const handleNavigateToRecordingView = () => {
+        const handleNavigateToRecordingView = (event) => {
             console.log("Navigating to Recording View");
-            setCurrentView('recordingView');
+            // Check if we should keep the side panel visible
+            const keepSidePanelVisible = event?.detail?.keepSidePanelVisible === true;
+
+            if (keepSidePanelVisible) {
+                console.log("Keeping side panel visible for recording view");
+                // We'll render both the side panel and recording view together
+                setCurrentView('recordingViewWithSidePanel');
+            } else {
+                // Standard fullscreen recording view
+                setCurrentView('recordingView');
+            }
         };
         
         document.addEventListener('navigateToAiModelConfig', handleNavigateToAiModelConfig);
@@ -616,6 +626,53 @@ export default function AppiumAnalysisPanel({
                 isRecording={inspectorState?.isRecording || false}
                 recordedActions={inspectorState?.recordedActions || []}
             />
+        );
+    }
+
+    // If recording view with side panel is active, render a combined layout
+    if (currentView === 'recordingViewWithSidePanel') {
+        return (
+            <Layout style={{ height: '100vh', background: '#fff' }}>
+                <SidePanel
+                    pages={pages}
+                    treeData={treeData}
+                    selectedKeys={selectedKeys}
+                    expandedKeys={expandedKeys}
+                    autoExpandParent={autoExpandParent}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    onTreeSelect={handleTreeSelect}
+                    onTreeExpand={onTreeExpand}
+                    onEditPage={handleEditPage}
+                    onDeletePage={handleDeletePage}
+                    onCreatePage={handleCreatePage}
+                    fileOperations={handleFileOperations}
+                    saving={saving}
+                    projectId={projectId}
+                    isCollapsed={isSidePanelCollapsed}
+                    onCollapseChange={setIsSidePanelCollapsed}
+                />
+
+                <Content style={{ padding: '10px', height: 'calc(100vh - 64px)', overflow: 'hidden', background: '#f0f2f5' }}>
+                    <RecordingView
+                        navigateBack={() => {
+                            // Return to previous view or default to page list
+                            if (selectedPageId) {
+                                setCurrentView('pageDetail');
+                            } else {
+                                setCurrentView('pageList');
+                            }
+                        }}
+                        inspectorState={inspectorState}
+                        startRecording={() => dispatch(startRecordingAction())}
+                        pauseRecording={() => dispatch(pauseRecordingAction())}
+                        clearRecording={() => dispatch(clearRecordingAction())}
+                        isRecording={inspectorState?.isRecording || false}
+                        recordedActions={inspectorState?.recordedActions || []}
+                        withSidePanel={true}
+                    />
+                </Content>
+            </Layout>
         );
     }
     

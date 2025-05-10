@@ -427,6 +427,31 @@ const ActionRecorder = {
   },
   
   /**
+   * Add a single entry to the recording
+   * @param {Object} entry - The entry to add to the recording
+   * @returns {Array} - The updated recording
+   */
+  addEntry: (entry) => {
+    if (!entry) {
+      console.warn('Attempted to add an empty entry to recording');
+      return detailedRecording;
+    }
+
+    // Add the entry to the recording
+    detailedRecording.push(entry);
+
+    // Notify subscribers
+    subscribers.forEach(callback => callback({
+      type: 'ENTRY_ADDED',
+      timestamp: Date.now(),
+      entry: entry,
+      recording: detailedRecording
+    }));
+
+    return detailedRecording;
+  },
+
+  /**
    * Load a recording from JSON data
    * @param {Object|string} jsonData - Recording data as JSON object or string
    * @param {Object} options - Options for loading
@@ -437,11 +462,11 @@ const ActionRecorder = {
   loadRecording: (jsonData, options = {}) => {
     // Default options from CONFIG.CONDENSER
     const defaultDetectCondensed = CONFIG?.CONDENSER?.enabled || false;
-    
+
     // Merge with provided options
     const replace = options.replace !== false; // Default to true
     const detectCondensed = options.detectCondensed !== undefined ? options.detectCondensed : defaultDetectCondensed;
-    
+
     // Parse JSON if string
     let parsedData;
     try {
@@ -450,30 +475,30 @@ const ActionRecorder = {
       } else {
         parsedData = jsonData;
       }
-      
+
       // Validate recording structure
       if (!Array.isArray(parsedData)) {
         throw new Error('Recording data must be an array');
       }
-      
+
       // Check if each entry has required fields
       parsedData.forEach((entry, index) => {
         if (!entry.actionTime || !entry.deviceArtifacts) {
           console.warn(`Entry at index ${index} is missing required fields. This may cause issues.`);
         }
       });
-      
+
       // Mark condensed states if needed
       if (detectCondensed) {
         for (let i = 1; i < parsedData.length; i++) {
           const previousEntry = parsedData[i - 1];
           const currentEntry = parsedData[i];
-          
+
           // Skip if already marked
           if (currentEntry.isCondensed !== undefined) {
             continue;
           }
-          
+
           // Prepare states for condensing check
           const previousState = {
             deviceArtifacts: {
@@ -481,14 +506,14 @@ const ActionRecorder = {
               screenshotBase64: previousEntry.deviceArtifacts?.screenshotBase64
             }
           };
-          
+
           const currentState = {
             deviceArtifacts: {
               pageSource: currentEntry.deviceArtifacts?.pageSource,
               screenshotBase64: currentEntry.deviceArtifacts?.screenshotBase64
             }
           };
-          
+
           // Create options from CONFIG.CONDENSER
           const condenserOptions = {
             enabled: CONFIG?.CONDENSER?.enabled !== undefined ? CONFIG.CONDENSER.enabled : true,
@@ -496,31 +521,31 @@ const ActionRecorder = {
             checkScreenshot: CONFIG?.CONDENSER?.checkScreenshot !== undefined ? CONFIG.CONDENSER.checkScreenshot : true,
             screenshotThreshold: CONFIG?.CONDENSER?.screenshotThreshold !== undefined ? CONFIG.CONDENSER.screenshotThreshold : 1.0
           };
-          
+
           // Determine if this entry should be marked as condensed
           const shouldCondense = shouldBeCondensed(previousState, currentState, condenserOptions);
           currentEntry.isCondensed = shouldCondense;
-          
+
           if (shouldCondense) {
             console.log(`Marked entry ${i} as condensed based on config (checkXml=${condenserOptions.checkXml}, checkScreenshot=${condenserOptions.checkScreenshot}, threshold=${condenserOptions.screenshotThreshold})`);
           }
         }
       }
-      
+
       // Replace or merge with current recording
       if (replace) {
         detailedRecording = parsedData;
       } else {
         detailedRecording = [...detailedRecording, ...parsedData];
       }
-      
+
       // Notify subscribers
       subscribers.forEach(callback => callback({
         type: 'RECORDING_LOADED',
         timestamp: Date.now(),
         recording: detailedRecording
       }));
-      
+
       return detailedRecording;
     } catch (error) {
       console.error('Error loading recording:', error);

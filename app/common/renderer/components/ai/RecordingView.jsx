@@ -84,11 +84,7 @@ const customScrollbarStyle = `
   flex-direction: column !important;
   height: 100% !important;
   overflow: hidden !important;
-  position: absolute !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
+  /* Position is controlled by inline styles based on withSidePanel prop */
 }
 /* Pulse animation for playback */
 @keyframes playback-pulse {
@@ -231,7 +227,8 @@ const RecordingView = ({
     pauseRecording: standardPauseRecording,
     clearRecording: standardClearRecording,
     isRecording: standardIsRecording,
-    recordedActions: standardRecordedActions
+    recordedActions: standardRecordedActions,
+    withSidePanel = false // New prop to indicate if side panel is visible
 }) => {
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -1673,7 +1670,13 @@ public void verifyFinalState() {
             background: '#fff',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden' // Prevent main container from scrolling
+            overflow: 'hidden', // Prevent main container from scrolling
+            position: withSidePanel ? 'relative' : 'absolute', // Use relative positioning when with side panel
+            top: withSidePanel ? 'auto' : 0,
+            bottom: withSidePanel ? 'auto' : 0,
+            left: withSidePanel ? 'auto' : 0,
+            right: withSidePanel ? 'auto' : 0,
+            height: withSidePanel ? '100%' : '100vh' // Full height but not absolute positioning when with side panel
         }}>
             {/* Header with Title and Back Button */}
             <Header style={{
